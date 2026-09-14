@@ -69,7 +69,7 @@ So khớp với kho tri thức (Vector Database: FAISS / Chroma / Pinecone)
         + Nút "Nhân viên tư vấn trực tuyến" (chuyển sang live chat với người thật)
 ```
 
-**Cơ chế fallback (rất quan trọng cho yêu cầu của bạn):**
+**Cơ chế fallback:**
 - Đặt ngưỡng tin cậy (confidence threshold) cho cả bước retrieval lẫn bước intent classification.
 - Nếu dưới ngưỡng → không đoán bừa, trả lời rõ ràng là ngoài phạm vi + gợi ý chuyển nhân viên thật (tránh chatbot "bịa" thông tin sai gây mất uy tín quán).
 - Log lại các câu hỏi bị fallback → đây là nguồn dữ liệu quý để mở rộng kho tri thức theo thời gian (continuous learning theo hướng bổ sung dữ liệu, không cần train lại mô hình nền).
@@ -101,7 +101,7 @@ Có 2 trường phái kinh điển trong Recommender System:
   - *Matrix Factorization (SVD, ALS)*: phân rã ma trận Người dùng × Món thành các vector đặc trưng ẩn (latent factors), giúp dự đoán mức độ ưa thích của một khách với món họ chưa từng mua — đây là kỹ thuật CF hiệu quả nhất khi dữ liệu lớn.
 - Nhược điểm: gặp vấn đề **cold-start** với khách hàng mới (chưa có lịch sử) hoặc món mới (chưa ai mua).
 
-**c) Hybrid Recommendation (mô hình khuyến nghị cho Smart AI Cafe)**
+**c) Hybrid Recommendation**
 - Kết hợp Content-based + Collaborative Filtering, cộng thêm **Popularity-based (xu hướng/hot trend)** để bù đắp cold-start và tăng tính mới mẻ.
 - Đúng với yêu cầu 80/20 của bạn, công thức điểm gợi ý cuối cùng cho mỗi món có thể thiết kế như sau:
 
@@ -242,5 +242,5 @@ Ba module hoạt động độc lập nhưng dùng chung hạ tầng dữ liệu
 
 ## 7. HƯỚNG PHÁT TRIỂN TIẾP THEO
 - Thu thập phản hồi thực tế của khách trên gợi ý (thích/không thích) để tinh chỉnh trọng số 80/20 theo dữ liệu thật thay vì cố định.
-- Mở rộng chatbot sang nhận diện giọng nói (Speech-to-Text) cho khách gọi món bằng giọng nói.
+- Mở rộng chatbot sang nhận diện giọng nói (Speech-to-Text) cho khách gọi món bằng giọng nói. --> Làm sau nếu có thời gian
 - Dùng dữ liệu OCR hóa đơn nguyên liệu để dự báo tồn kho/nhu cầu nhập hàng (một bài toán AI dự báo chuỗi thời gian - Time Series Forecasting) trong giai đoạn sau.
