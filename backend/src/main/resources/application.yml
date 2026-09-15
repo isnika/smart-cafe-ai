@@ -1,0 +1,26 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: smart-cafe-backend
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/smart_cafe_db
+    username: ${DB_USERNAME:admin}
+    password: ${DB_PASSWORD:admin123}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update   # dev thì để update, khi ổn định nên đổi sang validate
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+
+# Biến môi trường riêng, đọc từ .env / docker-compose
+jwt:
+  secret: ${JWT_SECRET:change_this_secret_in_env}
+  expiration: 86400000  # 24h (miliseconds)
