@@ -1,0 +1,60 @@
+services:
+
+   
+  # AI SERVICE
+   
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: smart-cafe-ai
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    depends_on:
+      - mysql
+
+   
+  # BACKEND
+   
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: smart-cafe-backend
+    ports:
+      - "8080:8080"
+    environment:
+      AI_SERVICE_URL: http://ai-service:8000
+
+      # MySQL connection
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: smart_cafe
+      DB_USERNAME: root
+      DB_PASSWORD: root
+    depends_on:
+      - ai-service
+      - mysql
+    restart: unless-stopped
+
+   
+  # MYSQL
+   
+  mysql:
+    image: mysql:8.4
+    container_name: smart-cafe-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: smart_cafe
+    volumes:
+      - mysql_data:/var/lib/mysql
+    restart: unless-stopped
+
+ 
+# VOLUMES
+ 
+volumes:
+  mysql_data:

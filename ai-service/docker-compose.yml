@@ -1,0 +1,12 @@
+services:
+  ai-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: smart-cafe-ai
+
+    ports:
+      - "8000:8000"
+
+    restart: unless-stopped
