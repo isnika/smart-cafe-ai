@@ -1,0 +1,567 @@
+Dữ liệu → Baseline → Content-Based → Collaborative Filtering → Hybrid → Evaluation → API
+
+| Thành phần                      | Thư viện                                                                               |
+| ------------------------------- | -------------------------------------------------------------------------------------- |
+| Content-Based                   | `scikit-learn`                                                                         |
+| TF-IDF món                      | `TfidfVectorizer`                                                                      |
+| Similarity                      | `cosine_similarity`                                                                    |
+| Collaborative Filtering         | `scikit-surprise`                                                                      |
+| Evaluation cơ bản               | `scikit-learn`                                                                         |
+| Precision@K / Recall@K / NDCG@K | tự viết **metric nhỏ** vì sklearn không có API trực tiếp phù hợp cho recommender Top-K |
+| Data                            | `pandas`, `numpy`                                                                      |
+
+
+                    User
+                      │
+                      ▼
+              Recommendation API
+                      │
+             ┌────────┴────────┐
+             ▼                 ▼
+      Content-Based       Collaborative
+             │                 │
+      TF-IDF + Cosine       SVD / KNN
+             │                 │
+             └────────┬────────┘
+                      ▼
+                 Hybrid Score
+                      │
+                      ▼
+                 Top-K món
+
+                 CREATE DATABASE IF NOT EXISTS smart_cafe_db_V8;
+USE smart_cafe_db_V8;
+
+| Thứ tự | File                        | Làm gì                                |
+| ------ | --------------------------- | ------------------------------------- |
+| **1**  | `products_100.csv`          | Dữ liệu sản phẩm                      |
+| **2**  | `collaborative_dataset.csv` | Dữ liệu user mua sản phẩm             |
+| **3**  | `preprocessing.py`          | Làm sạch + chuẩn hóa dữ liệu          |
+| **4**  | `features.py`               | Tạo feature cho recommendation        |
+| **5**  | `content_based.py`          | TF-IDF + Cosine Similarity            |
+| **6**  | `collaborative.py`          | Collaborative Filtering               |
+| **7**  | `hybrid.py`                 | Kết hợp 2 mô hình                     |
+| **8**  | `model.py`                  | Quản lý/load model                    |
+| **9**  | `evaluator.py`              | Precision@K, Recall@K, NDCG@K         |
+| **10** | `repository.py`             | Đọc dữ liệu CSV → sau này đổi sang DB |
+| **11** | `service.py`                | Điều phối toàn bộ recommendation      |
+| **12** | `schemas.py`                | Request/Response                      |
+| **13** | `recommendation.py`         | FastAPI endpoint                      |
+
+
+-- =====================================================================
+-- 1. MODULE: CÁC BẢNG DANH MỤC CƠ BẢN (Không phụ thuộc khóa ngoại)
+-- =====================================================================
+
+CREATE TABLE Roles (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(50) NOT NULL,
+    description VARCHAR(255)
+);
+
+CREATE TABLE Branches (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    address VARCHAR(255) NOT NULL,
+    phone VARCHAR(20)
+);
+
+CREATE TABLE Categories (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    image VARCHAR(255)
+);
+
+CREATE TABLE Ingredients (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    unit VARCHAR(20) NOT NULL,
+    average_cost DECIMAL(10,2) DEFAULT 0
+);
+
+CREATE TABLE Suppliers (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    phone VARCHAR(20),
+    address VARCHAR(255)
+);
+
+CREATE TABLE System_Configs (
+    key_name VARCHAR(50) PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+-- =====================================================================
+-- 2. MODULE: NGƯỜI DÙNG & QUẢN TRỊ
+-- =====================================================================
+
+CREATE TABLE Users (
+    id VARCHAR(36) PRIMARY KEY,
+    email VARCHAR(100) UNIQUE,
+    phone VARCHAR(20) UNIQUE,
+    password_hash VARCHAR(255),
+    google_id VARCHAR(100),
+    full_name VARCHAR(100) NOT NULL,
+    avatar VARCHAR(255),
+    role_id INT NOT NULL,
+    branch_id INT NULL,
+    status ENUM('Active', 'Banned', 'Unverified') DEFAULT 'Unverified',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (role_id) REFERENCES Roles(id),
+    FOREIGN KEY (branch_id) REFERENCES Branches(id)
+);
+
+CREATE TABLE OTP_Logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    phone_email VARCHAR(100) NOT NULL,
+    otp_code VARCHAR(10) NOT NULL,
+    expires_at DATETIME NOT NULL,
+    is_used BOOLEAN DEFAULT FALSE
+);
+
+CREATE TABLE Addresses (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL,
+    receiver_name VARCHAR(100) NOT NULL,
+    phone VARCHAR(20) NOT NULL,
+    province VARCHAR(100) NOT NULL,
+    district VARCHAR(100) NOT NULL,
+    ward VARCHAR(100) NOT NULL,
+    address_line VARCHAR(255) NOT NULL,
+    is_default BOOLEAN DEFAULT FALSE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
+);
+
+-- =====================================================================
+-- 3. MODULE: SẢN PHẨM, BIẾN THỂ, TÙY CHỌN & CÔNG THỨC
+-- =====================================================================
+
+CREATE TABLE Products (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    category_id INT NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    image VARCHAR(255) NULL,
+    description TEXT,
+    FOREIGN KEY (category_id) REFERENCES Categories(id)
+);
+
+CREATE TABLE Product_Variants (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    product_id INT NOT NULL,
+    variant_name VARCHAR(50) NOT NULL DEFAULT 'Standard',
+    price DECIMAL(10,2) NOT NULL,
+    status ENUM('In_Stock', 'Out_Of_Stock') DEFAULT 'In_Stock',
+    FOREIGN KEY (product_id) REFERENCES Products(id) ON DELETE CASCADE,
+    UNIQUE (product_id, variant_name)
+);
+
+CREATE TABLE Product_Option_Groups (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    product_id INT NOT NULL,
+    name VARCHAR(50) NOT NULL,
+    selection_type ENUM('Single', 'Multiple') NOT NULL,
+    is_required BOOLEAN DEFAULT FALSE,
+    FOREIGN KEY (product_id) REFERENCES Products(id) ON DELETE CASCADE,
+    UNIQUE (product_id, name)
+);
+
+CREATE TABLE Product_Options (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    group_id INT NOT NULL,
+    option_name VARCHAR(100) NOT NULL,
+    extra_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+    status ENUM('Available', 'Unavailable') DEFAULT 'Available',
+    FOREIGN KEY (group_id) REFERENCES Product_Option_Groups(id) ON DELETE CASCADE,
+    UNIQUE (group_id, option_name)
+);
+
+CREATE TABLE Recipes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    variant_id INT NOT NULL,
+    ingredient_id INT NOT NULL,
+    quantity_required DECIMAL(10,3) NOT NULL,
+    FOREIGN KEY (variant_id) REFERENCES Product_Variants(id) ON DELETE CASCADE,
+    FOREIGN KEY (ingredient_id) REFERENCES Ingredients(id)
+);
+
+-- =====================================================================
+-- 4. MODULE: CỬA HÀNG, BÀN, CA LÀM VIỆC & PHIÊN BÀN
+-- =====================================================================
+
+CREATE TABLE Tables (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    branch_id INT NOT NULL,
+    table_number VARCHAR(20) NOT NULL,
+    qr_code VARCHAR(255) UNIQUE,
+    status ENUM('Empty', 'Occupied') DEFAULT 'Empty',
+    UNIQUE (branch_id, table_number),
+    FOREIGN KEY (branch_id) REFERENCES Branches(id) ON DELETE CASCADE
+);
+
+CREATE TABLE Table_Sessions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    table_id INT NOT NULL,
+    session_code VARCHAR(50) UNIQUE NOT NULL,
+    customer_id VARCHAR(36) NULL,
+    status ENUM('Active', 'Payment_Pending', 'Completed', 'Cancelled') DEFAULT 'Active',
+    opened_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    closed_at DATETIME NULL,
+    FOREIGN KEY (table_id) REFERENCES Tables(id) ON DELETE CASCADE,
+    FOREIGN KEY (customer_id) REFERENCES Users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE Cashier_Shifts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    branch_id INT NOT NULL,
+    staff_id VARCHAR(36) NOT NULL,
+    opening_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    closing_time DATETIME NULL,
+    opening_cash DECIMAL(10,2) NOT NULL DEFAULT 0,
+    total_orders INT DEFAULT 0,
+    total_cash_sales DECIMAL(10,2) DEFAULT 0,
+    total_online_sales DECIMAL(10,2) DEFAULT 0,
+    closing_cash DECIMAL(10,2) NULL,
+    discrepancy DECIMAL(10,2) DEFAULT 0,
+    status ENUM('Open', 'Closed') DEFAULT 'Open',
+    FOREIGN KEY (branch_id) REFERENCES Branches(id),
+    FOREIGN KEY (staff_id) REFERENCES Users(id)
+);
+
+-- =====================================================================
+-- 5. MODULE: ĐẶT HÀNG & BÁN HÀNG (Orders, Carts, Payments, Refunds)
+-- =====================================================================
+
+CREATE TABLE Orders (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    order_code VARCHAR(20) UNIQUE NOT NULL,
+    user_id VARCHAR(36) NULL,
+    branch_id INT NOT NULL,
+    table_session_id BIGINT NULL,
+    cashier_shift_id INT NULL,
+
+    order_source ENUM('Online', 'QR', 'POS') NOT NULL,
+    fulfillment_type ENUM('Delivery', 'Pickup', 'Dine_In') NOT NULL,
+
+    delivery_name VARCHAR(100) NULL,
+    delivery_phone VARCHAR(20) NULL,
+    delivery_address VARCHAR(255) NULL,
+    sub_total DECIMAL(10,2) NOT NULL,
+    vat_amount DECIMAL(10,2) DEFAULT 0,
+    final_amount DECIMAL(10,2) NOT NULL,
+
+    status ENUM('Pending', 'Confirmed', 'Preparing', 'Ready', 'Shipping', 'Completed', 'Cancelled', 'Serving', 'Served', 'Rejected') DEFAULT 'Pending',
+
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES Users(id),
+    FOREIGN KEY (branch_id) REFERENCES Branches(id),
+    FOREIGN KEY (table_session_id) REFERENCES Table_Sessions(id) ON DELETE SET NULL,
+    FOREIGN KEY (cashier_shift_id) REFERENCES Cashier_Shifts(id) ON DELETE SET NULL
+);
+
+CREATE TABLE Order_Items (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    order_id INT NOT NULL,
+    variant_id INT NOT NULL,
+    quantity INT NOT NULL,
+    unit_price DECIMAL(10,2) NOT NULL,
+    note VARCHAR(255),
+    FOREIGN KEY (order_id) REFERENCES Orders(id) ON DELETE CASCADE,
+    FOREIGN KEY (variant_id) REFERENCES Product_Variants(id)
+);
+
+CREATE TABLE Order_Item_Options (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    order_item_id INT NOT NULL,
+    option_id INT NOT NULL,
+    quantity INT NOT NULL DEFAULT 1,
+    unit_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+    FOREIGN KEY (order_item_id) REFERENCES Order_Items(id) ON DELETE CASCADE,
+    FOREIGN KEY (option_id) REFERENCES Product_Options(id),
+    UNIQUE (order_item_id, option_id)
+);
+
+CREATE TABLE Order_Status_History (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_id INT NOT NULL,
+    status ENUM('Pending', 'Confirmed', 'Preparing', 'Ready', 'Shipping', 'Completed', 'Cancelled', 'Serving', 'Served', 'Rejected') NOT NULL,
+    changed_by VARCHAR(36) NULL,
+    note VARCHAR(255) NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (order_id) REFERENCES Orders(id) ON DELETE CASCADE,
+    FOREIGN KEY (changed_by) REFERENCES Users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE Carts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL UNIQUE,
+    FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE Cart_Items (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    cart_id INT NOT NULL,
+    variant_id INT NOT NULL,
+    qty INT DEFAULT 1,
+    note VARCHAR(255) NULL,
+    FOREIGN KEY (cart_id) REFERENCES Carts(id) ON DELETE CASCADE,
+    FOREIGN KEY (variant_id) REFERENCES Product_Variants(id)
+);
+
+CREATE TABLE Cart_Item_Options (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    cart_item_id INT NOT NULL,
+    option_id INT NOT NULL,
+    quantity INT NOT NULL DEFAULT 1,
+    FOREIGN KEY (cart_item_id) REFERENCES Cart_Items(id) ON DELETE CASCADE,
+    FOREIGN KEY (option_id) REFERENCES Product_Options(id),
+    UNIQUE (cart_item_id, option_id)
+);
+
+CREATE TABLE Loyalty_Cards (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL UNIQUE,
+    current_stamps INT DEFAULT 0,
+    total_free_cups INT DEFAULT 0,
+    FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE Loyalty_Transactions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL,
+    order_id INT NULL,
+    transaction_type ENUM('Earn', 'Redeem', 'Adjustment') NOT NULL,
+    stamps INT NOT NULL,
+    note VARCHAR(255) NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE,
+    FOREIGN KEY (order_id) REFERENCES Orders(id) ON DELETE SET NULL
+);
+
+CREATE TABLE Product_Reviews (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    product_id INT NOT NULL,
+    user_id VARCHAR(36) NOT NULL,
+    order_item_id INT NOT NULL,
+    rating INT NOT NULL,
+    comment TEXT,
+    status ENUM('Pending', 'Approved', 'Hidden') DEFAULT 'Pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (product_id) REFERENCES Products(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE,
+    FOREIGN KEY (order_item_id) REFERENCES Order_Items(id) ON DELETE CASCADE
+);
+
+CREATE TABLE Payments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    order_id INT NULL,
+    table_session_id BIGINT NULL,
+    payment_method ENUM('Cash', 'VNPay', 'Momo') NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
+    transaction_id VARCHAR(100) NULL,
+    status ENUM('Pending', 'Success', 'Failed') DEFAULT 'Pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (order_id) REFERENCES Orders(id) ON DELETE CASCADE,
+    FOREIGN KEY (table_session_id) REFERENCES Table_Sessions(id) ON DELETE CASCADE,
+    CHECK (
+        (order_id IS NOT NULL AND table_session_id IS NULL)
+        OR
+        (order_id IS NULL AND table_session_id IS NOT NULL)
+    )
+);
+
+CREATE TABLE Refunds (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    payment_id INT NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
+    reason TEXT,
+    status ENUM('Pending', 'Processed') DEFAULT 'Pending',
+    processed_at DATETIME NULL,
+    processed_by VARCHAR(36) NULL,
+    refund_transaction_id VARCHAR(100) NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (payment_id) REFERENCES Payments(id) ON DELETE CASCADE,
+    FOREIGN KEY (processed_by) REFERENCES Users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE Invoices (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    order_id INT NOT NULL,
+    invoice_number VARCHAR(50) NULL,
+    symbol VARCHAR(20) NULL,
+    template_code VARCHAR(20) NULL,
+    tax_code VARCHAR(20) NOT NULL,
+    company_name VARCHAR(255) NOT NULL,
+    buyer_address VARCHAR(255) NULL,
+    email VARCHAR(100) NULL,
+    total_amount DECIMAL(10,2) NOT NULL,
+    vat_rate DECIMAL(5,2) DEFAULT 8.00,
+    vat_amount DECIMAL(10,2) NOT NULL,
+    lookup_code VARCHAR(100) NULL,
+    pdf_url VARCHAR(255) NULL,
+    status ENUM('Requested', 'Issued', 'Cancelled') DEFAULT 'Requested',
+    issued_at DATETIME NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (order_id) REFERENCES Orders(id) ON DELETE CASCADE
+);
+
+-- =====================================================================
+-- 6. MODULE: KHO & NHÀ CUNG CẤP (Inventory)
+-- =====================================================================
+
+CREATE TABLE Inventories (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    branch_id INT NOT NULL,
+    ingredient_id INT NOT NULL,
+    quantity_in_stock DECIMAL(10,3) DEFAULT 0,
+    UNIQUE (branch_id, ingredient_id),
+    FOREIGN KEY (branch_id) REFERENCES Branches(id) ON DELETE CASCADE,
+    FOREIGN KEY (ingredient_id) REFERENCES Ingredients(id) ON DELETE CASCADE
+);
+
+CREATE TABLE Purchase_Orders (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    branch_id INT NOT NULL,
+    supplier_id INT NOT NULL,
+    total_amount DECIMAL(10,2) NOT NULL,
+    status ENUM('Pending', 'Completed', 'Cancelled') DEFAULT 'Pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (branch_id) REFERENCES Branches(id),
+    FOREIGN KEY (supplier_id) REFERENCES Suppliers(id)
+);
+
+CREATE TABLE PO_Details (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    po_id INT NOT NULL,
+    ingredient_id INT NOT NULL,
+    quantity DECIMAL(10,3) NOT NULL,
+    unit_price DECIMAL(10,2) NOT NULL,
+    FOREIGN KEY (po_id) REFERENCES Purchase_Orders(id) ON DELETE CASCADE,
+    FOREIGN KEY (ingredient_id) REFERENCES Ingredients(id)
+);
+
+CREATE TABLE Inventory_Logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    branch_id INT NOT NULL,
+    ingredient_id INT NOT NULL,
+    transaction_type ENUM('Import', 'Auto_Deduct', 'Refund', 'Waste', 'Adjustment') NOT NULL,
+    quantity_changed DECIMAL(10,3) NOT NULL,
+    reference_id INT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (branch_id) REFERENCES Branches(id),
+    FOREIGN KEY (ingredient_id) REFERENCES Ingredients(id)
+);
+
+-- =====================================================================
+-- 7. MODULE: NHÂN SỰ & CA LÀM VIỆC (HR & Timesheet)
+-- =====================================================================
+
+CREATE TABLE Shifts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    branch_id INT NOT NULL,
+    name VARCHAR(50) NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    FOREIGN KEY (branch_id) REFERENCES Branches(id)
+);
+
+CREATE TABLE Schedules (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL,
+    shift_id INT NOT NULL,
+    work_date DATE NOT NULL,
+    status ENUM('Scheduled', 'Completed', 'Absent') DEFAULT 'Scheduled',
+    FOREIGN KEY (user_id) REFERENCES Users(id),
+    FOREIGN KEY (shift_id) REFERENCES Shifts(id)
+);
+
+CREATE TABLE Timekeeping (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    schedule_id INT NOT NULL,
+    check_in DATETIME NULL,
+    check_out DATETIME NULL,
+    FOREIGN KEY (schedule_id) REFERENCES Schedules(id) ON DELETE CASCADE
+);
+
+CREATE TABLE Leave_Requests (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    reason TEXT NOT NULL,
+    status ENUM('Pending', 'Approved', 'Rejected') DEFAULT 'Pending',
+    approver_id VARCHAR(36) NULL,
+    FOREIGN KEY (user_id) REFERENCES Users(id),
+    FOREIGN KEY (approver_id) REFERENCES Users(id)
+);
+
+-- =====================================================================
+-- 8. MODULE: HỆ THỐNG CHAT, LOG, AI & KHO TRI THỨC
+-- =====================================================================
+
+CREATE TABLE Chat_Sessions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL,
+    staff_id VARCHAR(36) NULL,
+    status ENUM('Active', 'Closed') DEFAULT 'Active',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES Users(id),
+    FOREIGN KEY (staff_id) REFERENCES Users(id)
+);
+
+CREATE TABLE Chat_Messages (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    session_id INT NOT NULL,
+    sender_role ENUM('Customer', 'AI', 'Staff') NOT NULL,
+    content TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (session_id) REFERENCES Chat_Sessions(id) ON DELETE CASCADE
+);
+
+CREATE TABLE System_Logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL,
+    action VARCHAR(100) NOT NULL,
+    entity VARCHAR(50) NOT NULL,
+    details TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES Users(id)
+);
+
+CREATE TABLE AI_Forecasts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    branch_id INT NOT NULL,
+    forecast_date DATE NOT NULL,
+    predicted_revenue DECIMAL(15,2),
+    raw_data JSON,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (branch_id) REFERENCES Branches(id)
+);
+
+-- [BỔ SUNG MỚI 1]: Kho tri thức của quán (Knowledge Base / SOP & FAQ cho AI RAG)
+CREATE TABLE Knowledge_Base (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    category ENUM('FAQ', 'SOP_Staff', 'Policy', 'Menu_Guide') NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    content TEXT NOT NULL,
+    keywords VARCHAR(255) NULL,
+    status ENUM('Active', 'Hidden') DEFAULT 'Active',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- [BỔ SUNG MỚI 2]: Lưu kết quả AI gợi ý món ăn / đề xuất cá nhân hóa (Recommendations)
+CREATE TABLE AI_Recommendations (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL,
+    product_id INT NOT NULL,
+    recommendation_type ENUM('Cross_Sell', 'Up_Sell', 'Personalized', 'Trending') NOT NULL,
+    confidence_score DECIMAL(5,4) NOT NULL DEFAULT 0.0000, -- Độ tin cậy của thuật toán (VD: 0.9525 tương ứng 95.25%)
+    reason TEXT NULL, -- Lý do gợi ý (VD: "Vì bạn thường thích uống Trà sữa vào buổi chiều")
+    is_clicked BOOLEAN DEFAULT FALSE,
+    is_purchased BOOLEAN DEFAULT FALSE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE,
+    FOREIGN KEY (product_id) REFERENCES Products(id) ON DELETE CASCADE
+);

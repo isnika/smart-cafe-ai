@@ -1,0 +1,21 @@
+Product
+   ↓
+name + category + description
+   ↓
+TF-IDF
+   ↓
+Product vectors
+   ↓
+Cosine Similarity
+   ↓
+Top-K similar products
+
+Input:
+Cà phê sữa
+
+Output:
+
+Bạc xỉu       0.89
+Latte         0.75
+Cà phê đen    0.71
+Matcha latte  0.20

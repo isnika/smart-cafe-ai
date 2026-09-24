@@ -1,0 +1,103 @@
+﻿product_id,name,category,description
+1,Cà phê sữa,Coffee,Cà phê sữa truyền thống
+2,Bạc xỉu,Coffee,Cà phê nhiều sữa
+3,Matcha latte,Matcha,Matcha với sữa
+4,Cà phê đen,Coffee,Cà phê đen truyền thống
+5,Cà phê đen đá,Coffee,Cà phê đen dùng với đá
+6,Cà phê sữa đá,Coffee,Cà phê sữa dùng với đá
+7,Cà phê muối,Coffee,Cà phê kết hợp kem muối
+8,Cà phê dừa,Coffee,Cà phê kết hợp nước cốt dừa
+9,Cà phê trứng,Coffee,Cà phê phủ lớp kem trứng béo
+10,Cà phê caramel,Coffee,Cà phê kết hợp caramel
+11,Cà phê vanilla,Coffee,Cà phê kết hợp vanilla
+12,Cà phê hazelnut,Coffee,Cà phê hương hạt phỉ
+13,Cà phê mocha,Coffee,Cà phê kết hợp chocolate và sữa
+14,Americano,Coffee,Espresso pha loãng với nước
+15,Americano đá,Coffee,Americano dùng với đá
+16,Espresso,Coffee,Cà phê espresso đậm vị
+17,Espresso doppio,Coffee,Hai shot espresso đậm vị
+18,Cappuccino,Coffee,Espresso với sữa nóng và bọt sữa
+19,Latte,Coffee,Espresso kết hợp nhiều sữa
+20,Caramel macchiato,Coffee,Espresso với sữa và caramel
+21,Flat white,Coffee,Espresso với sữa mịn
+22,Cold brew,Coffee,Cà phê ủ lạnh trong thời gian dài
+23,Cold brew sữa,Coffee,Cold brew kết hợp với sữa
+24,Cold brew cam,Coffee,Cold brew kết hợp nước cam
+25,Cold brew tonic,Coffee,Cold brew kết hợp tonic
+26,Matcha đá,Matcha,Matcha pha với nước và đá
+27,Matcha latte đá,Matcha,Matcha latte dùng với đá
+28,Matcha dừa,Matcha,Matcha kết hợp nước cốt dừa
+29,Matcha kem cheese,Matcha,Matcha phủ kem cheese
+30,Matcha caramel,Matcha,Matcha kết hợp caramel
+31,Matcha strawberry,Matcha,Matcha kết hợp dâu tây
+32,Matcha coconut,Matcha,Matcha kết hợp sữa dừa
+33,Matcha vanilla,Matcha,Matcha kết hợp vanilla
+34,Matcha đá xay,Matcha,Matcha xay cùng đá và sữa
+35,Matcha chocolate,Matcha,Matcha kết hợp chocolate
+36,Trà đào,Tea,Trà kết hợp đào và đá
+37,Trà đào cam sả,Tea,Trà đào kết hợp cam và sả
+38,Trà tắc,Tea,Trà kết hợp tắc và đường
+39,Trà chanh,Tea,Trà chanh thanh mát
+40,Trà chanh dây,Tea,Trà kết hợp chanh dây
+41,Trà vải,Tea,Trà kết hợp vải
+42,Trà dâu,Tea,Trà kết hợp dâu tây
+43,Trà xoài,Tea,Trà kết hợp xoài
+44,Trà kiwi,Tea,Trà kết hợp kiwi
+45,Trà hoa nhài,Tea,Trà hoa nhài thơm nhẹ
+46,Trà sen,Tea,Trà sen thanh nhẹ
+47,Trà ô long,Tea,Trà ô long đậm hương
+48,Trà ô long đào,Tea,Trà ô long kết hợp đào
+49,Trà ô long vải,Tea,Trà ô long kết hợp vải
+50,Trà hibiscus,Tea,Trà hoa hibiscus chua nhẹ
+51,Trà gừng mật ong,Tea,Trà gừng kết hợp mật ong
+52,Trà bạc hà,Tea,Trà bạc hà thanh mát
+53,Chocolate nóng,Chocolate,Chocolate nóng với sữa
+54,Chocolate đá,Chocolate,Chocolate sữa dùng với đá
+55,Chocolate mint,Chocolate,Chocolate kết hợp bạc hà
+56,Chocolate caramel,Chocolate,Chocolate kết hợp caramel
+57,Chocolate hazelnut,Chocolate,Chocolate hương hạt phỉ
+58,Chocolate vanilla,Chocolate,Chocolate kết hợp vanilla
+59,Chocolate dừa,Chocolate,Chocolate kết hợp dừa
+60,Chocolate đá xay,Chocolate,Chocolate xay cùng đá và sữa
+61,Strawberry chocolate,Chocolate,Chocolate kết hợp dâu tây
+62,Sữa tươi,Milk,Sữa tươi nguyên chất
+63,Sữa tươi đường đen,Milk,Sữa tươi kết hợp đường đen
+64,Sữa tươi matcha,Milk,Sữa tươi kết hợp matcha
+65,Sữa tươi cacao,Milk,Sữa tươi kết hợp cacao
+66,Sữa tươi dâu,Milk,Sữa tươi kết hợp dâu
+67,Sữa tươi khoai môn,Milk,Sữa tươi kết hợp khoai môn
+68,Sữa tươi caramel,Milk,Sữa tươi kết hợp caramel
+69,Sữa chua dâu,Yogurt,Sữa chua kết hợp dâu tây
+70,Sữa chua việt quất,Yogurt,Sữa chua kết hợp việt quất
+71,Sữa chua xoài,Yogurt,Sữa chua kết hợp xoài
+72,Sữa chua đào,Yogurt,Sữa chua kết hợp đào
+73,Sữa chua chanh dây,Yogurt,Sữa chua kết hợp chanh dây
+74,Sữa chua kiwi,Yogurt,Sữa chua kết hợp kiwi
+75,Sinh tố bơ,Smoothie,Sinh tố bơ béo mịn
+76,Sinh tố xoài,Smoothie,Sinh tố xoài tươi
+77,Sinh tố dâu,Smoothie,Sinh tố dâu tây
+78,Sinh tố chuối,Smoothie,Sinh tố chuối
+79,Sinh tố việt quất,Smoothie,Sinh tố việt quất
+80,Sinh tố mãng cầu,Smoothie,Sinh tố mãng cầu
+81,Sinh tố sapoche,Smoothie,Sinh tố sapoche
+82,Sinh tố dừa,Smoothie,Sinh tố dừa
+83,Nước ép cam,Juice,Nước ép cam tươi
+84,Nước ép dưa hấu,Juice,Nước ép dưa hấu tươi
+85,Nước ép táo,Juice,Nước ép táo tươi
+86,Nước ép thơm,Juice,Nước ép thơm tươi
+87,Nước ép cà rốt,Juice,Nước ép cà rốt tươi
+88,Nước ép cần tây,Juice,Nước ép cần tây tươi
+89,Nước ép cam cà rốt,Juice,Nước ép cam kết hợp cà rốt
+90,Nước ép táo cần tây,Juice,Nước ép táo kết hợp cần tây
+91,Soda chanh,Soda,Soda kết hợp chanh tươi
+92,Soda tắc,Soda,Soda kết hợp tắc
+93,Soda việt quất,Soda,Soda kết hợp việt quất
+94,Soda dâu,Soda,Soda kết hợp dâu tây
+95,Soda đào,Soda,Soda kết hợp đào
+96,Soda chanh dây,Soda,Soda kết hợp chanh dây
+97,Soda bạc hà,Soda,Soda kết hợp bạc hà
+98,Nước suối,Other,Nước suối đóng chai
+99,Nước khoáng có gas,Other,Nước khoáng có gas
+100,Cookies chocolate,Bakery,Bánh cookie vị chocolate
+101,Croissant bơ,Bakery,Bánh croissant nhân bơ
+102,Bánh chuối,Bakery,Bánh chuối mềm thơm
