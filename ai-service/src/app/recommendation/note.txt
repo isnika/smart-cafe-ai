@@ -577,6 +577,7 @@ Cosine Similarity
       ↓
 Top-K sản phẩm tương tự
 ( Nhận TF-IDF của các sản phẩm → tính độ tương đồng → tìm Top-K sản phẩm tương tự một sản phẩm đã mua.)
+
 B4. collaborative:
 User
  ↓
@@ -587,7 +588,21 @@ User-Item Matrix
 độ tương đồng giữa sản phẩm
  ↓
 gợi ý sản phẩm
-B5.
+
+(Dựa vào những món khách hàng này đã mua, những món nào có quan hệ với các món đó và có khả năng khách hàng sẽ mua tiếp?)
+
+B5.hybrid
+U001 đang xem Cà phê sữa
+              ↓
+       ┌──────┴──────┐
+       ↓             ↓
+   Content       Collaborative
+       ↓             ↓
+  món giống      món U001
+                 có thể thích
+       └──────┬──────┘
+              ↓
+            Hybrid
 B6.
 B7.
 
