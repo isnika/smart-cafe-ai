@@ -565,3 +565,54 @@ CREATE TABLE AI_Recommendations (
     FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES Products(id) ON DELETE CASCADE
 );
+
+B1. preprocessing: đọc, kiểm tra và làm sạch dữ liệu.
+B2. features: tạo TF-IDF matrix và User-Item Matrix.
+B3. content based: File sẽ lấy TF-IDF đã tạo ở features.py để:
+TF-IDF Matrix
+      ↓
+Cosine Similarity
+      ↓
+Độ tương đồng giữa các sản phẩm
+      ↓
+Top-K sản phẩm tương tự
+( Nhận TF-IDF của các sản phẩm → tính độ tương đồng → tìm Top-K sản phẩm tương tự một sản phẩm đã mua.)
+B4. collaborative:
+User
+ ↓
+đã mua những sản phẩm nào
+ ↓
+User-Item Matrix
+ ↓
+độ tương đồng giữa sản phẩm
+ ↓
+gợi ý sản phẩm
+B5.
+B6.
+B7.
+
+
+
+Luong hoat dong
+Sau do:
+preprocessing
+        ↓
+features
+        ↓
+content_based.py      ← tiếp theo
+        ↓
+collaborative.py:
+        ↓
+hybrid.py
+        ↓
+model.py
+        ↓
+evaluator.py
+        ↓
+repository.py
+        ↓
+service.py
+        ↓
+schemas.py
+        ↓
+api/routes/recommendation.py

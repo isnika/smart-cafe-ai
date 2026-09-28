@@ -1,52 +1,106 @@
-from __future__ import annotations
-
-import numpy as np
 import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 
 class ContentBasedRecommender:
+
     def __init__(self):
-        self.vectorizer = TfidfVectorizer(
-            lowercase=True,
-            ngram_range=(1, 2),
-            min_df=1,
+        self.products = None
+        self.tfidf_matrix = None
+        self.similarity_matrix = None
+        self.product_index = {}
+
+    def fit(
+        self,
+        products: pd.DataFrame,
+        tfidf_matrix
+    ):
+        """
+        Huấn luyện Content-Based Recommender.
+
+        Parameters:
+            products:
+                DataFrame sản phẩm.
+
+            tfidf_matrix:
+                Ma trận TF-IDF được tạo từ features.py.
+        """
+
+        if products.empty:
+            raise ValueError("Products dataframe is empty.")
+
+        if tfidf_matrix is None:
+            raise ValueError("TF-IDF matrix is empty.")
+
+        if len(products) != tfidf_matrix.shape[0]:
+            raise ValueError(
+                "Số lượng products không khớp với TF-IDF matrix."
+            )
+
+        # Lưu danh sách sản phẩm
+        self.products = products.reset_index(drop=True)
+
+        # Lưu TF-IDF matrix
+        self.tfidf_matrix = tfidf_matrix
+
+        # Tính Cosine Similarity
+        self.similarity_matrix = cosine_similarity(
+            self.tfidf_matrix
         )
-        self.products: pd.DataFrame | None = None
-        self.matrix = None
-        self.index_by_product: dict[int, int] = {}
 
-    def fit(self, products: pd.DataFrame) -> "ContentBasedRecommender":
-        self.products = products.reset_index(drop=True).copy()
-        if self.products.empty:
-            self.matrix = None
-            self.index_by_product = {}
-            return self
-
-        self.matrix = self.vectorizer.fit_transform(self.products["text"])
-        self.index_by_product = {
-            int(pid): idx for idx, pid in enumerate(self.products["product_id"])
+        # Tạo mapping:
+        # product_id -> vị trí trong matrix
+        self.product_index = {
+            product_id: index
+            for index, product_id
+            in enumerate(self.products["product_id"])
         }
-        return self
 
-    def recommend(self, product_id: int, top_k: int = 5) -> list[dict]:
-        if self.matrix is None or product_id not in self.index_by_product:
+    def recommend(
+        self,
+        product_id: int,
+        top_k: int = 5
+    ):
+        """
+        Tìm các sản phẩm tương tự với product_id.
+        """
+
+        if self.similarity_matrix is None:
+            raise ValueError(
+                "Model chưa được fit."
+            )
+
+        if product_id not in self.product_index:
             return []
 
-        idx = self.index_by_product[product_id]
-        scores = cosine_similarity(self.matrix[idx], self.matrix).ravel()
-        scores[idx] = -1.0  # never recommend the same product
+        # Lấy vị trí của sản phẩm
+        product_idx = self.product_index[product_id]
 
-        top_indices = np.argsort(scores)[::-1][:top_k]
-        results = []
-        for i in top_indices:
-            if scores[i] <= 0:
+        # Lấy similarity score của sản phẩm
+        similarity_scores = self.similarity_matrix[
+            product_idx
+        ]
+
+        recommendations = []
+
+        for index, score in enumerate(similarity_scores):
+
+            # Không recommend chính sản phẩm đó
+            if index == product_idx:
                 continue
-            row = self.products.iloc[i]
-            results.append({
-                "product_id": int(row["product_id"]),
-                "name": row["name"],
-                "score": float(scores[i]),
+
+            recommendations.append({
+                "product_id": int(
+                    self.products.iloc[index]["product_id"]
+                ),
+                "product_name": self.products.iloc[index]["name"],
+                "score": float(score)
             })
-        return results
+
+        # Sắp xếp giảm dần theo similarity
+        recommendations.sort(
+            key=lambda x: x["score"],
+            reverse=True
+        )
+
+        return recommendations[:top_k]

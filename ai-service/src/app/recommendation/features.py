@@ -1,6 +1,16 @@
 '''
 1. Product → TF-IDF features
 2. User + Product + Quantity → User-Item Matrix
+preprocessing.py
+      ↓
+features.py
+      ↓
+ ┌────┴─────┐
+ ↓          ↓
+TF-IDF    User-Item
+ ↓          ↓
+content_   collaborative_
+based.py   .py
 '''
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
