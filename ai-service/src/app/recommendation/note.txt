@@ -603,9 +603,44 @@ U001 đang xem Cà phê sữa
        └──────┬──────┘
               ↓
             Hybrid
-B6.
-B7.
 
+Hybridđang kết hợp:
+- Collaborative: dựa trên user_id
+- Content-Based: dựa trên product_id
+B6. model.py
+Trước đây viết:
+
+tfidf_matrix, vectorizer = ...
+content_model = ...
+content_model.fit(...)
+
+user_item_matrix = ...
+collaborative_model = ...
+collaborative_model.fit(...)
+
+hybrid_model = ...
+hybrid_model.fit(...)
+
+Gio chỉ còn:
+
+model = RecommendationModel()
+
+model.fit(
+    products,
+    interactions
+)
+
+recommendations = model.recommend(
+    user_id="U001",
+    product_id=1,
+    top_k=5
+)
+
+B7.
+B8.
+B9.
+B10.
+B11.
 
 
 Luong hoat dong
