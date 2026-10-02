@@ -2,8 +2,8 @@ from preprocessing import prepare_data
 
 
 products, interactions = prepare_data(
-    "products_100.csv",
-    "collaborative_dataset.csv"
+    "products.csv",
+    "user_item_summary.csv"
 )
 
 print("===== PRODUCTS =====")
@@ -14,4 +14,3 @@ print(interactions.head())
 
 print("\nProduct shape:", products.shape)
 print("Interaction shape:", interactions.shape)
-

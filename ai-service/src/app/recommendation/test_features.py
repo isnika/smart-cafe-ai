@@ -5,10 +5,18 @@ from features import (
 )
 
 
+# =========================
+# LOAD DATA
+# =========================
+
 products, interactions = prepare_data(
-    "products_100.csv",
-    "collaborative_dataset.csv"
+    "products.csv",
+    "user_item_summary.csv"
 )
+
+print("===== DATA =====")
+print("Products:", products.shape)
+print("Interactions:", interactions.shape)
 
 
 # =========================
@@ -19,7 +27,7 @@ tfidf_matrix, vectorizer = create_tfidf_features(
     products
 )
 
-print("===== TF-IDF =====")
+print("\n===== TF-IDF =====")
 print("Shape:", tfidf_matrix.shape)
 
 print("\nFeatures:")
@@ -35,6 +43,7 @@ user_item_matrix = create_user_item_matrix(
 )
 
 print("\n===== USER-ITEM MATRIX =====")
-print(user_item_matrix)
+print("Shape:", user_item_matrix.shape)
 
-print("\nShape:", user_item_matrix.shape)
+print("\nFirst 5 users:")
+print(user_item_matrix.head())
