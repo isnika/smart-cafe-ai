@@ -1,3 +1,27 @@
+                 ┌─────────────────┐
+                 │   FastAPI API   │
+                 │  /recommendation│
+                 └────────┬────────┘
+                          ↓
+                ┌───────────────────┐
+                │ Recommendation    │
+                │     Service       │
+                └─────────┬─────────┘
+                          ↓
+             ┌────────────┴────────────┐
+             ↓                         ↓
+      Content-Based              Collaborative
+             │                         │
+       TF-IDF / cosine          User-Item Matrix
+             │                         │
+             └────────────┬────────────┘
+                          ↓
+                   Hybrid Model
+                          ↓
+                 Filter / Ranking
+                          ↓
+                   Top-K Products
+
 Dữ liệu → Baseline → Content-Based → Collaborative Filtering → Hybrid → Evaluation → API
 
 | Thành phần                      | Thư viện                                                                               |
@@ -129,26 +153,27 @@ B10.
 B11.
 
 
-Luong hoat dong
-Sau do:
-preprocessing
-        ↓
-features
-        ↓
-content_based.py      ← tiếp theo
-        ↓
-collaborative.py:
-        ↓
-hybrid.py
-        ↓
-model.py
-        ↓
-evaluator.py
-        ↓
-repository.py
-        ↓
-service.py
-        ↓
-schemas.py
-        ↓
-api/routes/recommendation.py
+1. Data mock
+      ↓
+2. Preprocessing
+      ↓
+3. Feature Engineering
+      ↓
+4. Content-Based
+      ↓
+5. Collaborative Filtering
+      ↓
+6. Hybrid Recommendation
+      ↓
+7. Cold Start / Popular
+      ↓
+8. Evaluation
+      ↓
+9. Service
+      ↓
+10. FastAPI
+      ↓
+11. Test toàn bộ
+
+
+

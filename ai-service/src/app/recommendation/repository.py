@@ -5,7 +5,7 @@ from sqlalchemy.engine import Engine
 
 
 class RecommendationRepository:
-    """Read-only data access for recommendation.
+    """Read-only data_mock access for recommendation.
 
     This uses SQLAlchemy Core so it can be plugged into an existing FastAPI
     infrastructure without requiring project-specific ORM models.

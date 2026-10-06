@@ -3,7 +3,7 @@ from model import RecommendationModel
 
 
 # ==========================================
-# 1. Load data
+# 1. Load data_mock
 # ==========================================
 
 products, interactions = prepare_data(
