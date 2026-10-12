@@ -25,9 +25,13 @@ public class UserResponse {
     private Integer roleId;
     @JsonProperty("role_name")
     private String roleName;
-    @JsonProperty("branch_id")
-    private Integer branchId;
     private UserStatus status;
+    @JsonProperty("email_verified_at")
+    private LocalDateTime emailVerifiedAt;
+    @JsonProperty("phone_verified_at")
+    private LocalDateTime phoneVerifiedAt;
+    @JsonProperty("last_login_at")
+    private LocalDateTime lastLoginAt;
     @JsonProperty("created_at")
     private LocalDateTime createdAt;
     @JsonProperty("updated_at")
@@ -45,8 +49,10 @@ public class UserResponse {
                 .avatar(user.getAvatar())
                 .roleId(user.getRole() != null ? user.getRole().getId() : null)
                 .roleName(user.getRole() != null ? user.getRole().getName() : null)
-                .branchId(user.getBranchId())
                 .status(user.getStatus())
+                .emailVerifiedAt(user.getEmailVerifiedAt())
+                .phoneVerifiedAt(user.getPhoneVerifiedAt())
+                .lastLoginAt(user.getLastLoginAt())
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .build();

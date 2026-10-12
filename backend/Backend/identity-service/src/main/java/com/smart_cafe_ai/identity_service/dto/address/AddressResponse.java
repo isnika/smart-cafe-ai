@@ -7,6 +7,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
@@ -17,6 +18,7 @@ public class AddressResponse {
     private Long id;
     @JsonProperty("user_id")
     private String userId;
+    private String label;
     @JsonProperty("receiver_name")
     private String receiverName;
     private String phone;
@@ -25,6 +27,8 @@ public class AddressResponse {
     private String ward;
     @JsonProperty("address_line")
     private String addressLine;
+    private BigDecimal latitude;
+    private BigDecimal longitude;
     @JsonProperty("is_default")
     private Boolean isDefault;
     @JsonProperty("created_at")
@@ -39,12 +43,15 @@ public class AddressResponse {
         return AddressResponse.builder()
                 .id(address.getId())
                 .userId(address.getUser() != null ? address.getUser().getId() : null)
+                .label(address.getLabel())
                 .receiverName(address.getReceiverName())
                 .phone(address.getPhone())
                 .province(address.getProvince())
                 .district(address.getDistrict())
                 .ward(address.getWard())
                 .addressLine(address.getAddressLine())
+                .latitude(address.getLatitude())
+                .longitude(address.getLongitude())
                 .isDefault(address.getIsDefault())
                 .createdAt(address.getCreatedAt())
                 .updatedAt(address.getUpdatedAt())
