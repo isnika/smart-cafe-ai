@@ -1,68 +1,37 @@
-# Smart AI Cafe - Backend
+# Smart Cafe AI - Backend
 
-Spring Boot app dùng chung cho 2 bạn BE:
-- **BE1**: module `ordermenu` (Order & Menu)
-- **BE2**: module `paymentcustomer` (Payment & Customer)
-- **shared**: dùng chung (User entity, config, security) — ai sửa phải báo người kia
+Backend is organized as independent Spring Boot microservices. Each service owns its database and exposes APIs through the API Gateway.
 
-## Yêu cầu môi trường
+## Services
 
-- Java 17
-- Maven 3.9+
-- PostgreSQL (chạy qua Docker hoặc cài local)
+| Module | Port | Database | Responsibility |
+| --- | ---: | --- | --- |
+| `discovery-server` | 8761 | - | Eureka service registry |
+| `api-gateway` | 8080 | - | Public entry point and routing |
+| `identity-service` | 8081 | `smart_cafe_identity_db` | Auth, users, roles, addresses |
+| `catalog-service` | 8082 | `smart_cafe_catalog_db` | Categories, products, variants, options |
+| `store-service` | 8083 | `smart_cafe_store_db` | Branches, tables, QR sessions, workforce |
+| `order-service` | 8084 | `smart_cafe_order_db` | Carts, orders, order status |
+| `payment-service` | 8085 | `smart_cafe_payment_db` | Payments, refunds, invoices, cashier shifts |
+| `inventory-service` | 8086 | `smart_cafe_inventory_db` | Ingredients, recipes, stock, purchase orders |
+| `engagement-service` | 8087 | `smart_cafe_engagement_db` | Loyalty, vouchers, reviews, notifications |
+| `intelligence-service` | 8088 | `smart_cafe_intelligence_db` | Chat, knowledge base, forecasts, recommendations |
 
-## Cách chạy
+## Structure
 
-### 1. Cấu hình database
-
-Cách 1 - dùng Docker (khuyên dùng), chạy ở thư mục gốc dự án (ngang hàng `backend/`):
-```bash
-docker-compose up -d database
+```text
+backend/
+├── pom.xml
+├── discovery-server/
+├── api-gateway/
+├── identity-service/
+├── catalog-service/
+├── store-service/
+├── order-service/
+├── payment-service/
+├── inventory-service/
+├── engagement-service/
+└── intelligence-service/
 ```
 
-Cách 2 - tự cài PostgreSQL, tạo database tên `smart_cafe_db`.
-
-### 2. Cấu hình biến môi trường
-
-Copy file `.env.example` (ở thư mục gốc dự án) thành `.env`, điền giá trị thật:
-```
-DB_USERNAME=admin
-DB_PASSWORD=admin123
-JWT_SECRET=your_secret_key
-```
-
-### 3. Chạy app
-
-```bash
-cd backend
-mvn spring-boot:run
-```
-
-App chạy ở `http://localhost:8080`
-
-## Cấu trúc thư mục
-
-```
-src/main/java/com/smartcafe/backend/
-├── modules/
-│   ├── ordermenu/          → BE1: Order, Menu
-│   │   ├── controller/
-│   │   ├── service/
-│   │   ├── repository/
-│   │   └── entity/
-│   ├── paymentcustomer/    → BE2: Payment, Customer
-│   │   ├── controller/
-│   │   ├── service/
-│   │   ├── repository/
-│   │   └── entity/
-│   └── shared/             → Dùng chung (auth, User entity, config)
-└── BackendApplication.java
-```
-
-## Quy tắc làm việc chung
-
-1. Mỗi module có prefix API riêng: `/api/order-menu/**` (BE1), `/api/payment-customer/**` (BE2)
-2. KHÔNG tự ý sửa code trong module của người khác
-3. Sửa file trong `shared/` → báo trước trong nhóm chat
-4. Branch Git: `feature/be1-xxx`, `feature/be2-xxx`, merge vào `dev` thường xuyên (1-2 ngày/lần)
-5. Không commit file `.env` (đã có trong `.gitignore`)
+The previous modular-monolith prototype under `backend/src/main/java/com/smartcafe/backend/modules` was removed so this folder now represents the microservice design only.

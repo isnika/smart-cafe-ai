@@ -1,0 +1,73 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+
+      routes:
+        # Identity Service Routes
+        - id: identity-service
+          uri: lb://IDENTITY-SERVICE
+          predicates:
+            - Path=/api/v1/auth/**, /api/v1/users/**, /api/v1/admin/users/**, /api/v1/admin/roles/**, /api/v1/internal/users/**
+
+        # Catalog Service Routes
+        - id: catalog-service
+          uri: lb://CATALOG-SERVICE
+          predicates:
+            - Path=/api/v1/catalog/**
+
+        # Store Service Routes
+        - id: store-service
+          uri: lb://STORE-SERVICE
+          predicates:
+            - Path=/api/v1/branches/**, /api/v1/tables/**, /api/v1/qr/**, /api/v1/table-sessions/**, /api/v1/staff-profiles/**, /api/v1/shifts/**, /api/v1/schedules/**, /api/v1/timekeeping/**, /api/v1/leave-requests/**
+
+        # Order Service Routes
+        - id: order-service
+          uri: lb://ORDER-SERVICE
+          predicates:
+            - Path=/api/v1/carts/**, /api/v1/orders/**
+
+        # Payment Service Routes
+        - id: payment-service
+          uri: lb://PAYMENT-SERVICE
+          predicates:
+            - Path=/api/v1/payments/**, /api/v1/refunds/**, /api/v1/invoices/**, /api/v1/cashier-shifts/**
+
+        # Inventory Service Routes
+        - id: inventory-service
+          uri: lb://INVENTORY-SERVICE
+          predicates:
+            - Path=/api/v1/inventory/**
+
+        # Engagement Service Routes
+        - id: engagement-service
+          uri: lb://ENGAGEMENT-SERVICE
+          predicates:
+            - Path=/api/v1/loyalty/**, /api/v1/vouchers/**, /api/v1/reviews/**, /api/v1/notifications/**, /api/v1/device-tokens/**
+
+        # Intelligence Service Routes
+        - id: intelligence-service
+          uri: lb://INTELLIGENCE-SERVICE
+          predicates:
+            - Path=/api/v1/chat/**, /api/v1/ai/**
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+
+# Block internal routes from external access through gateway
