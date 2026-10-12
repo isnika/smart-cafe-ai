@@ -19,8 +19,15 @@ public class OtpLog {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "phone_email", nullable = false, length = 100)
-    private String phoneEmail;
+    @Column(name = "user_id", length = 36)
+    private String userId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private OtpChannel channel;
+
+    @Column(nullable = false, length = 100)
+    private String target;
 
     @Column(name = "otp_hash", nullable = false, length = 255)
     private String otpHash;
@@ -46,6 +53,9 @@ public class OtpLog {
 
     @Column(name = "used_at")
     private LocalDateTime usedAt;
+
+    @Column(name = "ip_address", length = 45)
+    private String ipAddress;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

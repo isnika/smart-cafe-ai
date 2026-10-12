@@ -42,12 +42,18 @@ public class User {
     @JoinColumn(name = "role_id", nullable = false)
     private Role role;
 
-    @Column(name = "branch_id")
-    private Integer branchId;
-
     @Enumerated(EnumType.STRING)
-    @Column(columnDefinition = "ENUM('Active', 'Banned', 'Unverified') DEFAULT 'Unverified'")
+    @Column(columnDefinition = "ENUM('Unverified', 'Active', 'Banned', 'Deactivated') DEFAULT 'Unverified'")
     private UserStatus status;
+
+    @Column(name = "email_verified_at")
+    private LocalDateTime emailVerifiedAt;
+
+    @Column(name = "phone_verified_at")
+    private LocalDateTime phoneVerifiedAt;
+
+    @Column(name = "last_login_at")
+    private LocalDateTime lastLoginAt;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

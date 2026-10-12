@@ -5,6 +5,7 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -24,6 +25,9 @@ public class Address {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    @Column(length = 50)
+    private String label;
+
     @Column(name = "receiver_name", nullable = false, length = 100)
     private String receiverName;
 
@@ -33,7 +37,7 @@ public class Address {
     @Column(nullable = false, length = 100)
     private String province;
 
-    @Column(nullable = false, length = 100)
+    @Column(length = 100)
     private String district;
 
     @Column(nullable = false, length = 100)
@@ -41,6 +45,12 @@ public class Address {
 
     @Column(name = "address_line", nullable = false, length = 255)
     private String addressLine;
+
+    @Column(name = "latitude", precision = 10, scale = 7)
+    private BigDecimal latitude;
+
+    @Column(name = "longitude", precision = 10, scale = 7)
+    private BigDecimal longitude;
 
     @Column(name = "is_default")
     @Builder.Default
