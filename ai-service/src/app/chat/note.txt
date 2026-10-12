@@ -1,0 +1,35 @@
+1. Chuẩn hóa dữ liệu knowledge
+- Chuẩn hóa dữ liệu menu: tên món, giá, mô tả, thành phần, nhiệt độ, caffeine.
+- Chuẩn bị kiến thức FAQ: giờ mở cửa, địa chỉ, thanh toán, tích điểm, đổi hoặc hủy đơn.
+- Phân biệt dữ liệu thật của quán với dữ liệu giả lập.
+
+2. Xây dựng RAG
+RAG là cách để chatbot tìm thông tin trong dữ liệu của quán trước khi trả lời.
+Nhờ đó, câu trả lời bám sát menu và chính sách hơn, thay vì tự đoán.'
+
+3. Quản lý hội thoại
+Ghi nhớ ngữ cảnh trong phiên chat, hiểu câu hỏi nối tiếp và nhận diện ý định như hỏi menu,
+tư vấn món, hỏi khuyến mãi hoặc tra cứu đơn hàng.
+
+4. Kết nối hệ thống
+Kết nối API với backend quán để tra cứu giá, chương trình khuyến mãi, trạng thái đơn hàng và
+thông tin khách hàng theo quyền truy cập.
+
+5. Đánh giá chất lượng
+Tạo bộ câu hỏi kiểm thử, đo độ chính xác truy xuất, mức độ đúng của câu trả lời, độ trễ và tỷ lệ chatbot trả lời sai.
+
+
+Qúa trình hiện tại:
+Đọc menu từ products.csv Đã có
+
+Tìm món bằng từ khóa	Đã có, nhưng còn đơn giản
+
+Gọi LLM qua API Đã có khung tích hợp
+
+Tìm kiếm kiến thức bằng vector Chưa triển khai
+
+Trả lời dựa trên FAQ/chính sách quán Chưa đầy đủ
+
+Ghi nhớ ngữ cảnh nhiều lượt chat Chưa có
+
+Đánh giá độ chính xác Chưa có
