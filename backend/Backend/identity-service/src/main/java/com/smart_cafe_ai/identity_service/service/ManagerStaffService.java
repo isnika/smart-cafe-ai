@@ -32,9 +32,6 @@ public class ManagerStaffService {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(cb.equal(root.get("role").get("name"), "Staff"));
 
-            if (managerBranchId != null) {
-                predicates.add(cb.equal(root.get("branchId"), managerBranchId));
-            }
             if (status != null) {
                 predicates.add(cb.equal(root.get("status"), status));
             }
@@ -73,8 +70,6 @@ public class ManagerStaffService {
         Role staffRole = roleRepository.findByName("Staff")
                 .orElseGet(() -> roleRepository.save(Role.builder().name("Staff").description("Staff role").build()));
 
-        Integer branchId = request.getBranchId() != null ? request.getBranchId() : managerBranchId;
-
         User staff = User.builder()
                 .fullName(request.getFullName())
                 .email(request.getEmail())
@@ -82,8 +77,7 @@ public class ManagerStaffService {
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .avatar(request.getAvatar())
                 .role(staffRole)
-                .branchId(branchId)
-                .status(UserStatus.Active) // Staff is Active immediately
+                .status(UserStatus.Active)
                 .build();
 
         User savedStaff = userRepository.save(staff);
@@ -106,7 +100,6 @@ public class ManagerStaffService {
         if (request.getEmail() != null) staff.setEmail(request.getEmail());
         if (request.getPhone() != null) staff.setPhone(request.getPhone());
         if (request.getAvatar() != null) staff.setAvatar(request.getAvatar());
-        if (request.getBranchId() != null) staff.setBranchId(request.getBranchId());
 
         User updated = userRepository.save(staff);
         return ApiResponse.success(UserResponse.fromEntity(updated));

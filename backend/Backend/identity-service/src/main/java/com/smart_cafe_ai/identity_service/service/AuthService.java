@@ -2,23 +2,35 @@ package com.smart_cafe_ai.identity_service.service;
 
 import com.smart_cafe_ai.identity_service.dto.*;
 import com.smart_cafe_ai.identity_service.model.OtpPurpose;
+import com.smart_cafe_ai.identity_service.model.RefreshToken;
 import com.smart_cafe_ai.identity_service.model.Role;
 import com.smart_cafe_ai.identity_service.model.User;
 import com.smart_cafe_ai.identity_service.model.UserStatus;
+import com.smart_cafe_ai.identity_service.repository.RefreshTokenRepository;
 import com.smart_cafe_ai.identity_service.repository.RoleRepository;
 import com.smart_cafe_ai.identity_service.repository.UserRepository;
 import com.smart_cafe_ai.identity_service.security.JwtService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.LocalDateTime;
+import java.util.Base64;
+
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class AuthService {
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final OtpService otpService;
@@ -26,24 +38,27 @@ public class AuthService {
     @Transactional
     public ApiResponse<UserResponse> register(RegisterRequest request) {
         if (request.getFullName() == null || request.getFullName().isBlank()) {
-            return ApiResponse.error("VALIDATION_ERROR", "Họ và tên (fullName/full_name) là bắt buộc");
+            return ApiResponse.error("VALIDATION_ERROR", "Họ và tên (fullName) là bắt buộc");
         }
 
         if ((request.getEmail() == null || request.getEmail().isBlank()) &&
-            (request.getPhone() == null || request.getPhone().isBlank())) {
+                (request.getPhone() == null || request.getPhone().isBlank())) {
             return ApiResponse.error("VALIDATION_ERROR", "Email hoặc Số điện thoại là bắt buộc");
         }
 
-        if (request.getEmail() != null && !request.getEmail().isBlank() && userRepository.existsByEmail(request.getEmail())) {
+        if (request.getEmail() != null && !request.getEmail().isBlank()
+                && userRepository.existsByEmail(request.getEmail())) {
             return ApiResponse.error("CONFLICT", "Email đã được sử dụng");
         }
 
-        if (request.getPhone() != null && !request.getPhone().isBlank() && userRepository.existsByPhone(request.getPhone())) {
+        if (request.getPhone() != null && !request.getPhone().isBlank()
+                && userRepository.existsByPhone(request.getPhone())) {
             return ApiResponse.error("CONFLICT", "Số điện thoại đã được sử dụng");
         }
 
         Role customerRole = roleRepository.findByName("Customer")
-                .orElseGet(() -> roleRepository.save(Role.builder().name("Customer").description("Default Customer role").build()));
+                .orElseGet(() -> roleRepository
+                        .save(Role.builder().name("Customer").description("Default Customer role").build()));
 
         User user = User.builder()
                 .fullName(request.getFullName())
@@ -56,36 +71,46 @@ public class AuthService {
 
         User savedUser = userRepository.save(user);
 
-        String target = request.getPhone() != null && !request.getPhone().isBlank() ? request.getPhone() : request.getEmail();
-        otpService.generateAndSaveOtp(target, OtpPurpose.Register);
+        String target = request.getPhone() != null && !request.getPhone().isBlank() ? request.getPhone()
+                : request.getEmail();
+        otpService.generateAndSaveOtp(target, OtpPurpose.Register, savedUser.getId(), null);
 
         return ApiResponse.success(UserResponse.fromEntity(savedUser));
     }
 
     @Transactional
     public ApiResponse<AuthResponse> verifyOtp(VerifyOtpRequest request) {
-        boolean isValid = otpService.verifyOtp(request.getPhoneEmail(), request.getOtpCode(), OtpPurpose.Register) ||
-                          otpService.verifyOtp(request.getPhoneEmail(), request.getOtpCode(), OtpPurpose.Reset_Password);
+        String target = request.getPhoneEmail();
+        boolean isValid = otpService.verifyOtp(target, request.getOtpCode(), OtpPurpose.Register);
 
         if (!isValid) {
             return ApiResponse.error("OTP_INVALID", "Mã OTP không hợp lệ hoặc đã hết hạn");
         }
 
-        User user = userRepository.findByIdentifier(request.getPhoneEmail())
+        User user = userRepository.findByIdentifier(target)
                 .orElseThrow(() -> new RuntimeException("Tài khoản không tồn tại"));
 
         if (user.getStatus() == UserStatus.Unverified) {
             user.setStatus(UserStatus.Active);
-            user = userRepository.save(user);
         }
 
+        if (target.contains("@")) {
+            user.setEmailVerifiedAt(LocalDateTime.now());
+        } else {
+            user.setPhoneVerifiedAt(LocalDateTime.now());
+        }
+        user.setLastLoginAt(LocalDateTime.now());
+        user = userRepository.save(user);
+
         String roleName = user.getRole() != null ? user.getRole().getName() : "Customer";
-        String accessToken = jwtService.generateAccessToken(user.getId(), roleName, user.getBranchId());
-        String refreshToken = jwtService.generateRefreshToken(user.getId());
+        String accessToken = jwtService.generateAccessToken(user.getId(), roleName);
+        String refreshTokenStr = jwtService.generateRefreshToken(user.getId());
+
+        saveRefreshTokenInDb(user, refreshTokenStr);
 
         AuthResponse authResponse = AuthResponse.builder()
                 .accessToken(accessToken)
-                .refreshToken(refreshToken)
+                .refreshToken(refreshTokenStr)
                 .expiresIn(jwtService.getAccessTokenExpirationMs() / 1000)
                 .user(UserResponse.fromEntity(user))
                 .build();
@@ -96,14 +121,14 @@ public class AuthService {
     @Transactional
     public ApiResponse<String> resendOtp(ResendOtpRequest request) {
         String phoneEmail = request.getPhoneEmail();
-        userRepository.findByIdentifier(phoneEmail)
+        User user = userRepository.findByIdentifier(phoneEmail)
                 .orElseThrow(() -> new RuntimeException("Tài khoản không tồn tại"));
 
-        String code = otpService.generateAndSaveOtp(phoneEmail, OtpPurpose.Register);
+        otpService.generateAndSaveOtp(phoneEmail, OtpPurpose.Register, user.getId(), null);
         return ApiResponse.success("Đã gửi lại mã OTP thành công");
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public ApiResponse<AuthResponse> login(LoginRequest request) {
         User user = userRepository.findByIdentifier(request.getIdentifier())
                 .orElse(null);
@@ -120,13 +145,22 @@ public class AuthService {
             return ApiResponse.error("ACCOUNT_BANNED", "Tài khoản của bạn đã bị khóa");
         }
 
+        if (user.getStatus() == UserStatus.Deactivated) {
+            return ApiResponse.error("ACCOUNT_DEACTIVATED", "Tài khoản của bạn đã bị vô hiệu hóa");
+        }
+
+        user.setLastLoginAt(LocalDateTime.now());
+        userRepository.save(user);
+
         String roleName = user.getRole() != null ? user.getRole().getName() : "Customer";
-        String accessToken = jwtService.generateAccessToken(user.getId(), roleName, user.getBranchId());
-        String refreshToken = jwtService.generateRefreshToken(user.getId());
+        String accessToken = jwtService.generateAccessToken(user.getId(), roleName);
+        String refreshTokenStr = jwtService.generateRefreshToken(user.getId());
+
+        saveRefreshTokenInDb(user, refreshTokenStr);
 
         AuthResponse response = AuthResponse.builder()
                 .accessToken(accessToken)
-                .refreshToken(refreshToken)
+                .refreshToken(refreshTokenStr)
                 .expiresIn(jwtService.getAccessTokenExpirationMs() / 1000)
                 .user(UserResponse.fromEntity(user))
                 .build();
@@ -134,23 +168,39 @@ public class AuthService {
         return ApiResponse.success(response);
     }
 
+    @Transactional
     public ApiResponse<AuthResponse> refreshToken(RefreshTokenRequest request) {
-        String refreshToken = request.getRefreshToken();
-        if (refreshToken == null || !jwtService.isTokenValid(refreshToken)) {
+        String refreshTokenStr = request.getRefreshToken();
+        if (refreshTokenStr == null || !jwtService.isTokenValid(refreshTokenStr)) {
             return ApiResponse.error("TOKEN_EXPIRED", "Refresh Token không hợp lệ hoặc đã hết hạn");
         }
 
-        String userId = jwtService.extractUserId(refreshToken);
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        String tokenHash = hashToken(refreshTokenStr);
+        RefreshToken storedToken = refreshTokenRepository.findByTokenHashAndRevokedAtIsNull(tokenHash)
+                .orElse(null);
+
+        if (storedToken == null || storedToken.getExpiresAt().isBefore(LocalDateTime.now())) {
+            return ApiResponse.error("TOKEN_EXPIRED", "Refresh Token đã bị thu hồi hoặc đã hết hạn");
+        }
+
+        // Revoke current refresh token (rotation)
+        storedToken.setRevokedAt(LocalDateTime.now());
+        refreshTokenRepository.save(storedToken);
+
+        User user = storedToken.getUser();
+        if (user.getStatus() == UserStatus.Banned || user.getStatus() == UserStatus.Deactivated) {
+            return ApiResponse.error("ACCOUNT_DISABLED", "Tài khoản đã bị khóa hoặc vô hiệu hóa");
+        }
 
         String roleName = user.getRole() != null ? user.getRole().getName() : "Customer";
-        String newAccessToken = jwtService.generateAccessToken(user.getId(), roleName, user.getBranchId());
-        String newRefreshToken = jwtService.generateRefreshToken(user.getId());
+        String newAccessToken = jwtService.generateAccessToken(user.getId(), roleName);
+        String newRefreshTokenStr = jwtService.generateRefreshToken(user.getId());
+
+        saveRefreshTokenInDb(user, newRefreshTokenStr);
 
         AuthResponse response = AuthResponse.builder()
                 .accessToken(newAccessToken)
-                .refreshToken(newRefreshToken)
+                .refreshToken(newRefreshTokenStr)
                 .expiresIn(jwtService.getAccessTokenExpirationMs() / 1000)
                 .user(UserResponse.fromEntity(user))
                 .build();
@@ -158,35 +208,60 @@ public class AuthService {
         return ApiResponse.success(response);
     }
 
-    public ApiResponse<Void> logout(String refreshToken) {
-        // Clear context / token blacklist stub
+    @Transactional
+    public ApiResponse<Void> logout(String refreshTokenStr) {
+        if (refreshTokenStr != null && !refreshTokenStr.isBlank()) {
+            String tokenHash = hashToken(refreshTokenStr);
+            refreshTokenRepository.findByTokenHash(tokenHash).ifPresent(token -> {
+                token.setRevokedAt(LocalDateTime.now());
+                refreshTokenRepository.save(token);
+            });
+        }
         return ApiResponse.success(null);
     }
 
     @Transactional
     public ApiResponse<String> forgotPassword(ForgotPasswordRequest request) {
-        String phoneEmail = request.getPhoneEmail();
+        String phoneEmail = request.getPhoneEmail() == null ? null : request.getPhoneEmail().trim();
         userRepository.findByIdentifier(phoneEmail).ifPresent(user -> {
-            otpService.generateAndSaveOtp(phoneEmail, OtpPurpose.Reset_Password);
+            otpService.generateAndSaveOtp(phoneEmail, OtpPurpose.Reset_Password, user.getId(), null);
         });
-        // Always return success to prevent user enumeration
+        log.info(
+                "[DEV ONLY] OTP generated for password reset: target={}",
+                phoneEmail);
         return ApiResponse.success("Nếu tài khoản tồn tại, mã OTP đã được gửi đến " + phoneEmail);
     }
 
     @Transactional
     public ApiResponse<Void> resetPassword(ResetPasswordRequest request) {
-        boolean isValid = otpService.verifyOtp(request.getPhoneEmail(), request.getOtpCode(), OtpPurpose.Reset_Password);
+        String phoneEmail = request.getPhoneEmail() == null ? null : request.getPhoneEmail().trim();
+        boolean isValid = otpService.verifyOtp(phoneEmail, request.getOtpCode(),
+                OtpPurpose.Reset_Password);
         if (!isValid) {
             return ApiResponse.error("OTP_INVALID", "Mã OTP không hợp lệ hoặc đã hết hạn");
         }
 
-        User user = userRepository.findByIdentifier(request.getPhoneEmail())
+        User user = userRepository.findByIdentifier(phoneEmail)
                 .orElseThrow(() -> new RuntimeException("Tài khoản không tồn tại"));
 
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
 
         return ApiResponse.success(null);
+    }
+
+    @Transactional
+    public ApiResponse<String> requestChangePasswordOtp(String userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Tài khoản không tồn tại"));
+        String target = getChangePasswordOtpTarget(user);
+        if (target == null) {
+            return ApiResponse.error("VALIDATION_ERROR", "Tài khoản chưa có email hoặc số điện thoại để nhận OTP");
+        }
+
+        otpService.generateAndSaveOtp(target, OtpPurpose.Change_Password, user.getId(), null);
+        return ApiResponse.success(
+                "OTP đã được tạo cho " + target + "; hiện kiểm tra mã trong log của identity-service");
     }
 
     @Transactional
@@ -195,14 +270,59 @@ public class AuthService {
                 .orElseThrow(() -> new RuntimeException("Tài khoản không tồn tại"));
 
         if (user.getPasswordHash() != null && !user.getPasswordHash().isBlank()) {
-            if (request.getCurrentPassword() == null || !passwordEncoder.matches(request.getCurrentPassword(), user.getPasswordHash())) {
+            if (request.getCurrentPassword() == null
+                    || !passwordEncoder.matches(request.getCurrentPassword(), user.getPasswordHash())) {
                 return ApiResponse.error("VALIDATION_ERROR", "Mật khẩu hiện tại không đúng");
             }
+        }
+
+        String otpTarget = getChangePasswordOtpTarget(user);
+        if (otpTarget == null
+                || !otpService.verifyOtp(otpTarget, request.getOtpCode(), OtpPurpose.Change_Password)) {
+            return ApiResponse.error("OTP_INVALID", "Mã OTP không hợp lệ hoặc đã hết hạn");
         }
 
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
 
         return ApiResponse.success(null);
+    }
+
+    private String getChangePasswordOtpTarget(User user) {
+        if (user.getEmail() != null && !user.getEmail().isBlank()
+                && user.getEmailVerifiedAt() != null) {
+            return user.getEmail().trim();
+        }
+        if (user.getPhone() != null && !user.getPhone().isBlank()
+                && user.getPhoneVerifiedAt() != null) {
+            return user.getPhone().trim();
+        }
+        if (user.getEmail() != null && !user.getEmail().isBlank()) {
+            return user.getEmail().trim();
+        }
+        if (user.getPhone() != null && !user.getPhone().isBlank()) {
+            return user.getPhone().trim();
+        }
+        return null;
+    }
+
+    private void saveRefreshTokenInDb(User user, String refreshTokenStr) {
+        String tokenHash = hashToken(refreshTokenStr);
+        RefreshToken token = RefreshToken.builder()
+                .user(user)
+                .tokenHash(tokenHash)
+                .expiresAt(LocalDateTime.now().plusNanos(jwtService.getRefreshTokenExpirationMs() * 1_000_000L))
+                .build();
+        refreshTokenRepository.save(token);
+    }
+
+    private String hashToken(String token) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(token.getBytes(StandardCharsets.UTF_8));
+            return Base64.getEncoder().encodeToString(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("Error hashing token", e);
+        }
     }
 }

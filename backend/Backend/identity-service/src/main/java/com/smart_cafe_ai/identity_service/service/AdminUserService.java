@@ -33,9 +33,6 @@ public class AdminUserService {
             if (roleId != null) {
                 predicates.add(cb.equal(root.get("role").get("id"), roleId));
             }
-            if (branchId != null) {
-                predicates.add(cb.equal(root.get("branchId"), branchId));
-            }
             if (status != null) {
                 predicates.add(cb.equal(root.get("status"), status));
             }
@@ -87,7 +84,6 @@ public class AdminUserService {
                 .phone(request.getPhone())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .role(role)
-                .branchId(request.getBranchId())
                 .status(request.getStatus() != null ? request.getStatus() : UserStatus.Active)
                 .build();
 
@@ -118,9 +114,6 @@ public class AdminUserService {
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy vai trò"));
 
         user.setRole(role);
-        if (request.getBranchId() != null) {
-            user.setBranchId(request.getBranchId());
-        }
 
         User updated = userRepository.save(user);
         return ApiResponse.success(UserResponse.fromEntity(updated));

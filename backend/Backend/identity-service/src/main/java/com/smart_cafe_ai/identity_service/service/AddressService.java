@@ -46,13 +46,16 @@ public class AddressService {
 
         Address address = Address.builder()
                 .user(user)
+                .label(request.getLabel())
                 .receiverName(request.getReceiverName())
                 .phone(request.getPhone())
                 .province(request.getProvince())
                 .district(request.getDistrict())
                 .ward(request.getWard())
                 .addressLine(request.getAddressLine())
-                .isDefault(request.getIsDefault() || isFirstAddress)
+                .latitude(request.getLatitude())
+                .longitude(request.getLongitude())
+                .isDefault(Boolean.TRUE.equals(request.getIsDefault()) || isFirstAddress)
                 .build();
 
         Address savedAddress = addressRepository.save(address);
@@ -81,12 +84,15 @@ public class AddressService {
             });
         }
 
-        address.setReceiverName(request.getReceiverName());
-        address.setPhone(request.getPhone());
-        address.setProvince(request.getProvince());
-        address.setDistrict(request.getDistrict());
-        address.setWard(request.getWard());
-        address.setAddressLine(request.getAddressLine());
+        if (request.getLabel() != null) address.setLabel(request.getLabel());
+        if (request.getReceiverName() != null) address.setReceiverName(request.getReceiverName());
+        if (request.getPhone() != null) address.setPhone(request.getPhone());
+        if (request.getProvince() != null) address.setProvince(request.getProvince());
+        if (request.getDistrict() != null) address.setDistrict(request.getDistrict());
+        if (request.getWard() != null) address.setWard(request.getWard());
+        if (request.getAddressLine() != null) address.setAddressLine(request.getAddressLine());
+        if (request.getLatitude() != null) address.setLatitude(request.getLatitude());
+        if (request.getLongitude() != null) address.setLongitude(request.getLongitude());
         if (request.getIsDefault() != null) {
             address.setIsDefault(request.getIsDefault());
         }
