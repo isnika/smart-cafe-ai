@@ -25,10 +25,16 @@ public class JwtService {
     @Value("${jwt.refresh-expiration-ms:604800000}") // 7 ngày mặc định cho Refresh Token
     private long refreshTokenExpirationMs;
 
+    public String generateAccessToken(String userId, String role) {
+        return generateAccessToken(userId, role, null);
+    }
+
     public String generateAccessToken(String userId, String role, Integer branchId) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("role", role);
-        claims.put("branch_id", branchId);
+        if (branchId != null) {
+            claims.put("branch_id", branchId);
+        }
         return buildToken(claims, userId, accessTokenExpirationMs);
     }
 
@@ -95,7 +101,6 @@ public class JwtService {
     private SecretKey getSignInKey() {
         byte[] keyBytes = Decoders.BASE64.decode(secretKey);
         if (keyBytes.length < 32) {
-            // Hex string or raw string fallback
             keyBytes = secretKey.getBytes();
         }
         return Keys.hmacShaKeyFor(keyBytes);
@@ -103,5 +108,9 @@ public class JwtService {
 
     public long getAccessTokenExpirationMs() {
         return accessTokenExpirationMs;
+    }
+
+    public long getRefreshTokenExpirationMs() {
+        return refreshTokenExpirationMs;
     }
 }

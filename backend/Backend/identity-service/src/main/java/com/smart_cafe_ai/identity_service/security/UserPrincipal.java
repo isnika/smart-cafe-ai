@@ -34,7 +34,7 @@ public class UserPrincipal implements UserDetails {
     }
 
     public Integer getBranchId() {
-        return user.getBranchId();
+        return null;
     }
 
     public String getRoleName() {
@@ -58,7 +58,7 @@ public class UserPrincipal implements UserDetails {
 
     @Override
     public boolean isAccountNonLocked() {
-        return user.getStatus() != UserStatus.Banned;
+        return user.getStatus() != UserStatus.Banned && user.getStatus() != UserStatus.Deactivated;
     }
 
     @Override
