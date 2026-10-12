@@ -1,37 +1,23 @@
-from fastapi import APIRouter
-from pydantic import BaseModel
+from datetime import date
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 
-router = APIRouter(
-    prefix="/api/forecasting",
-    tags=["Forecasting"]
-)
+from src.app.forecasting.service import get_forecast_service
+
+router = APIRouter(prefix="/api/forecasting", tags=["Forecasting"])
 
 
 class ForecastingRequest(BaseModel):
-    start_date: str
-    days: int = 7
+    start_date: date
+    days: int = Field(default=7, ge=1, le=90)
 
 
 @router.post("")
 def forecast(request: ForecastingRequest):
-
-    forecast_data = [
-        {
-            "date": "2026-09-23",
-            "predicted_revenue": 3500000
-        },
-        {
-            "date": "2026-09-24",
-            "predicted_revenue": 3700000
-        },
-        {
-            "date": "2026-09-25",
-            "predicted_revenue": 3900000
-        }
-    ]
-
-    return {
-        "start_date": request.start_date,
-        "days": request.days,
-        "forecast": forecast_data
-    }
+    try:
+        service = get_forecast_service()
+        return service.forecast(request.start_date.isoformat(), request.days)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

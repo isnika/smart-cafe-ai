@@ -1,22 +1,21 @@
-from fastapi import APIRouter
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 
-router = APIRouter(
-    prefix="/api/chat",
-    tags=["Chat"]
-)
+from src.app.chat.service import CafeChatService
+
+router = APIRouter(prefix="/api/chat", tags=["Chat"])
+_service = CafeChatService()
 
 
 class ChatRequest(BaseModel):
-    message: str
-    user_id: int | None = None
+    message: str = Field(min_length=1, max_length=2000)
+    user_id: str | None = None
 
 
 @router.post("")
 def chat(request: ChatRequest):
-
-    return {
-        "message": request.message,
-        "response": "Xin chào! Tôi là trợ lý AI của Smart Café.",
-        "user_id": request.user_id
-    }
+    try:
+        result = _service.reply(request.message, request.user_id)
+        return {"message": request.message, **result}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
