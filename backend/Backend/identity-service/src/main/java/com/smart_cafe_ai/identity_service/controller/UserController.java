@@ -38,6 +38,18 @@ public class UserController {
         return ResponseEntity.ok(response);
     }
 
+    @PostMapping("/me/contact/otp")
+    public ResponseEntity<ApiResponse<String>> requestContactOtp(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestBody UpdateContactRequest request
+    ) {
+        if (principal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("UNAUTHORIZED", "Bạn chưa đăng nhập"));
+        }
+        ApiResponse<String> response = userService.requestContactOtp(principal.getId(), request);
+        return ResponseEntity.status(response.isSuccess() ? HttpStatus.OK : HttpStatus.BAD_REQUEST).body(response);
+    }
+
     @PutMapping("/me/contact")
     public ResponseEntity<ApiResponse<UserResponse>> updateContact(
             @AuthenticationPrincipal UserPrincipal principal,
