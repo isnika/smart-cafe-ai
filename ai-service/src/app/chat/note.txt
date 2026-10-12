@@ -1,9 +1,9 @@
-1. Chuẩn hóa dữ liệu knowledge
+1. Chuẩn hóa dữ liệu knowledge ( Done)
 - Chuẩn hóa dữ liệu menu: tên món, giá, mô tả, thành phần, nhiệt độ, caffeine.
 - Chuẩn bị kiến thức FAQ: giờ mở cửa, địa chỉ, thanh toán, tích điểm, đổi hoặc hủy đơn.
 - Phân biệt dữ liệu thật của quán với dữ liệu giả lập.
 
-2. Xây dựng RAG
+2. Xây dựng RAG (Doing)
 RAG là cách để chatbot tìm thông tin trong dữ liệu của quán trước khi trả lời.
 Nhờ đó, câu trả lời bám sát menu và chính sách hơn, thay vì tự đoán.'
 
