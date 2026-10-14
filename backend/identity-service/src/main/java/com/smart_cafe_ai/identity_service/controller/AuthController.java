@@ -13,7 +13,6 @@ import com.smart_cafe_ai.identity_service.dto.auth.VerifyOtpRequest;
 import com.smart_cafe_ai.identity_service.dto.user.UserResponse;
 import com.smart_cafe_ai.identity_service.security.UserPrincipal;
 import com.smart_cafe_ai.identity_service.service.AuthService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -21,10 +20,13 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping({"/auth", "/api/v1/auth", "/api/auth"})
-@RequiredArgsConstructor
 public class AuthController {
 
     private final AuthService authService;
+
+    public AuthController(AuthService authService) {
+        this.authService = authService;
+    }
 
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<UserResponse>> register(@RequestBody RegisterRequest request) {
@@ -104,3 +106,4 @@ public class AuthController {
         return ResponseEntity.status(response.isSuccess() ? HttpStatus.OK : HttpStatus.BAD_REQUEST).body(response);
     }
 }
+

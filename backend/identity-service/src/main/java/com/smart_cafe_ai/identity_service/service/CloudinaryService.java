@@ -2,35 +2,26 @@ package com.smart_cafe_ai.identity_service.service;
 
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-
 import java.io.IOException;
 import java.util.Map;
 
 @Service
-@RequiredArgsConstructor
-@Slf4j
 public class CloudinaryService {
-
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CloudinaryService.class);
     private final Cloudinary cloudinary;
+
+    public CloudinaryService(Cloudinary cloudinary) {
+        this.cloudinary = cloudinary;
+    }
 
     public String uploadImage(MultipartFile file, String folder) {
         if (file == null || file.isEmpty()) {
             throw new RuntimeException("File tải lên không được để rỗng");
         }
-
         try {
-            Map<?, ?> uploadResult = cloudinary.uploader().upload(
-                    file.getBytes(),
-                    ObjectUtils.asMap(
-                            "folder", folder,
-                            "resource_type", "auto"
-                    )
-            );
-
+            Map<?, ?> uploadResult = cloudinary.uploader().upload(file.getBytes(), ObjectUtils.asMap("folder", folder, "resource_type", "auto"));
             String secureUrl = (String) uploadResult.get("secure_url");
             log.info("Uploaded avatar image to Cloudinary: {}", secureUrl);
             return secureUrl;
@@ -40,3 +31,4 @@ public class CloudinaryService {
         }
     }
 }
+

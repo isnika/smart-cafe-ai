@@ -11,7 +11,6 @@ import com.smart_cafe_ai.identity_service.model.UserStatus;
 import com.smart_cafe_ai.identity_service.repository.RoleRepository;
 import com.smart_cafe_ai.identity_service.repository.UserRepository;
 import jakarta.persistence.criteria.Predicate;
-import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -23,12 +22,21 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Service
-@RequiredArgsConstructor
 public class ManagerStaffService {
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+
+    public ManagerStaffService(
+            UserRepository userRepository,
+            RoleRepository roleRepository,
+            PasswordEncoder passwordEncoder
+    ) {
+        this.userRepository = userRepository;
+        this.roleRepository = roleRepository;
+        this.passwordEncoder = passwordEncoder;
+    }
 
     @Transactional(readOnly = true)
     public ApiResponse<List<UserResponse>> getStaffList(Integer managerBranchId, String query, UserStatus status, Pageable pageable) {
@@ -119,3 +127,4 @@ public class ManagerStaffService {
         return ApiResponse.success(UserResponse.fromEntity(updated));
     }
 }
+

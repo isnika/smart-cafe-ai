@@ -2,19 +2,13 @@ package com.smart_cafe_ai.identity_service.security;
 
 import com.smart_cafe_ai.identity_service.model.User;
 import com.smart_cafe_ai.identity_service.model.UserStatus;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
-
 import java.util.Collection;
 import java.util.Collections;
 
-@AllArgsConstructor
-@Getter
 public class UserPrincipal implements UserDetails {
-
     private final User user;
 
     @Override
@@ -70,4 +64,11 @@ public class UserPrincipal implements UserDetails {
     public boolean isEnabled() {
         return user.getStatus() == UserStatus.Active;
     }
+    public UserPrincipal(final User user) {
+        this.user = user;
+    }
+    public User getUser() {
+        return this.user;
+    }
 }
+

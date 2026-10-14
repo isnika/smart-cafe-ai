@@ -7,7 +7,6 @@ import com.smart_cafe_ai.identity_service.dto.user.UserResponse;
 import com.smart_cafe_ai.identity_service.model.OtpPurpose;
 import com.smart_cafe_ai.identity_service.model.User;
 import com.smart_cafe_ai.identity_service.repository.UserRepository;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -16,12 +15,21 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
-@RequiredArgsConstructor
 public class UserService {
 
     private final UserRepository userRepository;
     private final OtpService otpService;
     private final CloudinaryService cloudinaryService;
+
+    public UserService(
+            UserRepository userRepository,
+            OtpService otpService,
+            CloudinaryService cloudinaryService
+    ) {
+        this.userRepository = userRepository;
+        this.otpService = otpService;
+        this.cloudinaryService = cloudinaryService;
+    }
 
     @Transactional(readOnly = true)
     public ApiResponse<UserResponse> getProfile(String userId) {
@@ -197,3 +205,4 @@ public class UserService {
                 .toList();
     }
 }
+
