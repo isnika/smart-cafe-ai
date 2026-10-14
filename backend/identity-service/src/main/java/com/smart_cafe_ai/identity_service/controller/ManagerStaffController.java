@@ -1,10 +1,13 @@
 package com.smart_cafe_ai.identity_service.controller;
 
-import com.smart_cafe_ai.identity_service.dto.*;
+import com.smart_cafe_ai.identity_service.dto.ApiResponse;
+import com.smart_cafe_ai.identity_service.dto.staff.StaffCreateRequest;
+import com.smart_cafe_ai.identity_service.dto.staff.StaffStatusRequest;
+import com.smart_cafe_ai.identity_service.dto.staff.StaffUpdateRequest;
+import com.smart_cafe_ai.identity_service.dto.user.UserResponse;
 import com.smart_cafe_ai.identity_service.model.UserStatus;
 import com.smart_cafe_ai.identity_service.security.UserPrincipal;
 import com.smart_cafe_ai.identity_service.service.ManagerStaffService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -16,10 +19,13 @@ import java.util.List;
 
 @RestController
 @RequestMapping({"/manager/staff", "/api/v1/manager/staff"})
-@RequiredArgsConstructor
 public class ManagerStaffController {
 
     private final ManagerStaffService managerStaffService;
+
+    public ManagerStaffController(ManagerStaffService managerStaffService) {
+        this.managerStaffService = managerStaffService;
+    }
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<UserResponse>>> getStaffList(

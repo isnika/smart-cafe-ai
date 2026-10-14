@@ -1,4 +1,4 @@
-package com.smart_cafe_ai.identity_service.dto;
+package com.smart_cafe_ai.identity_service.dto.auth;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;

@@ -1,6 +1,9 @@
 package com.smart_cafe_ai.identity_service.service;
 
-import com.smart_cafe_ai.identity_service.dto.*;
+import com.smart_cafe_ai.identity_service.dto.ApiResponse;
+import com.smart_cafe_ai.identity_service.dto.user.UpdateContactRequest;
+import com.smart_cafe_ai.identity_service.dto.user.UpdateProfileRequest;
+import com.smart_cafe_ai.identity_service.dto.user.UserResponse;
 import com.smart_cafe_ai.identity_service.model.OtpPurpose;
 import com.smart_cafe_ai.identity_service.model.User;
 import com.smart_cafe_ai.identity_service.repository.UserRepository;

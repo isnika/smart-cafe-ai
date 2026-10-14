@@ -1,9 +1,11 @@
 package com.smart_cafe_ai.identity_service.controller;
 
-import com.smart_cafe_ai.identity_service.dto.*;
+import com.smart_cafe_ai.identity_service.dto.ApiResponse;
+import com.smart_cafe_ai.identity_service.dto.user.UpdateContactRequest;
+import com.smart_cafe_ai.identity_service.dto.user.UpdateProfileRequest;
+import com.smart_cafe_ai.identity_service.dto.user.UserResponse;
 import com.smart_cafe_ai.identity_service.security.UserPrincipal;
 import com.smart_cafe_ai.identity_service.service.UserService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -12,10 +14,13 @@ import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping({"/users", "/api/v1/users"})
-@RequiredArgsConstructor
 public class UserController {
 
     private final UserService userService;
+
+    public UserController(UserService userService) {
+        this.userService = userService;
+    }
 
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UserResponse>> getProfile(@AuthenticationPrincipal UserPrincipal principal) {

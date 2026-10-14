@@ -1,6 +1,7 @@
-package com.smart_cafe_ai.identity_service.dto;
+package com.smart_cafe_ai.identity_service.dto.auth;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.smart_cafe_ai.identity_service.dto.user.UserResponse;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

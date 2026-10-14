@@ -1,7 +1,6 @@
 package com.smart_cafe_ai.identity_service.dto.auth;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.smart_cafe_ai.identity_service.dto.ResetPasswordRequest;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

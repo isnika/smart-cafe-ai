@@ -1,4 +1,4 @@
-package com.smart_cafe_ai.identity_service.dto;
+package com.smart_cafe_ai.identity_service.dto.admin;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;

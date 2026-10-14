@@ -1,8 +1,8 @@
 package com.smart_cafe_ai.identity_service.service;
 
 import com.smart_cafe_ai.identity_service.dto.ApiResponse;
-import com.smart_cafe_ai.identity_service.dto.RoleRequest;
-import com.smart_cafe_ai.identity_service.dto.RoleResponse;
+import com.smart_cafe_ai.identity_service.dto.role.RoleRequest;
+import com.smart_cafe_ai.identity_service.dto.role.RoleResponse;
 import com.smart_cafe_ai.identity_service.model.Role;
 import com.smart_cafe_ai.identity_service.repository.RoleRepository;
 import com.smart_cafe_ai.identity_service.repository.UserRepository;

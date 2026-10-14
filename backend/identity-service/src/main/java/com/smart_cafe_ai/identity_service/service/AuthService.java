@@ -1,6 +1,16 @@
 package com.smart_cafe_ai.identity_service.service;
 
-import com.smart_cafe_ai.identity_service.dto.*;
+import com.smart_cafe_ai.identity_service.dto.ApiResponse;
+import com.smart_cafe_ai.identity_service.dto.auth.AuthResponse;
+import com.smart_cafe_ai.identity_service.dto.auth.ChangePasswordRequest;
+import com.smart_cafe_ai.identity_service.dto.auth.ForgotPasswordRequest;
+import com.smart_cafe_ai.identity_service.dto.auth.LoginRequest;
+import com.smart_cafe_ai.identity_service.dto.auth.RefreshTokenRequest;
+import com.smart_cafe_ai.identity_service.dto.auth.RegisterRequest;
+import com.smart_cafe_ai.identity_service.dto.auth.ResendOtpRequest;
+import com.smart_cafe_ai.identity_service.dto.auth.ResetPasswordRequest;
+import com.smart_cafe_ai.identity_service.dto.auth.VerifyOtpRequest;
+import com.smart_cafe_ai.identity_service.dto.user.UserResponse;
 import com.smart_cafe_ai.identity_service.model.OtpPurpose;
 import com.smart_cafe_ai.identity_service.model.RefreshToken;
 import com.smart_cafe_ai.identity_service.model.Role;

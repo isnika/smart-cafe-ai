@@ -1,8 +1,8 @@
 package com.smart_cafe_ai.identity_service.controller;
 
 import com.smart_cafe_ai.identity_service.dto.ApiResponse;
-import com.smart_cafe_ai.identity_service.dto.BatchUserRequest;
-import com.smart_cafe_ai.identity_service.dto.UserResponse;
+import com.smart_cafe_ai.identity_service.dto.user.BatchUserRequest;
+import com.smart_cafe_ai.identity_service.dto.user.UserResponse;
 import com.smart_cafe_ai.identity_service.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
