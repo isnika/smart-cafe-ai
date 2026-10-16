@@ -33,3 +33,10 @@ Trả lời dựa trên FAQ/chính sách quán Chưa đầy đủ
 Ghi nhớ ngữ cảnh nhiều lượt chat Chưa có
 
 Đánh giá độ chính xác Chưa có
+
+Luồng xử lý
+
+retriever.py đọc mọi file .md và .txt trong knowledge_base/ (menu, cafe_info, faq, policies). Mỗi file được chia chunk theo heading Markdown, và section quá dài (trên 900 ký tự) được cắt tiếp. Mỗi chunk giữ metadata gồm source, category, heading.
+Embedding dùng multilingual-e5-small, hỗ trợ tiếng Việt và chạy CPU được. Index được cache trong .rag_cache/ và chỉ tính lại khi nội dung knowledge_base thay đổi.
+rag.py viết lại câu hỏi nối tiếp thành câu độc lập (ví dụ “còn size L thì sao?” thành “matcha latte size L giá bao nhiêu?”), rồi tìm top-k chunk. Nếu không chunk nào đạt ngưỡng điểm thì trả về câu fallback, không gọi LLM. Ngược lại, bot ghép context vào prompt và trả lời kèm danh sách nguồn.
+service.py bọc pipeline thành ChatService (có reindex()), kèm ví dụ router FastAPI ở cuối file.
