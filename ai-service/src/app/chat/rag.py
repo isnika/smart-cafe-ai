@@ -31,7 +31,7 @@ from .schemas import ChatMessage, SourceChunk
 
 logger = logging.getLogger(__name__)
 
-TOP_K = int(os.getenv("RAG_TOP_K", "4"))
+TOP_K = int(os.getenv("RAG_TOP_K", "3"))
 # Điểm cosine của e5 thường nằm trong khoảng 0.7-0.9 -> cần tinh chỉnh theo dữ liệu thật
 MIN_SCORE = float(os.getenv("RAG_MIN_SCORE", "0.75"))
 MAX_HISTORY_MESSAGES = 6
@@ -130,7 +130,11 @@ class RAGPipeline:
             return FALLBACK_ANSWER, []
 
         user_msg = USER_TEMPLATE.format(context=_format_context(hits), question=question)
-        answer = await self.llm.generate(SYSTEM_PROMPT, hist + [{"role": "user", "content": user_msg}])
+        answer = await self.llm.generate(
+            SYSTEM_PROMPT,
+            hist + [{"role": "user", "content": user_msg}],
+            max_tokens=256,
+            )
 
         sources = [
             SourceChunk(

@@ -2,6 +2,8 @@ chay service: uvicorn src.app.main:app --reload --port 8000
 
 ollama run qwen2.5:3b test model
 
+dùng httpx để gọi API tương thích OpenAI do Ollama cung cấp.
+
 1. Chuẩn hóa dữ liệu knowledge ( Done)
 - Chuẩn hóa dữ liệu menu: tên món, giá, mô tả, thành phần, nhiệt độ, caffeine.
 - Chuẩn bị kiến thức FAQ: giờ mở cửa, địa chỉ, thanh toán, tích điểm, đổi hoặc hủy đơn.
