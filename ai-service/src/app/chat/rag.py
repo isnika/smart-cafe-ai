@@ -12,6 +12,7 @@ Giai đoạn 2: Vector database
 Giai đoạn 3: Retrieval
 """
 from __future__ import annotations
+from .llm import get_llm
 
 import asyncio
 import logging
@@ -90,7 +91,7 @@ class RAGPipeline:
         min_score: float = MIN_SCORE,
     ):
         self.retriever = retriever or get_retriever()
-        self.llm = llm or AnthropicLLM()
+        self.llm = llm or get_llm()
         self.top_k = top_k
         self.min_score = min_score
 
