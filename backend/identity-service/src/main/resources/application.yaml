@@ -5,16 +5,29 @@ spring:
   application:
     name: identity-service
 
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:smartcafe}
+    password: ${RABBITMQ_PASSWORD:smartcafe-local}
+    virtual-host: ${RABBITMQ_VHOST:/}
+    connection-timeout: 5s
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/smart_cafe_identity_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true}
     username: ${SPRING_DATASOURCE_USERNAME:root}
-    password: ${SPRING_DATASOURCE_PASSWORD:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:123456}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
     hibernate:
       ddl-auto: update # Có thể dùng 'none' hoặc 'validate' khi DB đã tạo bảng sẵn từ SQL script
-    show-sql: true
+    # Outbox polling runs every second; keep its SQL from pushing OTP logs off screen.
+    show-sql: ${SHOW_SQL:false}
     properties:
       hibernate:
         format_sql: true
@@ -45,3 +58,8 @@ cloudinary:
   cloud-name: ${CLOUDINARY_CLOUD_NAME:}
   api-key: ${CLOUDINARY_API_KEY:}
   api-secret: ${CLOUDINARY_API_SECRET:}
+
+app:
+  otp-email:
+    publisher-enabled: ${OTP_EMAIL_PUBLISHER_ENABLED:true}
+    publish-delay-ms: ${OTP_EMAIL_PUBLISH_DELAY_MS:1000}

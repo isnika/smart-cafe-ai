@@ -1,0 +1,27 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-smartcafe}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-smartcafe-local}
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional local inbox for checking real SMTP delivery without an external email account.
+  mailpit:
+    image: axllent/mailpit:v1.20
+    profiles: ["mail-test"]
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
+
+volumes:
+  rabbitmq_data:

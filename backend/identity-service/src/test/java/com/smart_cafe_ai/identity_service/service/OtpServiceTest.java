@@ -24,7 +24,7 @@ class OtpServiceTest {
     void verifyOtpTrimsTargetAndMarksNewestOtpUsed() {
         OtpLogRepository repository = mock(OtpLogRepository.class);
         PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
-        OtpService otpService = new OtpService(repository, passwordEncoder);
+        OtpService otpService = new OtpService(repository, passwordEncoder, mock(OtpEmailOutboxService.class));
         OtpLog otpLog = OtpLog.builder()
                 .otpHash("hashed-otp")
                 .expiresAt(LocalDateTime.now().plusMinutes(5))
@@ -50,7 +50,7 @@ class OtpServiceTest {
     void verifyEmailChangeOtpIsScopedToUserAndNormalizesEmailAndCode() {
         OtpLogRepository repository = mock(OtpLogRepository.class);
         PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
-        OtpService otpService = new OtpService(repository, passwordEncoder);
+        OtpService otpService = new OtpService(repository, passwordEncoder, mock(OtpEmailOutboxService.class));
         OtpLog otpLog = OtpLog.builder()
                 .otpHash("hashed-otp")
                 .expiresAt(LocalDateTime.now().plusMinutes(5))
@@ -76,7 +76,7 @@ class OtpServiceTest {
     void generatedEmailOtpCanBeVerifiedWithDifferentEmailCase() {
         OtpLogRepository repository = mock(OtpLogRepository.class);
         PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
-        OtpService otpService = new OtpService(repository, passwordEncoder);
+        OtpService otpService = new OtpService(repository, passwordEncoder, mock(OtpEmailOutboxService.class));
         when(passwordEncoder.encode(anyString())).thenReturn("hashed-otp");
         when(passwordEncoder.matches(anyString(), eq("hashed-otp"))).thenReturn(true);
 

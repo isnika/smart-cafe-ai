@@ -4,23 +4,29 @@ import com.smart_cafe_ai.identity_service.model.OtpChannel;
 import com.smart_cafe_ai.identity_service.model.OtpLog;
 import com.smart_cafe_ai.identity_service.model.OtpPurpose;
 import com.smart_cafe_ai.identity_service.repository.OtpLogRepository;
+import com.smart_cafe_ai.identity_service.dto.event.OtpEmailEvent;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Locale;
+import java.util.UUID;
+import java.time.ZoneId;
 
 @Service
 public class OtpService {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(OtpService.class);
     private final OtpLogRepository otpLogRepository;
     private final PasswordEncoder passwordEncoder;
+    private final OtpEmailOutboxService otpEmailOutboxService;
     private static final SecureRandom random = new SecureRandom();
 
-    public OtpService(OtpLogRepository otpLogRepository, PasswordEncoder passwordEncoder) {
+    public OtpService(OtpLogRepository otpLogRepository, PasswordEncoder passwordEncoder,
+                      OtpEmailOutboxService otpEmailOutboxService) {
         this.otpLogRepository = otpLogRepository;
         this.passwordEncoder = passwordEncoder;
+        this.otpEmailOutboxService = otpEmailOutboxService;
     }
 
     @Transactional
@@ -37,6 +43,11 @@ public class OtpService {
         OtpLog otpLog =  // 5 phút TTL
         OtpLog.builder().userId(userId).channel(channel).target(normalizedTarget).otpHash(otpHash).purpose(purpose).expiresAt(LocalDateTime.now().plusMinutes(5)).attemptCount(0).maxAttempts(5).isUsed(false).ipAddress(ipAddress).build();
         otpLogRepository.save(otpLog);
+        if (channel == OtpChannel.Email) {
+            otpEmailOutboxService.enqueue(new OtpEmailEvent(
+                    UUID.randomUUID().toString(), userId, normalizedTarget, otpCode,
+                    purpose.name(), otpLog.getExpiresAt().atZone(ZoneId.systemDefault()).toInstant()));
+        }
         log.info("\ud83d\udd11 [OTP DEV LOG] Mã OTP sinh ra cho {}: {}", normalizedTarget, otpCode);
         System.out.println("=================================================");
         System.out.println("\ud83d\udd11 [OTP CODE] MÃ OTP CỦA " + normalizedTarget + " LÀ: " + otpCode);

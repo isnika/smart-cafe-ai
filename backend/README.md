@@ -35,3 +35,5 @@ backend/
 ```
 
 The previous modular-monolith prototype under `backend/src/main/java/com/smartcafe/backend/modules` was removed so this folder now represents the microservice design only.
+
+OTP email delivery (Identity → RabbitMQ → Engagement → SMTP): see [setup and testing](engagement-service/README.md).

@@ -65,7 +65,7 @@ public class AuthService {
         Role customerRole = roleRepository.findByName("Customer").orElseGet(() -> roleRepository.save(Role.builder().name("Customer").description("Default Customer role").build()));
         User user = User.builder().fullName(request.getFullName()).email(request.getEmail()).phone(request.getPhone()).passwordHash(passwordEncoder.encode(request.getPassword())).role(customerRole).status(UserStatus.Unverified).build();
         User savedUser = userRepository.save(user);
-        String target = request.getPhone() != null && !request.getPhone().isBlank() ? request.getPhone() : request.getEmail();
+        String target = request.getEmail() != null && !request.getEmail().isBlank() ? request.getEmail() : request.getPhone();
         otpService.generateAndSaveOtp(target, OtpPurpose.Register, savedUser.getId(), null);
         return ApiResponse.success(UserResponse.fromEntity(savedUser));
     }
@@ -198,7 +198,9 @@ public class AuthService {
             return ApiResponse.error("VALIDATION_ERROR", "Tài khoản chưa có email hoặc số điện thoại để nhận OTP");
         }
         otpService.generateAndSaveOtp(target, OtpPurpose.Change_Password, user.getId(), null);
-        return ApiResponse.success("OTP đã được tạo cho " + target + "; hiện kiểm tra mã trong log của identity-service");
+        return ApiResponse.success(target.contains("@")
+                ? "Yêu cầu gửi OTP đến email " + target + " đã được tiếp nhận"
+                : "OTP đã được tạo cho " + target + "; hiện kiểm tra mã trong log của identity-service");
     }
 
     @Transactional

@@ -23,3 +23,7 @@ cloudinary:
   cloud-name: test
   api-key: test
   api-secret: test
+
+app:
+  otp-email:
+    publisher-enabled: false

@@ -94,7 +94,8 @@ public class UserService {
         OtpPurpose purpose = hasEmail ? OtpPurpose.Change_Email : OtpPurpose.Change_Phone;
         otpService.generateAndSaveOtp(target, purpose, user.getId(), null);
         return ApiResponse.success(
-                "OTP đã được tạo cho " + target + "; hiện kiểm tra mã trong log của identity-service");
+                hasEmail ? "Yêu cầu gửi OTP đến email " + target + " đã được tiếp nhận"
+                        : "OTP đã được tạo cho " + target + "; hiện kiểm tra mã trong log của identity-service");
     }
 
     @Transactional

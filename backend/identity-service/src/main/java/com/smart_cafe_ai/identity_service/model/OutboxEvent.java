@@ -2,6 +2,8 @@ package com.smart_cafe_ai.identity_service.model;
 
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.time.LocalDateTime;
 
 @Entity
@@ -22,6 +24,7 @@ public class OutboxEvent {
     private Integer eventVersion;
     @Column(name = "correlation_id", length = 64)
     private String correlationId;
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "JSON", nullable = false)
     private String payload;
     @Enumerated(EnumType.STRING)
