@@ -14,9 +14,8 @@ class RecommendationRequest(BaseModel):
 
 @router.post("")
 def recommend(request: RecommendationRequest):
-    if request.user_id is None and request.product_id is None:
-        # Both can be absent for cold-start/popularity recommendations.
-        pass
+    # user_id enables personalization from purchase history. If omitted,
+    # the service returns popular items for cold-start visitors.
     try:
         service = get_recommendation_service()
         recommendations = service.recommend(

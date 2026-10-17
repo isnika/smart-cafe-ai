@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+import math
 
 import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
@@ -14,9 +15,13 @@ DATA_DIR = BASE_DIR / "data_mock"
 
 
 class RecommendationService:
-    """Content-based + item-based collaborative + hybrid recommendation."""
+    """Personalized café recommendations using purchase history, recency, content and CF.
 
-    def __init__(self, data_dir: Path | None = None):
+    The interaction CSV is implicit feedback: quantity/order count indicate interest,
+    rating adjusts preference when present, and recent purchases count more heavily.
+    """
+
+    def __init__(self, data_dir: Path | None = None, recency_half_life_days: int = 60):
         self.data_dir = data_dir or DATA_DIR
         products_path = self.data_dir / "products.csv"
         interactions_path = self.data_dir / "user_item_summary.csv"
@@ -27,6 +32,10 @@ class RecommendationService:
 
         self.products = load_products(products_path).reset_index(drop=True)
         self.interactions = load_interactions(interactions_path)
+        # Only recommend products that exist in the current catalog.
+        valid_ids = set(self.products["product_id"].astype(int))
+        self.interactions = self.interactions[self.interactions["product_id"].isin(valid_ids)].copy()
+
         self.tfidf_matrix, self.vectorizer = create_tfidf_features(self.products)
         self.content_similarity = cosine_similarity(self.tfidf_matrix)
         self.product_ids = self.products["product_id"].astype(int).tolist()
@@ -40,94 +49,140 @@ class RecommendationService:
             }
             for row in self.products.itertuples(index=False)
         }
-        self.user_item = create_user_item_matrix(self.interactions)
+
+        self.user_item = create_user_item_matrix(self.interactions) if not self.interactions.empty else pd.DataFrame()
         self.item_similarity = cosine_similarity(self.user_item.T) if not self.user_item.empty else None
-        self.item_ids = [int(x) for x in self.user_item.columns]
+        self.item_ids = [int(x) for x in self.user_item.columns] if not self.user_item.empty else []
         self.item_index = {pid: i for i, pid in enumerate(self.item_ids)}
-        self.popularity = (
-            self.interactions.groupby("product_id")["quantity"].sum().to_dict()
-        )
+        self.popularity = self.interactions.groupby("product_id")["quantity"].sum().to_dict()
+        self.recency_half_life_days = max(1, int(recency_half_life_days))
 
     @staticmethod
     def _normalize(scores: dict[int, float]) -> dict[int, float]:
-        if not scores:
+        """Scale non-negative scores to [0, 1] without rewarding absent candidates."""
+        positive = {pid: max(0.0, float(score)) for pid, score in scores.items() if score > 0}
+        if not positive:
             return {}
-        lo, hi = min(scores.values()), max(scores.values())
-        if hi == lo:
-            return {pid: 1.0 for pid in scores}
-        return {pid: (score - lo) / (hi - lo) for pid, score in scores.items()}
+        high = max(positive.values())
+        return {pid: score / high for pid, score in positive.items()}
 
-    def _content_scores(self, product_id: int, top_k: int = 30) -> dict[int, float]:
-        if product_id not in self.product_index:
-            return {}
-        idx = self.product_index[product_id]
-        row = self.content_similarity[idx]
-        pairs = [
-            (pid, float(row[i])) for i, pid in enumerate(self.product_ids)
-            if pid != product_id and row[i] > 0
-        ]
-        pairs.sort(key=lambda x: x[1], reverse=True)
-        return dict(pairs[:top_k])
+    def _user_history(self, user_id: str) -> pd.DataFrame:
+        if self.interactions.empty:
+            return self.interactions.copy()
+        history = self.interactions[self.interactions["user_id"].astype(str) == str(user_id)].copy()
+        if history.empty:
+            return history
 
-    def _collaborative_scores(self, user_id: str, top_k: int = 50) -> dict[int, float]:
-        user_id = str(user_id)
-        if self.item_similarity is None or user_id not in self.user_item.index:
-            return {}
-        user_vector = self.user_item.loc[user_id]
-        purchased = set(int(pid) for pid in user_vector[user_vector > 0].index)
-        if not purchased:
-            return {}
+        now = pd.Timestamp.now().normalize()
+        history["last_purchase"] = pd.to_datetime(history["last_purchase"], errors="coerce")
+        age_days = (now - history["last_purchase"]).dt.total_seconds().div(86400).fillna(365)
+        age_days = age_days.clip(lower=0)
+        recency = (0.5 ** (age_days / self.recency_half_life_days)).clip(lower=0.05)
+        # Order count and quantity both represent interest; log prevents heavy buyers dominating.
+        strength = history["quantity"].clip(lower=0).map(lambda x: math.log1p(float(x)))
+        strength += 0.7 * history["n_orders"].clip(lower=0).map(lambda x: math.log1p(float(x)))
+        ratings = history["rating"]
+        rating_factor = pd.Series(1.0, index=history.index)
+        rating_factor.loc[ratings.notna() & (ratings >= 4)] = 1.25
+        rating_factor.loc[ratings.notna() & (ratings <= 2)] = 0.55
+        history["preference_weight"] = (strength + 0.1) * recency * rating_factor
+        return history
+
+    def _history_content_scores(self, history: pd.DataFrame) -> dict[int, float]:
+        """Recommend similar products based on all items in the customer's history."""
         scores: dict[int, float] = {}
-        for pid in purchased:
-            if pid not in self.item_index:
+        for row in history.itertuples(index=False):
+            source_id = int(row.product_id)
+            if source_id not in self.product_index:
                 continue
-            idx = self.item_index[pid]
-            quantity = float(user_vector[pid])
-            for j, similarity in enumerate(self.item_similarity[idx]):
-                candidate = self.item_ids[j]
-                if candidate in purchased or similarity <= 0:
+            source_idx = self.product_index[source_id]
+            weight = float(row.preference_weight)
+            similarities = self.content_similarity[source_idx]
+            for idx, candidate_id in enumerate(self.product_ids):
+                if candidate_id == source_id:
                     continue
-                scores[candidate] = scores.get(candidate, 0.0) + float(similarity) * quantity
-        return dict(sorted(scores.items(), key=lambda x: x[1], reverse=True)[:top_k])
+                similarity = float(similarities[idx])
+                if similarity > 0:
+                    scores[candidate_id] = scores.get(candidate_id, 0.0) + similarity * weight
+        return scores
 
-    def _popular_scores(self, top_k: int = 50) -> dict[int, float]:
-        items = sorted(self.popularity.items(), key=lambda x: x[1], reverse=True)
-        return {int(pid): float(score) for pid, score in items[:top_k]}
+    def _collaborative_scores(self, user_id: str, history: pd.DataFrame, top_k: int = 100) -> dict[int, float]:
+        """Item-item CF, weighted by the customer's recency-adjusted purchase history."""
+        if self.item_similarity is None or str(user_id) not in self.user_item.index:
+            return {}
+        weights = {int(row.product_id): float(row.preference_weight) for row in history.itertuples(index=False)}
+        purchased = set(weights)
+        scores: dict[int, float] = {}
+        for source_id, weight in weights.items():
+            if source_id not in self.item_index:
+                continue
+            row = self.item_similarity[self.item_index[source_id]]
+            for idx, similarity in enumerate(row):
+                candidate_id = self.item_ids[idx]
+                if candidate_id in purchased or similarity <= 0:
+                    continue
+                scores[candidate_id] = scores.get(candidate_id, 0.0) + float(similarity) * weight
+        return dict(sorted(scores.items(), key=lambda item: item[1], reverse=True)[:top_k])
+
+    def _popular_scores(self) -> dict[int, float]:
+        return {int(pid): float(count) for pid, count in self.popularity.items()}
 
     def recommend(self, user_id: str | None = None, product_id: int | None = None, top_k: int = 5):
         if not 1 <= top_k <= 50:
             raise ValueError("top_k must be between 1 and 50")
-        content = self._content_scores(product_id, 100) if product_id is not None else {}
-        collaborative = self._collaborative_scores(user_id, 100) if user_id else {}
-        popular = self._popular_scores(100)
+        if product_id is not None and product_id not in self.product_index:
+            raise ValueError(f"product_id={product_id} không tồn tại trong danh mục sản phẩm")
 
-        # Blend content and CF when available; popular products provide a cold-start fallback.
+        history = self._user_history(str(user_id)) if user_id else self.interactions.iloc[0:0].copy()
+        purchased_ids = set(history["product_id"].astype(int).tolist()) if not history.empty else set()
+
+        content = self._history_content_scores(history) if not history.empty else {}
+        # An explicitly viewed product is also a strong short-term signal.
+        if product_id is not None:
+            idx = self.product_index[product_id]
+            row = self.content_similarity[idx]
+            for i, candidate_id in enumerate(self.product_ids):
+                if candidate_id != product_id and row[i] > 0:
+                    content[candidate_id] = content.get(candidate_id, 0.0) + float(row[i]) * 1.5
+
+        collaborative = self._collaborative_scores(str(user_id), history) if user_id and not history.empty else {}
+        popular = self._popular_scores()
         content_n = self._normalize(content)
         collaborative_n = self._normalize(collaborative)
         popular_n = self._normalize(popular)
-        candidate_ids = set(content_n) | set(collaborative_n)
-        if not candidate_ids:
+
+        candidate_ids = set(content_n) | set(collaborative_n) | set(popular_n)
+        if user_id and history.empty:
+            # Cold-start user: use popularity; do not pretend this is personalized.
             candidate_ids = set(popular_n)
+
         results = []
         for pid in candidate_ids:
-            if product_id is not None and pid == product_id:
+            if pid not in self.product_lookup:
+                continue
+            if pid in purchased_ids:
+                # Discovery recommendations avoid repeating an already purchased item.
                 continue
             has_content = pid in content_n
             has_cf = pid in collaborative_n
+            has_history = not history.empty
+
             if has_content and has_cf:
-                score = 0.4 * content_n[pid] + 0.6 * collaborative_n[pid]
-                reason, kind = "Kết hợp đặc điểm món và lịch sử mua hàng", "Hybrid"
+                score = 0.45 * content_n[pid] + 0.45 * collaborative_n[pid] + 0.10 * popular_n.get(pid, 0.0)
+                reason, kind = "Dựa trên món bạn từng mua và khách có sở thích tương tự", "Hybrid-Personalized"
+            elif has_content and (has_history or product_id is not None):
+                score = 0.70 * content_n[pid] + 0.20 * collaborative_n.get(pid, 0.0) + 0.10 * popular_n.get(pid, 0.0)
+                if product_id is not None and not has_history:
+                    reason, kind = "Có đặc điểm tương tự món bạn đang xem", "Content-Based"
+                else:
+                    reason, kind = "Có hương vị hoặc đặc điểm gần với món bạn thường chọn", "History-Content"
             elif has_cf:
-                score = 0.85 * collaborative_n[pid] + 0.15 * popular_n.get(pid, 0.0)
-                reason, kind = "Phù hợp với lịch sử mua hàng của bạn", "Collaborative"
-            elif has_content:
-                score = 0.85 * content_n[pid] + 0.15 * popular_n.get(pid, 0.0)
-                reason, kind = "Có đặc điểm tương tự món bạn đang xem", "Content-Based"
+                score = 0.75 * collaborative_n[pid] + 0.25 * popular_n.get(pid, 0.0)
+                reason, kind = "Khách có lịch sử mua tương tự cũng thường chọn món này", "Collaborative"
             else:
                 score = popular_n.get(pid, 0.0)
                 reason, kind = "Món được mua phổ biến tại quán", "Trending"
-            if pid not in self.product_lookup:
-                continue
+
             item = self.product_lookup[pid]
             results.append({
                 "product_id": pid,
@@ -138,7 +193,8 @@ class RecommendationService:
                 "reason": reason,
                 "recommendation_type": kind,
             })
-        results.sort(key=lambda x: x["score"], reverse=True)
+
+        results.sort(key=lambda item: (-item["score"], item["product_id"]))
         return results[:top_k]
 
 
