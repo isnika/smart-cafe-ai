@@ -1,0 +1,1148 @@
+{
+  "info": {
+    "_postman_id": "a918e7e1-8f5b-4c6e-b148-5c4d0e981234",
+    "name": "Smart Cafe AI - Store Service Test Suite",
+    "description": "Bộ mẫu test toàn diện cho Store Service (48 APIs) bao gồm: Chi nhánh, Bàn/QR Code, Phiên bàn (QR Ordering), Nhân sự, Ca làm việc, Phân lịch, Chấm công và Nghỉ phép.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8083",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "branch_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "table_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "qr_code",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "session_code",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "session_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "staff_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "shift_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "schedule_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "timekeeping_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "leave_id",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Branches & Tables (Chi nhánh & Bàn/QR)",
+      "item": [
+        {
+          "name": "1.1 Tạo chi nhánh mới (Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201 Created\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Success is true\", function () {",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "    pm.expect(jsonData.data.id).to.be.a('number');",
+                  "});",
+                  "if (jsonData.success && jsonData.data) {",
+                  "    pm.collectionVariables.set(\"branch_id\", jsonData.data.id);",
+                  "    console.log(\"Saved branch_id: \" + jsonData.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"CN-Q1-" + Date.now().toString().slice(-4) + "\",\n  \"name\": \"Smart Cafe Quận 1\",\n  \"address\": \"123 Nguyễn Huệ, Phường Bến Nghé, Quận 1, TP.HCM\",\n  \"phone\": \"02812345678\",\n  \"latitude\": 10.776889,\n  \"longitude\": 106.700806,\n  \"timezone\": \"Asia/Ho_Chi_Minh\",\n  \"opening_time\": \"07:00:00\",\n  \"closing_time\": \"22:30:00\",\n  \"accepts_online_orders\": true,\n  \"delivery_radius_km\": 5.0,\n  \"delivery_fee\": 15000,\n  \"status\": \"Active\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/branches",
+              "host": ["{{base_url}}"],
+              "path": ["branches"]
+            }
+          }
+        },
+        {
+          "name": "1.2 Danh sách chi nhánh (Public)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Has branches list\", function () {",
+                  "    pm.expect(jsonData.data).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/branches?status=Active",
+              "host": ["{{base_url}}"],
+              "path": ["branches"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "Active"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "1.3 Tạo bàn ăn kèm QR Code tự động (Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201 Created\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Table has ID and qr_code\", function () {",
+                  "    pm.expect(jsonData.data.id).to.be.a('number');",
+                  "    pm.expect(jsonData.data.qr_code).to.be.a('string');",
+                  "});",
+                  "if (jsonData.success && jsonData.data) {",
+                  "    pm.collectionVariables.set(\"table_id\", jsonData.data.id);",
+                  "    pm.collectionVariables.set(\"qr_code\", jsonData.data.qr_code);",
+                  "    console.log(\"Saved table_id: \" + jsonData.data.id + \", qr_code: \" + jsonData.data.qr_code);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"table_number\": \"T-\" + Math.floor(Math.random() * 900 + 100)\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/branches/{{branch_id}}/tables",
+              "host": ["{{base_url}}"],
+              "path": ["branches", "{{branch_id}}", "tables"]
+            }
+          }
+        },
+        {
+          "name": "1.4 Tải ảnh QR Code bàn (PNG)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Content-Type is image/png\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"image/png\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/tables/{{table_id}}/qr?format=png",
+              "host": ["{{base_url}}"],
+              "path": ["tables", "{{table_id}}", "qr"],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "png"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "1.5 Xuất PDF bộ mã QR toàn chi nhánh",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Content-Type is application/pdf\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/pdf\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/branches/{{branch_id}}/tables/qr-export",
+              "host": ["{{base_url}}"],
+              "path": ["branches", "{{branch_id}}", "tables", "qr-export"]
+            }
+          }
+        },
+        {
+          "name": "1.6 Sinh lại mã QR cho bàn (Regenerate)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.data) {",
+                  "    pm.collectionVariables.set(\"qr_code\", jsonData.data.qr_code);",
+                  "    console.log(\"Updated new qr_code: \" + jsonData.data.qr_code);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/tables/{{table_id}}/qr/regenerate",
+              "host": ["{{base_url}}"],
+              "path": ["tables", "{{table_id}}", "qr", "regenerate"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Table Sessions & QR Ordering (Phiên bàn)",
+      "item": [
+        {
+          "name": "2.1 Khách quét QR lấy thông tin bàn (Public)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Table matches qr_code\", function () {",
+                  "    pm.expect(jsonData.data.qr_code).to.eql(pm.collectionVariables.get(\"qr_code\"));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/qr/{{qr_code}}",
+              "host": ["{{base_url}}"],
+              "path": ["qr", "{{qr_code}}"]
+            }
+          }
+        },
+        {
+          "name": "2.2 Khách mở hoặc tham gia phiên bàn (Public/Bearer)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 or 201\", function () {",
+                  "    pm.expect([200, 201]).to.include(pm.response.code);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Session has session_code and status Active\", function () {",
+                  "    pm.expect(jsonData.data.session_code).to.be.a('string');",
+                  "    pm.expect(jsonData.data.status).to.eql('Active');",
+                  "});",
+                  "if (jsonData.success && jsonData.data) {",
+                  "    pm.collectionVariables.set(\"session_id\", jsonData.data.id);",
+                  "    pm.collectionVariables.set(\"session_code\", jsonData.data.session_code);",
+                  "    console.log(\"Saved session_code: \" + jsonData.data.session_code);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/qr/{{qr_code}}/sessions",
+              "host": ["{{base_url}}"],
+              "path": ["qr", "{{qr_code}}", "sessions"]
+            }
+          }
+        },
+        {
+          "name": "2.3 Lấy thông tin phiên hiện tại từ Header (Guest/Customer)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Session code matches header\", function () {",
+                  "    pm.expect(jsonData.data.session_code).to.eql(pm.collectionVariables.get(\"session_code\"));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Table-Session-Code",
+                "value": "{{session_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/table-sessions/current",
+              "host": ["{{base_url}}"],
+              "path": ["table-sessions", "current"]
+            }
+          }
+        },
+        {
+          "name": "2.4 Khách gửi yêu cầu thanh toán (Request Payment)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Status updated to Payment_Pending\", function () {",
+                  "    pm.expect(jsonData.data.status).to.eql('Payment_Pending');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Table-Session-Code",
+                "value": "{{session_code}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/table-sessions/current/request-payment",
+              "host": ["{{base_url}}"],
+              "path": ["table-sessions", "current", "request-payment"]
+            }
+          }
+        },
+        {
+          "name": "2.5 Nhân viên xem các phiên đang chờ thanh toán",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/table-sessions?branch_id={{branch_id}}&status=Payment_Pending",
+              "host": ["{{base_url}}"],
+              "path": ["table-sessions"],
+              "query": [
+                {
+                  "key": "branch_id",
+                  "value": "{{branch_id}}"
+                },
+                {
+                  "key": "status",
+                  "value": "Payment_Pending"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "2.6 Nhân viên đóng phiên bàn (Completed)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Session is Completed\", function () {",
+                  "    pm.expect(jsonData.data.status).to.eql('Completed');",
+                  "    pm.expect(jsonData.data.closed_at).to.not.be.null;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"Completed\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/table-sessions/{{session_id}}/status",
+              "host": ["{{base_url}}"],
+              "path": ["table-sessions", "{{session_id}}", "status"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Workforce, Shifts & Schedules (Nhân sự & Lịch làm việc)",
+      "item": [
+        {
+          "name": "3.1 Tạo hồ sơ nhân viên (Manager/Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201 Created\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.data) {",
+                  "    pm.collectionVariables.set(\"staff_id\", jsonData.data.id);",
+                  "    console.log(\"Saved staff_id: \" + jsonData.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"usr-\" + Date.now().toString().slice(-6),\n  \"branch_id\": {{branch_id}},\n  \"employee_code\": \"EMP-\" + Date.now().toString().slice(-4),\n  \"job_title\": \"Barista\",\n  \"employment_type\": \"Full_Time\",\n  \"hire_date\": \"2026-10-01\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/staff-profiles",
+              "host": ["{{base_url}}"],
+              "path": ["staff-profiles"]
+            }
+          }
+        },
+        {
+          "name": "3.2 Cập nhật hồ sơ công việc nhân viên (Manager)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Updated job_title to Senior Barista\", function () {",
+                  "    pm.expect(jsonData.data.job_title).to.eql(\"Senior Barista\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"job_title\": \"Senior Barista\",\n  \"employment_type\": \"Full_Time\",\n  \"hire_date\": \"2026-10-01\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/staff-profiles/{{staff_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["staff-profiles", "{{staff_id}}"]
+            }
+          }
+        },
+        {
+          "name": "3.3 Tạo định nghĩa ca làm việc (Manager)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201 Created\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.data) {",
+                  "    pm.collectionVariables.set(\"shift_id\", jsonData.data.id);",
+                  "    console.log(\"Saved shift_id: \" + jsonData.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branch_id\": {{branch_id}},\n  \"name\": \"Ca Sáng - \" + Date.now().toString().slice(-4),\n  \"start_time\": \"07:00:00\",\n  \"end_time\": \"15:00:00\",\n  \"is_active\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/shifts",
+              "host": ["{{base_url}}"],
+              "path": ["shifts"]
+            }
+          }
+        },
+        {
+          "name": "3.4 Danh sách ca làm việc của chi nhánh",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/shifts?branch_id={{branch_id}}&is_active=true",
+              "host": ["{{base_url}}"],
+              "path": ["shifts"],
+              "query": [
+                {
+                  "key": "branch_id",
+                  "value": "{{branch_id}}"
+                },
+                {
+                  "key": "is_active",
+                  "value": "true"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "3.5 Xếp lịch làm việc cho nhân viên (Manager)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201 Created\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.data) {",
+                  "    pm.collectionVariables.set(\"schedule_id\", jsonData.data.id);",
+                  "    console.log(\"Saved schedule_id: \" + jsonData.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"staff_id\": {{staff_id}},\n  \"shift_id\": {{shift_id}},\n  \"work_date\": \"2026-10-20\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/schedules",
+              "host": ["{{base_url}}"],
+              "path": ["schedules"]
+            }
+          }
+        },
+        {
+          "name": "3.6 Xếp lịch làm việc hàng loạt (Bulk)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201 Created\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Created count >= 1\", function () {",
+                  "    pm.expect(jsonData.data.created_count).to.be.at.least(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"staff_id\": {{staff_id}},\n      \"shift_id\": {{shift_id}},\n      \"work_date\": \"2026-10-21\"\n    },\n    {\n      \"staff_id\": {{staff_id}},\n      \"shift_id\": {{shift_id}},\n      \"work_date\": \"2026-10-22\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/schedules/bulk",
+              "host": ["{{base_url}}"],
+              "path": ["schedules", "bulk"]
+            }
+          }
+        },
+        {
+          "name": "3.7 Lịch làm việc toàn chi nhánh",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/schedules?branch_id={{branch_id}}&from=2026-10-01&to=2026-10-31",
+              "host": ["{{base_url}}"],
+              "path": ["schedules"],
+              "query": [
+                {
+                  "key": "branch_id",
+                  "value": "{{branch_id}}"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-10-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-10-31"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Timekeeping (Chấm công)",
+      "item": [
+        {
+          "name": "4.1 Check-In vào ca làm việc (Staff)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.data) {",
+                  "    pm.collectionVariables.set(\"timekeeping_id\", jsonData.data.id);",
+                  "    console.log(\"Saved timekeeping_id: \" + jsonData.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schedule_id\": {{schedule_id}},\n  \"source\": \"QR\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/timekeeping/check-in",
+              "host": ["{{base_url}}"],
+              "path": ["timekeeping", "check-in"]
+            }
+          }
+        },
+        {
+          "name": "4.2 Check-Out kết thúc ca làm việc (Staff)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Has check_out time\", function () {",
+                  "    pm.expect(jsonData.data.check_out).to.not.be.null;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schedule_id\": {{schedule_id}}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/timekeeping/check-out",
+              "host": ["{{base_url}}"],
+              "path": ["timekeeping", "check-out"]
+            }
+          }
+        },
+        {
+          "name": "4.3 Xem bảng chấm công chi nhánh (Manager)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/timekeeping?branch_id={{branch_id}}&from=2026-10-01&to=2026-10-31",
+              "host": ["{{base_url}}"],
+              "path": ["timekeeping"],
+              "query": [
+                {
+                  "key": "branch_id",
+                  "value": "{{branch_id}}"
+                },
+                {
+                  "key": "from",
+                  "value": "2026-10-01"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-10-31"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "4.4 Điều chỉnh chấm công (Manager)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"is_adjusted is true\", function () {",
+                  "    pm.expect(jsonData.data.is_adjusted).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"check_in\": \"2026-10-20T07:05:00\",\n  \"check_out\": \"2026-10-20T15:02:00\",\n  \"adjustment_reason\": \"Nhân viên quên check-in máy quét QR, đã xác nhận với trưởng ca\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/timekeeping/{{timekeeping_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["timekeeping", "{{timekeeping_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Leave Requests (Nghỉ phép)",
+      "item": [
+        {
+          "name": "5.1 Nhân viên nộp đơn xin nghỉ phép (Staff)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201 Created\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.data) {",
+                  "    pm.collectionVariables.set(\"leave_id\", jsonData.data.id);",
+                  "    console.log(\"Saved leave_id: \" + jsonData.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leave_type\": \"Annual\",\n  \"start_date\": \"2026-10-25\",\n  \"end_date\": \"2026-10-26\",\n  \"reason\": \"Nghỉ phép thường niên giải quyết việc gia đình\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/leave-requests",
+              "host": ["{{base_url}}"],
+              "path": ["leave-requests"]
+            }
+          }
+        },
+        {
+          "name": "5.2 Quản lý xem danh sách đơn nghỉ cần duyệt",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/leave-requests?branch_id={{branch_id}}&status=Pending",
+              "host": ["{{base_url}}"],
+              "path": ["leave-requests"],
+              "query": [
+                {
+                  "key": "branch_id",
+                  "value": "{{branch_id}}"
+                },
+                {
+                  "key": "status",
+                  "value": "Pending"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "5.3 Quản lý phê duyệt đơn nghỉ (Approved)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Status is Approved\", function () {",
+                  "    pm.expect(jsonData.data.status).to.eql('Approved');",
+                  "    pm.expect(jsonData.data.reviewed_at).to.not.be.null;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"Approved\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/leave-requests/{{leave_id}}/decision",
+              "host": ["{{base_url}}"],
+              "path": ["leave-requests", "{{leave_id}}", "decision"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
