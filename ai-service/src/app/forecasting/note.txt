@@ -1,0 +1,48 @@
+Bước 1 — data_mock/
+
+Tạo dữ liệu giả lập để phát triển và kiểm thử trước khi kết nối MySQL.
+- orders.csv: ngày, mã đơn, tổng tiền, trạng thái.
+- order_items.csv: sản phẩm, số lượng, đơn giá.
+- inventory.csv: tồn kho, mức tồn tối thiểu.
+- recipes.csv: định lượng nguyên liệu cho từng sản phẩm.
+
+
+Bước 2 — preprocessing.py
+Làm sạch dữ liệu, chuyển kiểu ngày tháng, xử lý giá trị thiếu và tổng hợp doanh thu theo ngày. Chỉ tính những đơn hàng hợp lệ theo quy tắc nghiệp vụ.
+
+
+Bước 3 — features.py
+Tạo đặc trưng đầu vào cho mô hình:
+- day_of_week: thứ trong tuần.
+- lag_1: doanh thu ngày trước.
+- lag_7: doanh thu cùng thứ tuần trước.
+- rolling_mean_7: doanh thu trung bình 7 ngày trước.
+Đây là dữ liệu đầu vào, chưa phải mô hình dự đoán.
+
+
+Bước 4 — models/
+Viết từng mô hình riêng để dễ so sánh:
+- baseline.py: mô hình cơ sở, ví dụ lấy doanh thu cùng thứ tuần trước.
+- random_forest.py: Random Forest, Extra Trees.
+- xgboost.py: XGBoost, nếu cài thư viện xgboost.
+Không mặc định mô hình phức tạp nhất là mô hình tốt nhất.
+
+
+
+Bước 5 — evaluation.py
+Chia dữ liệu theo thời gian: quá khứ để huấn luyện, giai đoạn sau để kiểm tra. So sánh MAE, RMSE và WAPE rồi chọn mô hình phù hợp.
+
+
+
+Bước 6 — service.py
+Điều phối toàn bộ luồng: đọc dữ liệu → tạo features → huấn luyện/chọn mô hình → dự đoán doanh thu ngày mai. Phần dự đoán nhiều ngày cần cập nhật các đặc trưng lag một cách tuần tự.
+
+
+
+Bước 7 — schemas.py và api/routes/forecasting.py
+Khai báo request/response bằng Pydantic, sau đó tạo API để frontend gọi và nhận kết quả dự báo.
+
+
+
+Bước 8 — Kiểm thử và tích hợp
+Kiểm tra dữ liệu, API, trường hợp thiếu lịch sử, rồi kết nối MySQL và lưu kết quả dự báo vào bảng AI_Forecasts.
