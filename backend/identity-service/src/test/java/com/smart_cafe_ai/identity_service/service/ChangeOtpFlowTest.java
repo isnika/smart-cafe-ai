@@ -120,7 +120,7 @@ class ChangeOtpFlowTest {
                 mock(RefreshTokenRepository.class),
                 passwordEncoder,
                 mock(JwtService.class),
-                otpService);
+                otpService, mock(GoogleTokenVerifierService.class));
         User user = User.builder()
                 .id("user-1")
                 .email("user@example.com")

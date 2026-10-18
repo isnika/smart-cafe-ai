@@ -53,6 +53,10 @@ jwt:
   secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
   expiration-ms: 86400000 # 1 ngày
 
+auth:
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:}
+
 # --- CẤU HÌNH CLOUDINARY (LẤY TỪ FILE .ENV) ---
 cloudinary:
   cloud-name: ${CLOUDINARY_CLOUD_NAME:}

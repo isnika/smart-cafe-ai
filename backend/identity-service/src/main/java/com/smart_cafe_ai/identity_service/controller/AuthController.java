@@ -5,6 +5,7 @@ import com.smart_cafe_ai.identity_service.dto.auth.AuthResponse;
 import com.smart_cafe_ai.identity_service.dto.auth.ChangePasswordRequest;
 import com.smart_cafe_ai.identity_service.dto.auth.ForgotPasswordRequest;
 import com.smart_cafe_ai.identity_service.dto.auth.LoginRequest;
+import com.smart_cafe_ai.identity_service.dto.auth.GoogleLoginRequest;
 import com.smart_cafe_ai.identity_service.dto.auth.RefreshTokenRequest;
 import com.smart_cafe_ai.identity_service.dto.auth.RegisterRequest;
 import com.smart_cafe_ai.identity_service.dto.auth.ResendOtpRequest;
@@ -14,6 +15,7 @@ import com.smart_cafe_ai.identity_service.dto.user.UserResponse;
 import com.smart_cafe_ai.identity_service.security.UserPrincipal;
 import com.smart_cafe_ai.identity_service.service.AuthService;
 import org.springframework.http.HttpStatus;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -53,9 +55,30 @@ public class AuthController {
     }
 
     @PostMapping("/google")
-    public ResponseEntity<ApiResponse<String>> googleLogin() {
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
-                .body(ApiResponse.error("NOT_IMPLEMENTED", "Tính năng Đăng nhập bằng Google sẽ được hoàn thiện ở bước tiếp theo"));
+    public ResponseEntity<ApiResponse<AuthResponse>> googleLogin(@RequestBody(required = false) GoogleLoginRequest request) {
+        return googleResponse(() -> authService.googleLogin(request));
+    }
+
+    @PostMapping("/google/link")
+    public ResponseEntity<ApiResponse<AuthResponse>> linkGoogle(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestBody(required = false) GoogleLoginRequest request) {
+        if (principal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("UNAUTHORIZED", "Hãy đăng nhập trước khi liên kết Google"));
+        }
+        return googleResponse(() -> authService.linkGoogle(principal.getId(), request));
+    }
+
+    private ResponseEntity<ApiResponse<AuthResponse>> googleResponse(
+            java.util.function.Supplier<ApiResponse<AuthResponse>> action) {
+        try {
+            return ResponseEntity.ok(action.get());
+        } catch (DataIntegrityViolationException ex) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiResponse.error("GOOGLE_ACCOUNT_CONFLICT",
+                            "Thông tin tài khoản đã thay đổi hoặc trùng lặp, vui lòng thử đăng nhập lại"));
+        }
     }
 
     @PostMapping("/refresh")

@@ -1,6 +1,7 @@
 package com.smart_cafe_ai.identity_service.dto.auth;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.smart_cafe_ai.identity_service.dto.user.UserResponse;
 
 public class AuthResponse {
@@ -13,6 +14,17 @@ public class AuthResponse {
     @JsonProperty("expires_in")
     private Long expiresIn;
     private UserResponse user;
+    @JsonProperty("is_new_user")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Boolean newUser;
+
+    public Boolean getNewUser() {
+        return newUser;
+    }
+
+    public void setNewUser(Boolean newUser) {
+        this.newUser = newUser;
+    }
     private static String $default$tokenType() {
         return "Bearer";
     }
@@ -121,6 +133,7 @@ public class AuthResponse {
         if (!(o instanceof AuthResponse)) return false;
         final AuthResponse other = (AuthResponse) o;
         if (!other.canEqual((java.lang.Object) this)) return false;
+        if (!java.util.Objects.equals(this.newUser, other.newUser)) return false;
         final java.lang.Object this$expiresIn = this.getExpiresIn();
         final java.lang.Object other$expiresIn = other.getExpiresIn();
         if (this$expiresIn == null ? other$expiresIn != null : !this$expiresIn.equals(other$expiresIn)) return false;
@@ -146,6 +159,7 @@ public class AuthResponse {
     public int hashCode() {
         final int PRIME = 59;
         int result = 1;
+        result = PRIME * result + java.util.Objects.hashCode(newUser);
         final java.lang.Object $expiresIn = this.getExpiresIn();
         result = result * PRIME + ($expiresIn == null ? 43 : $expiresIn.hashCode());
         final java.lang.Object $accessToken = this.getAccessToken();

@@ -41,7 +41,7 @@ class RegistrationOtpChannelTest {
             return user;
         });
         AuthService auth = new AuthService(users, roles, mock(RefreshTokenRepository.class),
-                encoder, mock(JwtService.class), otpService);
+                encoder, mock(JwtService.class), otpService, mock(GoogleTokenVerifierService.class));
         RegisterRequest request = RegisterRequest.builder().fullName("Customer")
                 .email(email).phone("0901234567").password("Password123!").build();
 

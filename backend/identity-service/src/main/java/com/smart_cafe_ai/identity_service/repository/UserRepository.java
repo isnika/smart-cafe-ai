@@ -14,6 +14,8 @@ import java.util.Optional;
 @Repository
 public interface UserRepository extends JpaRepository<User, String>, JpaSpecificationExecutor<User> {
     Optional<User> findByEmail(String email);
+    Optional<User> findByGoogleId(String googleId);
+    Optional<User> findByEmailIgnoreCase(String email);
     Optional<User> findByPhone(String phone);
 
     @Query("SELECT u FROM User u WHERE u.email = :identifier OR u.phone = :identifier")

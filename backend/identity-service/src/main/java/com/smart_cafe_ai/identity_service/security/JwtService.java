@@ -44,6 +44,7 @@ public class JwtService {
 
     private String buildToken(Map<String, Object> extraClaims, String subject, long expirationMs) {
         return Jwts.builder()
+                .id(java.util.UUID.randomUUID().toString())
                 .claims(extraClaims)
                 .subject(subject)
                 .issuedAt(new Date(System.currentTimeMillis()))
