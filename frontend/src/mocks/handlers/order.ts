@@ -26,7 +26,7 @@ function voucherDiscount(code: string | undefined, net: number): number {
   return Math.min(Math.round(net * 0.1), 30_000);
 }
 
-function buildItem(line: OrderLineInput, branchId: number, orderId: number): OrderItemDetail {
+export function buildItem(line: OrderLineInput, branchId: number, orderId: number): OrderItemDetail {
   if (!Number.isInteger(line.quantity) || line.quantity < 1) fail(400, 'VALIDATION_ERROR', 'quantity phải là số nguyên ≥ 1');
 
   const found = findVariant(line.variantId);
