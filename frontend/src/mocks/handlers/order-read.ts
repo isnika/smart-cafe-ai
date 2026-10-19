@@ -30,7 +30,7 @@ function parseStatuses(sp: URLSearchParams): OrderStatus[] {
  */
 function toPage(all: OrderDetail[], page: number, size: number): Page<OrderDetail> {
   const start = (page - 1) * size;
-  return { items: all.slice(start, start + size), total: all.length, page, size, totalPages: Math.ceil(all.length / size) };
+  return { items: all.slice(start, start + size), total: all.length, page, pageSize : size };
 }
 
 const byCreatedAsc = (a: OrderDetail, b: OrderDetail) => a.createdAt.localeCompare(b.createdAt) || a.id - b.id;
