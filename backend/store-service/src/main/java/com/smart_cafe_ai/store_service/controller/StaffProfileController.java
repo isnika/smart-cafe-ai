@@ -9,9 +9,9 @@ import com.smart_cafe_ai.store_service.repository.StaffBranchHistoryRepository;
 import com.smart_cafe_ai.store_service.service.StaffProfileService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -32,11 +32,13 @@ public class StaffProfileController {
      * Danh sách hồ sơ nhân viên theo chi nhánh. (Manager/Admin)
      */
     @GetMapping
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
     public ResponseEntity<ApiResponse<List<StaffProfileResponse>>> getStaffProfiles(
             @RequestParam(value = "branch_id", required = false) Integer branchId,
-            @RequestParam(value = "status", required = false) StaffStatus status
+            @RequestParam(value = "status", required = false) StaffStatus status,
+            @RequestHeader(value = "Authorization", required = false) String bearerToken
     ) {
-        List<StaffProfileResponse> profiles = staffProfileService.getStaffProfiles(branchId, status);
+        List<StaffProfileResponse> profiles = staffProfileService.getStaffProfiles(branchId, status, bearerToken);
         return ResponseEntity.ok(ApiResponse.success(profiles));
     }
 
@@ -45,6 +47,7 @@ public class StaffProfileController {
      * Chi tiết hồ sơ nhân viên (có tích hợp lấy thông tin user qua OpenFeign). (Manager/Admin)
      */
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
     public ResponseEntity<ApiResponse<StaffProfileResponse>> getStaffProfileById(
             @PathVariable Long id,
             @RequestHeader(value = "Authorization", required = false) String bearerToken
@@ -58,6 +61,7 @@ public class StaffProfileController {
      * Tạo hồ sơ nhân viên mới. (Manager/Admin)
      */
     @PostMapping
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
     public ResponseEntity<ApiResponse<StaffProfileResponse>> createStaffProfile(
             @Valid @RequestBody StaffProfileRequest request,
             @RequestHeader(value = "Authorization", required = false) String bearerToken
@@ -71,6 +75,7 @@ public class StaffProfileController {
      * Cập nhật hồ sơ công việc. (Manager/Admin)
      */
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
     public ResponseEntity<ApiResponse<StaffProfileResponse>> updateStaffProfile(
             @PathVariable Long id,
             @Valid @RequestBody com.smart_cafe_ai.store_service.dto.staff.StaffProfileUpdateRequest request
@@ -84,6 +89,7 @@ public class StaffProfileController {
      * Cập nhật trạng thái nhân sự. (Manager/Admin)
      */
     @PatchMapping("/{id}/status")
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
     public ResponseEntity<ApiResponse<StaffProfileResponse>> updateStaffStatus(
             @PathVariable Long id,
             @RequestBody Map<String, Object> body
@@ -102,6 +108,7 @@ public class StaffProfileController {
      * Điều chuyển nhân viên sang chi nhánh khác. (Manager/Admin)
      */
     @PostMapping("/{id}/transfer")
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
     public ResponseEntity<ApiResponse<StaffProfileResponse>> transferBranch(
             @PathVariable Long id,
             @RequestBody Map<String, Object> body,
@@ -122,6 +129,7 @@ public class StaffProfileController {
      * Lịch sử chuyển chi nhánh của nhân viên. (Manager/Admin)
      */
     @GetMapping("/{id}/branch-history")
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
     public ResponseEntity<ApiResponse<List<StaffBranchHistory>>> getBranchHistory(@PathVariable Long id) {
         List<StaffBranchHistory> history = staffBranchHistoryRepository.findAllByStaffIdOrderByEffectiveDateDesc(id);
         return ResponseEntity.ok(ApiResponse.success(history));

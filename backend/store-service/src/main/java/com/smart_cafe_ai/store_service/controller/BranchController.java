@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -49,6 +50,7 @@ public class BranchController {
      * Tạo chi nhánh. (Admin)
      */
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<BranchResponse>> createBranch(@Valid @RequestBody BranchRequest request) {
         BranchResponse created = branchService.createBranch(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(created));
@@ -59,6 +61,7 @@ public class BranchController {
      * Sửa thông tin chi nhánh. (Admin)
      */
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<BranchResponse>> updateBranch(
             @PathVariable Integer id,
             @Valid @RequestBody BranchRequest request
@@ -72,6 +75,7 @@ public class BranchController {
      * Kích hoạt/vô hiệu hóa chi nhánh. (Admin)
      */
     @PatchMapping("/{id}/status")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<BranchResponse>> updateBranchStatus(
             @PathVariable Integer id,
             @RequestBody BranchStatusRequest request

@@ -9,6 +9,7 @@ import com.smart_cafe_ai.store_service.service.TableSessionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -70,9 +71,10 @@ public class TableSessionController {
 
     /**
      * GET /table-sessions
-     * Nhân viên xem các phiên bàn theo chi nhánh. (Staff/Manager)
+     * Nhân viên xem các phiên bàn theo chi nhánh. (Staff/Manager/Admin)
      */
     @GetMapping({"/table-sessions", "/api/v1/table-sessions"})
+    @PreAuthorize("hasAnyRole('STAFF', 'MANAGER', 'ADMIN')")
     public ResponseEntity<ApiResponse<List<TableSessionResponse>>> getSessionsByBranch(
             @RequestParam("branch_id") Integer branchId,
             @RequestParam(value = "status", required = false) List<TableSessionStatus> statuses
@@ -83,9 +85,10 @@ public class TableSessionController {
 
     /**
      * PATCH /table-sessions/{id}/status
-     * Đóng / Hủy / Đổi trạng thái phiên làm việc. (Staff/Manager)
+     * Đóng / Hủy / Đổi trạng thái phiên làm việc. (Staff/Manager/Admin)
      */
     @PatchMapping({"/table-sessions/{id}/status", "/api/v1/table-sessions/{id}/status"})
+    @PreAuthorize("hasAnyRole('STAFF', 'MANAGER', 'ADMIN')")
     public ResponseEntity<ApiResponse<TableSessionResponse>> updateSessionStatus(
             @PathVariable Long id,
             @RequestBody TableSessionStatusRequest request

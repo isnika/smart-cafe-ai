@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -31,6 +32,7 @@ public class ScheduleController {
      * Lịch theo chi nhánh/nhân viên/ngày. (Manager, Admin)
      */
     @GetMapping
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
     public ResponseEntity<ApiResponse<List<ScheduleResponse>>> getSchedules(
             @RequestParam(value = "branch_id", required = false) Integer branchId,
             @RequestParam(value = "staff_id", required = false) Long staffId,
@@ -45,9 +47,10 @@ public class ScheduleController {
 
     /**
      * GET /schedules/me
-     * Nhân viên xem lịch của mình. (Staff)
+     * Nhân viên xem lịch của mình. (Staff/Manager/Admin)
      */
     @GetMapping("/me")
+    @PreAuthorize("hasAnyRole('STAFF', 'MANAGER', 'ADMIN')")
     public ResponseEntity<ApiResponse<List<ScheduleResponse>>> getMySchedules(
             Authentication authentication,
             @RequestParam(value = "from", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -60,9 +63,10 @@ public class ScheduleController {
 
     /**
      * POST /schedules
-     * Xếp lịch một nhân viên. (Manager)
+     * Xếp lịch một nhân viên. (Manager, Admin)
      */
     @PostMapping
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
     public ResponseEntity<ApiResponse<ScheduleResponse>> createSchedule(@Valid @RequestBody ScheduleRequest request) {
         ScheduleResponse created = scheduleService.createSchedule(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(created));
@@ -70,9 +74,10 @@ public class ScheduleController {
 
     /**
      * POST /schedules/bulk
-     * Xếp lịch hàng loạt. (Manager)
+     * Xếp lịch hàng loạt. (Manager, Admin)
      */
     @PostMapping("/bulk")
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
     public ResponseEntity<ApiResponse<ScheduleBulkResponse>> createSchedulesBulk(@Valid @RequestBody ScheduleBulkRequest request) {
         ScheduleBulkResponse result = scheduleService.createSchedulesBulk(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(result));
@@ -80,9 +85,10 @@ public class ScheduleController {
 
     /**
      * PUT /schedules/{id}
-     * Đổi ca/ngày cho schedule. (Manager)
+     * Đổi ca/ngày cho schedule. (Manager, Admin)
      */
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
     public ResponseEntity<ApiResponse<ScheduleResponse>> updateSchedule(
             @PathVariable Long id,
             @Valid @RequestBody ScheduleRequest request
@@ -93,9 +99,10 @@ public class ScheduleController {
 
     /**
      * PATCH /schedules/{id}/status
-     * Cập nhật trạng thái lịch. (Manager)
+     * Cập nhật trạng thái lịch. (Manager, Admin)
      */
     @PatchMapping("/{id}/status")
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
     public ResponseEntity<ApiResponse<ScheduleResponse>> updateScheduleStatus(
             @PathVariable Long id,
             @RequestBody Map<String, String> body
@@ -108,9 +115,10 @@ public class ScheduleController {
 
     /**
      * DELETE /schedules/{id}
-     * Xóa lịch tương lai chưa có chấm công. (Manager)
+     * Xóa lịch tương lai chưa có chấm công. (Manager, Admin)
      */
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
     public ResponseEntity<Void> deleteSchedule(@PathVariable Long id) {
         scheduleService.deleteSchedule(id);
         return ResponseEntity.noContent().build();

@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,9 +25,10 @@ public class LeaveRequestController {
 
     /**
      * POST /leave-requests
-     * Nhân viên gửi đơn nghỉ. (Staff)
+     * Nhân viên gửi đơn nghỉ. (Staff/Manager)
      */
     @PostMapping
+    @PreAuthorize("hasAnyRole('STAFF', 'MANAGER')")
     public ResponseEntity<ApiResponse<LeaveRequestResponse>> createLeaveRequest(
             @Valid @RequestBody LeaveRequestCreateRequest request,
             Authentication authentication
@@ -38,9 +40,10 @@ public class LeaveRequestController {
 
     /**
      * GET /leave-requests/me
-     * Đơn nghỉ của tôi. (Staff)
+     * Đơn nghỉ của tôi. (Staff/Manager)
      */
     @GetMapping("/me")
+    @PreAuthorize("hasAnyRole('STAFF', 'MANAGER')")
     public ResponseEntity<ApiResponse<List<LeaveRequestResponse>>> getMyLeaveRequests(
             Authentication authentication,
             @RequestParam(value = "status", required = false) LeaveStatus status
@@ -52,9 +55,10 @@ public class LeaveRequestController {
 
     /**
      * POST /leave-requests/{id}/cancel
-     * Rút đơn nghỉ khi còn Pending. (Staff)
+     * Rút đơn nghỉ khi còn Pending. (Staff/Manager)
      */
     @PostMapping("/{id}/cancel")
+    @PreAuthorize("hasAnyRole('STAFF', 'MANAGER')")
     public ResponseEntity<ApiResponse<LeaveRequestResponse>> cancelLeaveRequest(
             @PathVariable Long id,
             Authentication authentication
@@ -69,6 +73,7 @@ public class LeaveRequestController {
      * Quản lý xem đơn nghỉ. (Manager, Admin)
      */
     @GetMapping
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
     public ResponseEntity<ApiResponse<List<LeaveRequestResponse>>> getLeaveRequests(
             @RequestParam(value = "branch_id", required = false) Integer branchId,
             @RequestParam(value = "staff_id", required = false) Long staffId,
@@ -80,9 +85,10 @@ public class LeaveRequestController {
 
     /**
      * PATCH /leave-requests/{id}/decision
-     * Duyệt hoặc từ chối đơn nghỉ. (Manager)
+     * Duyệt hoặc từ chối đơn nghỉ. (Manager, Admin)
      */
     @PatchMapping("/{id}/decision")
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
     public ResponseEntity<ApiResponse<LeaveRequestResponse>> decideLeaveRequest(
             @PathVariable Long id,
             @Valid @RequestBody LeaveRequestDecisionRequest request,

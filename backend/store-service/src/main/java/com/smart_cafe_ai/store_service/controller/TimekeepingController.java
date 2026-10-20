@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -25,9 +26,10 @@ public class TimekeepingController {
 
     /**
      * POST /timekeeping/check-in
-     * Check-in vào schedule của chính mình. (Staff)
+     * Check-in vào schedule của chính mình. (Staff/Manager)
      */
     @PostMapping("/check-in")
+    @PreAuthorize("hasAnyRole('STAFF', 'MANAGER')")
     public ResponseEntity<ApiResponse<TimekeepingResponse>> checkIn(
             @Valid @RequestBody TimekeepingCheckInRequest request,
             Authentication authentication
@@ -39,9 +41,10 @@ public class TimekeepingController {
 
     /**
      * POST /timekeeping/check-out
-     * Check-out khỏi schedule của mình. (Staff)
+     * Check-out khỏi schedule của mình. (Staff/Manager)
      */
     @PostMapping("/check-out")
+    @PreAuthorize("hasAnyRole('STAFF', 'MANAGER')")
     public ResponseEntity<ApiResponse<TimekeepingResponse>> checkOut(
             @Valid @RequestBody TimekeepingCheckOutRequest request,
             Authentication authentication
@@ -53,9 +56,10 @@ public class TimekeepingController {
 
     /**
      * GET /timekeeping/me
-     * Lịch sử chấm công của tôi. (Staff)
+     * Lịch sử chấm công của tôi. (Staff/Manager)
      */
     @GetMapping("/me")
+    @PreAuthorize("hasAnyRole('STAFF', 'MANAGER')")
     public ResponseEntity<ApiResponse<List<TimekeepingResponse>>> getMyTimekeeping(
             Authentication authentication,
             @RequestParam(value = "from", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -71,6 +75,7 @@ public class TimekeepingController {
      * Bảng chấm công toàn chi nhánh. (Manager, Admin)
      */
     @GetMapping
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
     public ResponseEntity<ApiResponse<List<TimekeepingResponse>>> getTimekeeping(
             @RequestParam(value = "branch_id", required = false) Integer branchId,
             @RequestParam(value = "staff_id", required = false) Long staffId,
@@ -83,9 +88,10 @@ public class TimekeepingController {
 
     /**
      * PATCH /timekeeping/{id}
-     * Quản lý điều chỉnh chấm công. (Manager)
+     * Quản lý điều chỉnh chấm công. (Manager, Admin)
      */
     @PatchMapping("/{id}")
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
     public ResponseEntity<ApiResponse<TimekeepingResponse>> adjustTimekeeping(
             @PathVariable Long id,
             @Valid @RequestBody TimekeepingAdjustmentRequest request,

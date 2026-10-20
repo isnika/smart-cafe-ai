@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,6 +26,7 @@ public class ShiftController {
      * Danh sách định nghĩa ca của chi nhánh. (Staff, Manager, Admin)
      */
     @GetMapping
+    @PreAuthorize("hasAnyRole('STAFF', 'MANAGER', 'ADMIN')")
     public ResponseEntity<ApiResponse<List<ShiftResponse>>> getShifts(
             @RequestParam(value = "branch_id", required = false) Integer branchId,
             @RequestParam(value = "is_active", required = false) Boolean isActive
@@ -35,9 +37,10 @@ public class ShiftController {
 
     /**
      * GET /shifts/{id}
-     * Chi tiết ca làm việc.
+     * Chi tiết ca làm việc. (Staff, Manager, Admin)
      */
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('STAFF', 'MANAGER', 'ADMIN')")
     public ResponseEntity<ApiResponse<ShiftResponse>> getShiftById(@PathVariable Integer id) {
         ShiftResponse shift = shiftService.getShiftById(id);
         return ResponseEntity.ok(ApiResponse.success(shift));
@@ -45,9 +48,10 @@ public class ShiftController {
 
     /**
      * POST /shifts
-     * Tạo ca. (Manager)
+     * Tạo ca. (Manager, Admin)
      */
     @PostMapping
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
     public ResponseEntity<ApiResponse<ShiftResponse>> createShift(@Valid @RequestBody ShiftRequest request) {
         ShiftResponse created = shiftService.createShift(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(created));
@@ -55,9 +59,10 @@ public class ShiftController {
 
     /**
      * PUT /shifts/{id}
-     * Sửa ca. (Manager)
+     * Sửa ca. (Manager, Admin)
      */
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
     public ResponseEntity<ApiResponse<ShiftResponse>> updateShift(
             @PathVariable Integer id,
             @Valid @RequestBody ShiftRequest request
@@ -68,9 +73,10 @@ public class ShiftController {
 
     /**
      * PATCH /shifts/{id}/active
-     * Bật/tắt ca làm việc. (Manager)
+     * Bật/tắt ca làm việc. (Manager, Admin)
      */
     @PatchMapping("/{id}/active")
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> updateShiftActive(
             @PathVariable Integer id,
             @RequestBody Map<String, Boolean> body
