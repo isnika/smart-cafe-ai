@@ -10,7 +10,8 @@ import {
   Users,
 } from "lucide-react";
 import type { ComponentType } from "react";
-import { useAuthStore, type Role } from "@/features/auth/store";
+import { useAuthStore } from "@/features/auth/store";
+import type { RoleName } from "@/shared/types";
 import { Button } from "@/shared/ui";
 import { cn } from "@/shared/lib/cn";
 
@@ -21,24 +22,28 @@ interface NavItem {
   end?: boolean;
 }
 
-const navByRole: Record<Exclude<Role, "customer">, NavItem[]> = {
-  staff: [
+const navByRole: Record<Exclude<RoleName, "Customer">, NavItem[]> = {
+  Staff: [
     { to: "/staff", label: "Tổng quan", icon: LayoutDashboard, end: true },
     { to: "/staff/queue", label: "Hàng đợi đơn", icon: ClipboardList },
     { to: "/staff/checkin", label: "Check-in QR", icon: ScanLine },
   ],
-  manager: [
+  Manager: [
     { to: "/manager", label: "Tổng quan", icon: LayoutDashboard, end: true },
     { to: "/manager/inventory", label: "Kho", icon: Package },
     { to: "/manager/forecast", label: "Dự báo AI", icon: Sparkles },
   ],
-  admin: [
+  Admin: [
     { to: "/admin", label: "Tổng quan", icon: LayoutDashboard, end: true },
     { to: "/admin/users", label: "Người dùng", icon: Users },
   ],
 };
 
-const roleLabel = { staff: "Nhân viên", manager: "Quản lý", admin: "Quản trị" };
+const roleLabel: Record<Exclude<RoleName, "Customer">, string> = {
+  Staff: "Nhân viên",
+  Manager: "Quản lý",
+  Admin: "Quản trị",
+};
 
 function NavItems({
   items,
@@ -75,11 +80,12 @@ function NavItems({
 /** Khung chung cho Staff / Manager / Admin: Sidebar (desktop) + Topbar. Menu đổi theo vai trò. */
 export function StaffShellLayout() {
   const user = useAuthStore((s) => s.user);
+  const roleName = useAuthStore((s) => s.roleName);
   const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
 
-  if (!user || user.role === "customer") return null; // RequireRole đã chặn; dòng này chỉ để TypeScript thu hẹp kiểu
-  const items = navByRole[user.role];
+  if (!user || !roleName || roleName === "Customer") return null;
+  const items = navByRole[roleName];
 
   return (
     <div className="min-h-screen md:flex">
@@ -93,8 +99,8 @@ export function StaffShellLayout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-10 flex items-center justify-between bg-white px-4 py-3 shadow-sticky">
           <div>
-            <p className="font-medium">{user.name}</p>
-            <p className="text-caption text-gray-500">{roleLabel[user.role]}</p>
+            <p className="font-medium">{user.fullName}</p>
+            <p className="text-caption text-gray-500">{roleLabel[roleName]}</p>
           </div>
           <Button
             variant="ghost"

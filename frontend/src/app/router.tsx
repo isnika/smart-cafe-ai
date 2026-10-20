@@ -4,7 +4,11 @@ import { RequireRole } from "@/app/guards/RequireRole";
 import { CustomerLayout } from "@/app/layouts/CustomerLayout";
 import { StaffShellLayout } from "@/app/layouts/StaffShellLayout";
 import { PATHS } from "@/app/routes";
-import LoginPage from "@/pages/auth/LoginPage";
+import LoginPage from "@/features/auth/pages/LoginPage";
+import RegisterPage from "@/features/auth/pages/RegisterPage";
+import VerifyOtpPage from "@/features/auth/pages/VerifyOtpPage";
+import ForgotPasswordPage from "@/features/auth/pages/ForgotPasswordPage";
+import ResetPasswordPage from "@/features/auth/pages/ResetPasswordPage";
 import PlaceholderPage from "@/pages/PlaceholderPage";
 
 const P = PlaceholderPage;
@@ -42,10 +46,11 @@ export const router = createBrowserRouter([
   { path: PATHS.login, element: <LoginPage /> },
   {
     path: PATHS.register,
-    element: <P title="Đăng ký" note="Register + OTP" />,
+    element: <RegisterPage />,
   },
-  { path: PATHS.verifyOtp, element: <P title="Xác thực OTP" /> },
-  { path: PATHS.forgotPassword, element: <P title="Quên mật khẩu" /> },
+  { path: PATHS.verifyOtp, element: <VerifyOtpPage /> },
+  { path: PATHS.forgotPassword, element: <ForgotPasswordPage /> },
+  { path: PATHS.resetPassword, element: <ResetPasswordPage /> },
   ...devRoutes,
 
   // ── Khách ───────────────────────────────────────────────────────────
@@ -115,7 +120,7 @@ export const router = createBrowserRouter([
 
       // Cần đăng nhập
       {
-        element: <RequireRole allow={["customer"]} />,
+        element: <RequireRole allow={["Customer"]} />,
         children: [
           {
             path: PATHS.checkout,
@@ -139,7 +144,7 @@ export const router = createBrowserRouter([
   // ── Nhân viên / Quản lý / Quản trị ──────────────────────────────────
   // Guard nằm NGOÀI shell để người chưa đăng nhập không thấy khung sidebar trước khi bị chuyển hướng.
   {
-    element: <RequireRole allow={["staff"]} />,
+    element: <RequireRole allow={["Staff"]} />,
     children: [
       {
         element: <StaffShellLayout />,
@@ -163,7 +168,7 @@ export const router = createBrowserRouter([
     ],
   },
   {
-    element: <RequireRole allow={["manager"]} />,
+    element: <RequireRole allow={["Manager"]} />,
     children: [
       {
         element: <StaffShellLayout />,
@@ -176,7 +181,7 @@ export const router = createBrowserRouter([
     ],
   },
   {
-    element: <RequireRole allow={["admin"]} />,
+    element: <RequireRole allow={["Admin"]} />,
     children: [
       {
         element: <StaffShellLayout />,

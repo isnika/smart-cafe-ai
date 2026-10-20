@@ -11,10 +11,12 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   hint?: string;
   error?: string;
   leftIcon?: ReactNode;
+  /** Phần tử đặt bên phải ô nhập (vd: nút hiện/ẩn mật khẩu). Tự chừa padding-right. */
+  rightElement?: ReactNode;
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
-  { label, hint, error, leftIcon, className, id, ...props },
+  { label, hint, error, leftIcon, rightElement, className, id, ...props },
   ref,
 ) {
   const autoId = useId();
@@ -54,10 +56,16 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
               ? "border-error focus:border-error focus:ring-error-soft"
               : "border-gray-300",
             leftIcon && "pl-9",
+            rightElement && "pr-11",
             className,
           )}
           {...props}
         />
+        {rightElement && (
+          <span className="absolute inset-y-0 right-1.5 flex items-center">
+            {rightElement}
+          </span>
+        )}
       </div>
       {error ? (
         <p id={`${inputId}-error`} className="text-caption text-error-strong">
