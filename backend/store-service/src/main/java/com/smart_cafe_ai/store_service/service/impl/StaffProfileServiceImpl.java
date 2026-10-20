@@ -2,6 +2,7 @@ package com.smart_cafe_ai.store_service.service.impl;
 
 import com.smart_cafe_ai.store_service.client.IdentityServiceClient;
 import com.smart_cafe_ai.store_service.dto.ApiResponse;
+import com.smart_cafe_ai.store_service.dto.identity.BatchUserRequest;
 import com.smart_cafe_ai.store_service.dto.identity.UserInfo;
 import com.smart_cafe_ai.store_service.dto.staff.StaffProfileRequest;
 import com.smart_cafe_ai.store_service.dto.staff.StaffProfileResponse;
@@ -23,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -37,7 +39,7 @@ public class StaffProfileServiceImpl implements StaffProfileService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<StaffProfileResponse> getStaffProfiles(Integer branchId, StaffStatus status) {
+    public List<StaffProfileResponse> getStaffProfiles(Integer branchId, StaffStatus status, String bearerToken) {
         List<StaffProfile> profiles;
         if (branchId != null && status != null) {
             profiles = staffProfileRepository.findAllByBranchIdAndStatus(branchId, status);
@@ -47,9 +49,40 @@ public class StaffProfileServiceImpl implements StaffProfileService {
             profiles = staffProfileRepository.findAll();
         }
 
-        return profiles.stream()
+        List<StaffProfileResponse> responseList = profiles.stream()
                 .map(StaffProfileResponse::fromEntity)
                 .collect(Collectors.toList());
+
+        if (responseList.isEmpty()) {
+            return responseList;
+        }
+
+        // Tự động enrich thông tin user_info từ identity-service bằng batch API
+        try {
+            List<String> userIds = responseList.stream()
+                    .map(StaffProfileResponse::getUserId)
+                    .filter(uid -> uid != null && !uid.isBlank())
+                    .distinct()
+                    .collect(Collectors.toList());
+
+            if (!userIds.isEmpty()) {
+                ApiResponse<List<UserInfo>> batchResponse = identityServiceClient.getBatchUsers(
+                        new BatchUserRequest(userIds),
+                        bearerToken
+                );
+                if (batchResponse != null && batchResponse.isSuccess() && batchResponse.getData() != null) {
+                    Map<String, UserInfo> userMap = batchResponse.getData().stream()
+                            .collect(Collectors.toMap(UserInfo::getId, u -> u, (u1, u2) -> u1));
+                    for (StaffProfileResponse res : responseList) {
+                        res.setUserInfo(userMap.get(res.getUserId()));
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Không thể gọi batch identity-service để lấy user_info: {}", e.getMessage());
+        }
+
+        return responseList;
     }
 
     @Override
@@ -60,16 +93,14 @@ public class StaffProfileServiceImpl implements StaffProfileService {
 
         StaffProfileResponse response = StaffProfileResponse.fromEntity(profile);
 
-        // Gọi identity-service qua OpenFeign để kết nối dữ liệu user nếu có bearerToken
-        if (bearerToken != null && !bearerToken.isBlank()) {
-            try {
-                ApiResponse<UserInfo> userApiResponse = identityServiceClient.getUserById(profile.getUserId(), bearerToken);
-                if (userApiResponse != null && userApiResponse.isSuccess()) {
-                    response.setUserInfo(userApiResponse.getData());
-                }
-            } catch (Exception e) {
-                log.warn("Không thể gọi identity-service lấy thông tin user_id={}: {}", profile.getUserId(), e.getMessage());
+        // Gọi identity-service qua OpenFeign để kết nối dữ liệu user
+        try {
+            ApiResponse<UserInfo> userApiResponse = identityServiceClient.getUserById(profile.getUserId(), bearerToken);
+            if (userApiResponse != null && userApiResponse.isSuccess()) {
+                response.setUserInfo(userApiResponse.getData());
             }
+        } catch (Exception e) {
+            log.warn("Không thể gọi identity-service lấy thông tin user_id={}: {}", profile.getUserId(), e.getMessage());
         }
 
         return response;

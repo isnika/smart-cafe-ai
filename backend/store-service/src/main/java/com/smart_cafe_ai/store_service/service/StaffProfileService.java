@@ -2,16 +2,19 @@ package com.smart_cafe_ai.store_service.service;
 
 import com.smart_cafe_ai.store_service.dto.staff.StaffProfileRequest;
 import com.smart_cafe_ai.store_service.dto.staff.StaffProfileResponse;
+import com.smart_cafe_ai.store_service.dto.staff.StaffProfileUpdateRequest;
 import com.smart_cafe_ai.store_service.enums.StaffStatus;
 
 import java.time.LocalDate;
 import java.util.List;
 
-import com.smart_cafe_ai.store_service.dto.staff.StaffProfileUpdateRequest;
-
 public interface StaffProfileService {
 
-    List<StaffProfileResponse> getStaffProfiles(Integer branchId, StaffStatus status);
+    default List<StaffProfileResponse> getStaffProfiles(Integer branchId, StaffStatus status) {
+        return getStaffProfiles(branchId, status, null);
+    }
+
+    List<StaffProfileResponse> getStaffProfiles(Integer branchId, StaffStatus status, String bearerToken);
 
     StaffProfileResponse getStaffProfileById(Long id, String bearerToken);
 
