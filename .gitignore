@@ -1,5 +1,6 @@
 # Java / Maven
-backend/target/
+target/
+**/target/
 *.class
 
 # IDE
@@ -9,3 +10,4 @@ backend/target/
 
 # Environment
 .env
+**/.env
