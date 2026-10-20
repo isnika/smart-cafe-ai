@@ -256,6 +256,12 @@ public class AuthService {
     }
 
     @Transactional
+    public ApiResponse<Void> logoutAll(String userId) {
+        refreshTokenRepository.revokeAllByUserId(userId);
+        return ApiResponse.success(null);
+    }
+
+    @Transactional
     public ApiResponse<String> forgotPassword(ForgotPasswordRequest request) {
         String phoneEmail = request.getPhoneEmail() == null ? null : request.getPhoneEmail().trim();
         userRepository.findByIdentifier(phoneEmail).ifPresent(user -> {
