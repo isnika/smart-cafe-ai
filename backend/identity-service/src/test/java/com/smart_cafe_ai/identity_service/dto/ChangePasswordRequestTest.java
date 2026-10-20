@@ -13,13 +13,11 @@ class ChangePasswordRequestTest {
         ChangePasswordRequest request = new ObjectMapper().readValue("""
                 {
                   "currentPassword": "old-password",
-                  "newPassword": "new-password",
-                  "otpCode": "123456"
+                  "newPassword": "new-password"
                 }
                 """, ChangePasswordRequest.class);
 
         assertEquals("old-password", request.getCurrentPassword());
         assertEquals("new-password", request.getNewPassword());
-        assertEquals("123456", request.getOtpCode());
     }
 }

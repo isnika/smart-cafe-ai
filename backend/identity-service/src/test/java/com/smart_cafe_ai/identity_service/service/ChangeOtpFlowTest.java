@@ -4,6 +4,7 @@ import com.smart_cafe_ai.identity_service.dto.auth.ChangePasswordRequest;
 import com.smart_cafe_ai.identity_service.dto.user.UpdateContactRequest;
 import com.smart_cafe_ai.identity_service.model.OtpPurpose;
 import com.smart_cafe_ai.identity_service.model.User;
+import com.smart_cafe_ai.identity_service.model.UserStatus;
 import com.smart_cafe_ai.identity_service.repository.RefreshTokenRepository;
 import com.smart_cafe_ai.identity_service.repository.RoleRepository;
 import com.smart_cafe_ai.identity_service.repository.UserRepository;
@@ -110,14 +111,15 @@ class ChangeOtpFlowTest {
     }
 
     @Test
-    void requestsAndRequiresChangePasswordOtpForVerifiedEmail() {
+    void changesPasswordWithCurrentPasswordWithoutRequestingOrVerifyingOtp() {
         UserRepository users = mock(UserRepository.class);
         OtpService otpService = mock(OtpService.class);
         PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
+        RefreshTokenRepository refreshTokens = mock(RefreshTokenRepository.class);
         AuthService authService = new AuthService(
                 users,
                 mock(RoleRepository.class),
-                mock(RefreshTokenRepository.class),
+                refreshTokens,
                 passwordEncoder,
                 mock(JwtService.class),
                 otpService, mock(GoogleTokenVerifierService.class));
@@ -126,24 +128,20 @@ class ChangeOtpFlowTest {
                 .email("user@example.com")
                 .emailVerifiedAt(LocalDateTime.now())
                 .passwordHash("old-hash")
+                .status(UserStatus.Active)
                 .build();
-        when(users.findById("user-1")).thenReturn(Optional.of(user));
+        when(users.findByIdForUpdate("user-1")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("old-password", "old-hash")).thenReturn(true);
-        when(otpService.verifyOtp("user@example.com", "123456", OtpPurpose.Change_Password))
-                .thenReturn(true);
-        when(passwordEncoder.encode("new-password")).thenReturn("new-hash");
-
-        assertTrue(authService.requestChangePasswordOtp("user-1").isSuccess());
-        verify(otpService).generateAndSaveOtp(
-                "user@example.com", OtpPurpose.Change_Password, "user-1", null);
+        when(passwordEncoder.encode("NewPassword123!")).thenReturn("new-hash");
 
         ChangePasswordRequest request = ChangePasswordRequest.builder()
                 .currentPassword("old-password")
-                .newPassword("new-password")
-                .otpCode("123456")
+                .newPassword("NewPassword123!")
                 .build();
         assertTrue(authService.changePassword("user-1", request).isSuccess());
-        verify(otpService).verifyOtp(
-                "user@example.com", "123456", OtpPurpose.Change_Password);
+        assertEquals("new-hash", user.getPasswordHash());
+        verify(refreshTokens).revokeAllByUserId("user-1");
+        verify(otpService).invalidatePasswordResetOtps("user-1");
+        org.mockito.Mockito.verifyNoMoreInteractions(otpService);
     }
 }

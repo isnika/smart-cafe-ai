@@ -43,9 +43,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         jwt = authHeader.substring(7);
         try {
             userId = jwtService.extractUserId(jwt);
-            if (userId != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+            // Access tokens carry a role; refresh tokens must only be used at /auth/refresh.
+            if (userId != null && jwtService.extractRole(jwt) != null
+                    && SecurityContextHolder.getContext().getAuthentication() == null) {
                 UserDetails userDetails = this.userDetailsService.loadUserByUsername(userId);
-                if (jwtService.isTokenValid(jwt, userDetails.getUsername())) {
+                if (jwtService.isTokenValid(jwt, userDetails.getUsername())
+                        && userDetails.isEnabled() && userDetails.isAccountNonLocked()
+                        && userDetails.isAccountNonExpired() && userDetails.isCredentialsNonExpired()) {
                     UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                             userDetails,
                             null,

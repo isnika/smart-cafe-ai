@@ -64,6 +64,11 @@ cloudinary:
   api-secret: ${CLOUDINARY_API_SECRET:}
 
 app:
+  password-recovery:
+    resend-cooldown-seconds: ${PASSWORD_RESET_RESEND_COOLDOWN_SECONDS:60}
+    max-requests-per-hour: ${PASSWORD_RESET_MAX_REQUESTS_PER_HOUR:5}
+  otp:
+    log-codes: ${OTP_LOG_CODES:false}
   otp-email:
     publisher-enabled: ${OTP_EMAIL_PUBLISHER_ENABLED:true}
     publish-delay-ms: ${OTP_EMAIL_PUBLISH_DELAY_MS:1000}

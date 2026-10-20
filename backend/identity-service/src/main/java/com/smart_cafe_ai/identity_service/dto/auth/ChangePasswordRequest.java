@@ -10,13 +10,9 @@ public class ChangePasswordRequest {
     @JsonAlias("newPassword")
     @JsonProperty("new_password")
     private String newPassword;
-    @JsonAlias("otpCode")
-    @JsonProperty("otp_code")
-    private String otpCode;
     public static class ChangePasswordRequestBuilder {
         private String currentPassword;
         private String newPassword;
-        private String otpCode;
         ChangePasswordRequestBuilder() {
         }
 
@@ -40,22 +36,13 @@ public class ChangePasswordRequest {
             return this;
         }
 
-        /**
-         * @return {@code this}.
-         */
-        @JsonAlias("otpCode")
-        @JsonProperty("otp_code")
-        public ChangePasswordRequest.ChangePasswordRequestBuilder otpCode(final String otpCode) {
-            this.otpCode = otpCode;
-            return this;
-        }
         public ChangePasswordRequest build() {
-            return new ChangePasswordRequest(this.currentPassword, this.newPassword, this.otpCode);
+            return new ChangePasswordRequest(this.currentPassword, this.newPassword);
         }
 
         @java.lang.Override
         public java.lang.String toString() {
-            return "ChangePasswordRequest.ChangePasswordRequestBuilder(currentPassword=" + this.currentPassword + ", newPassword=" + this.newPassword + ", otpCode=" + this.otpCode + ")";
+            return "ChangePasswordRequest.ChangePasswordRequestBuilder(currentPassword=[PROTECTED], newPassword=[PROTECTED])";
         }
     }
     public static ChangePasswordRequest.ChangePasswordRequestBuilder builder() {
@@ -67,17 +54,11 @@ public class ChangePasswordRequest {
     public String getNewPassword() {
         return this.newPassword;
     }
-    public String getOtpCode() {
-        return this.otpCode;
-    }
     public void setCurrentPassword(final String currentPassword) {
         this.currentPassword = currentPassword;
     }
     public void setNewPassword(final String newPassword) {
         this.newPassword = newPassword;
-    }
-    public void setOtpCode(final String otpCode) {
-        this.otpCode = otpCode;
     }
 
     @java.lang.Override
@@ -92,9 +73,6 @@ public class ChangePasswordRequest {
         final java.lang.Object this$newPassword = this.getNewPassword();
         final java.lang.Object other$newPassword = other.getNewPassword();
         if (this$newPassword == null ? other$newPassword != null : !this$newPassword.equals(other$newPassword)) return false;
-        final java.lang.Object this$otpCode = this.getOtpCode();
-        final java.lang.Object other$otpCode = other.getOtpCode();
-        if (this$otpCode == null ? other$otpCode != null : !this$otpCode.equals(other$otpCode)) return false;
         return true;
     }
     protected boolean canEqual(final java.lang.Object other) {
@@ -109,21 +87,18 @@ public class ChangePasswordRequest {
         result = result * PRIME + ($currentPassword == null ? 43 : $currentPassword.hashCode());
         final java.lang.Object $newPassword = this.getNewPassword();
         result = result * PRIME + ($newPassword == null ? 43 : $newPassword.hashCode());
-        final java.lang.Object $otpCode = this.getOtpCode();
-        result = result * PRIME + ($otpCode == null ? 43 : $otpCode.hashCode());
         return result;
     }
 
     @java.lang.Override
     public java.lang.String toString() {
-        return "ChangePasswordRequest(currentPassword=" + this.getCurrentPassword() + ", newPassword=" + this.getNewPassword() + ", otpCode=" + this.getOtpCode() + ")";
+        return "ChangePasswordRequest(currentPassword=[PROTECTED], newPassword=[PROTECTED])";
     }
     public ChangePasswordRequest() {
     }
-    public ChangePasswordRequest(final String currentPassword, final String newPassword, final String otpCode) {
+    public ChangePasswordRequest(final String currentPassword, final String newPassword) {
         this.currentPassword = currentPassword;
         this.newPassword = newPassword;
-        this.otpCode = otpCode;
     }
 }
 

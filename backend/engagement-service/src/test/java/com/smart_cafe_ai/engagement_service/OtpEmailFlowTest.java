@@ -76,6 +76,17 @@ class OtpEmailFlowTest {
     }
 
     @Test
+    void passwordResetEventUsesExistingEmailDeliveryAndCorrectContent() throws Exception {
+        OtpEmailEvent event = new OtpEmailEvent(UUID.randomUUID().toString(), "user-1", "customer@example.com",
+                "012345", "Reset_Password", Instant.now().plusSeconds(300));
+        consumer.consume(message(event));
+        verify(mailSender).send(any(MimeMessage.class));
+        assertEquals(Notification.Status.SENT, repository.findByEventId(event.eventId()).orElseThrow().getStatus());
+        assertTrue(mimeMessage.getSubject().contains("đặt lại mật khẩu"));
+        assertTrue(mimeMessage.getContent().toString().contains("012345"));
+    }
+
+    @Test
     void failureIsPersistedAndRedeliveryCanSucceed() throws Exception {
         OtpEmailEvent event = event(Instant.now().plusSeconds(300));
         doThrow(new MailSendException("SMTP unavailable")).doNothing()

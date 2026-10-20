@@ -28,6 +28,8 @@ public class OtpLog {
     private Integer attemptCount;
     @Column(name = "max_attempts", nullable = false)
     private Integer maxAttempts;
+    @Column(name = "locked_until")
+    private LocalDateTime lockedUntil;
     @Column(name = "is_used", nullable = false)
     private Boolean isUsed;
     @Column(name = "used_at")
@@ -217,6 +219,9 @@ public class OtpLog {
     public Integer getMaxAttempts() {
         return this.maxAttempts;
     }
+    public LocalDateTime getLockedUntil() {
+        return this.lockedUntil;
+    }
     public Boolean getIsUsed() {
         return this.isUsed;
     }
@@ -255,6 +260,9 @@ public class OtpLog {
     }
     public void setMaxAttempts(final Integer maxAttempts) {
         this.maxAttempts = maxAttempts;
+    }
+    public void setLockedUntil(final LocalDateTime lockedUntil) {
+        this.lockedUntil = lockedUntil;
     }
     public void setIsUsed(final Boolean isUsed) {
         this.isUsed = isUsed;

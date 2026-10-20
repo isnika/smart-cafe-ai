@@ -104,38 +104,31 @@ public class AuthController {
     }
 
     @PostMapping("/forgot-password")
-    public ResponseEntity<ApiResponse<String>> forgotPassword(@RequestBody ForgotPasswordRequest request) {
+    public ResponseEntity<ApiResponse<String>> forgotPassword(@RequestBody(required = false) ForgotPasswordRequest request) {
         ApiResponse<String> response = authService.forgotPassword(request);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.status(response.isSuccess() ? HttpStatus.OK : HttpStatus.BAD_REQUEST).body(response);
     }
 
     @PostMapping("/reset-password")
-    public ResponseEntity<ApiResponse<Void>> resetPassword(@RequestBody ResetPasswordRequest request) {
+    public ResponseEntity<ApiResponse<Void>> resetPassword(@RequestBody(required = false) ResetPasswordRequest request) {
         ApiResponse<Void> response = authService.resetPassword(request);
         return ResponseEntity.status(response.isSuccess() ? HttpStatus.OK : HttpStatus.BAD_REQUEST).body(response);
     }
 
-    @PostMapping("/change-password/otp")
-    public ResponseEntity<ApiResponse<String>> requestChangePasswordOtp(
-            @AuthenticationPrincipal UserPrincipal principal
-    ) {
-        if (principal == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("UNAUTHORIZED", "Bạn chưa đăng nhập"));
-        }
-        ApiResponse<String> response = authService.requestChangePasswordOtp(principal.getId());
-        return ResponseEntity.status(response.isSuccess() ? HttpStatus.OK : HttpStatus.BAD_REQUEST).body(response);
-    }
-
     @PutMapping("/change-password")
-    public ResponseEntity<ApiResponse<Void>> changePassword(
+    public ResponseEntity<ApiResponse<String>> changePassword(
             @AuthenticationPrincipal UserPrincipal principal,
-            @RequestBody ChangePasswordRequest request
+            @RequestBody(required = false) ChangePasswordRequest request
     ) {
         if (principal == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("UNAUTHORIZED", "Bạn chưa đăng nhập"));
         }
-        ApiResponse<Void> response = authService.changePassword(principal.getId(), request);
-        return ResponseEntity.status(response.isSuccess() ? HttpStatus.OK : HttpStatus.BAD_REQUEST).body(response);
+        ApiResponse<String> response = authService.changePassword(principal.getId(), request);
+        HttpStatus status = response.isSuccess() ? HttpStatus.OK
+                : "UNAUTHORIZED".equals(response.getError().getCode()) ? HttpStatus.UNAUTHORIZED
+                : "ACCOUNT_DISABLED".equals(response.getError().getCode()) ? HttpStatus.FORBIDDEN
+                : HttpStatus.BAD_REQUEST;
+        return ResponseEntity.status(status).body(response);
     }
 }
 

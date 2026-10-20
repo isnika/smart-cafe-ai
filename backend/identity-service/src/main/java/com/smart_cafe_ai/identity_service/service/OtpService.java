@@ -5,11 +5,14 @@ import com.smart_cafe_ai.identity_service.model.OtpLog;
 import com.smart_cafe_ai.identity_service.model.OtpPurpose;
 import com.smart_cafe_ai.identity_service.repository.OtpLogRepository;
 import com.smart_cafe_ai.identity_service.dto.event.OtpEmailEvent;
+import com.smart_cafe_ai.identity_service.exception.OtpLockedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.time.Duration;
 import java.util.Locale;
 import java.util.UUID;
 import java.time.ZoneId;
@@ -21,6 +24,12 @@ public class OtpService {
     private final PasswordEncoder passwordEncoder;
     private final OtpEmailOutboxService otpEmailOutboxService;
     private static final SecureRandom random = new SecureRandom();
+    @Value("${app.otp.log-codes:false}")
+    private boolean logCodes;
+    @Value("${app.password-recovery.resend-cooldown-seconds:60}")
+    private long resendCooldownSeconds = 60;
+    @Value("${app.password-recovery.max-requests-per-hour:5}")
+    private int maxRequestsPerHour = 5;
 
     public OtpService(OtpLogRepository otpLogRepository, PasswordEncoder passwordEncoder,
                       OtpEmailOutboxService otpEmailOutboxService) {
@@ -37,6 +46,7 @@ public class OtpService {
     @Transactional
     public String generateAndSaveOtp(String target, OtpPurpose purpose, String userId, String ipAddress) {
         String normalizedTarget = normalizeTarget(target);
+        otpLogRepository.invalidatePrevious(normalizedTarget, purpose, userId, LocalDateTime.now());
         String otpCode = String.format("%06d", random.nextInt(1000000));
         String otpHash = passwordEncoder.encode(otpCode);
         OtpChannel channel = (normalizedTarget != null && normalizedTarget.contains("@")) ? OtpChannel.Email : OtpChannel.Phone;
@@ -48,29 +58,54 @@ public class OtpService {
                     UUID.randomUUID().toString(), userId, normalizedTarget, otpCode,
                     purpose.name(), otpLog.getExpiresAt().atZone(ZoneId.systemDefault()).toInstant()));
         }
-        log.info("\ud83d\udd11 [OTP DEV LOG] Mã OTP sinh ra cho {}: {}", normalizedTarget, otpCode);
-        System.out.println("=================================================");
-        System.out.println("\ud83d\udd11 [OTP CODE] MÃ OTP CỦA " + normalizedTarget + " LÀ: " + otpCode);
-        System.out.println("=================================================");
+        if (logCodes) {
+            log.warn("[DEV ONLY] OTP for {}: {}", normalizedTarget, otpCode);
+        }
         return otpCode;
     }
 
+    // The caller holds the user's write lock so concurrent requests share these limits.
     @Transactional
+    public void requestPasswordResetOtp(String email, String userId) {
+        String target = normalizeTarget(email);
+        LocalDateTime now = LocalDateTime.now();
+        OtpLog latest = otpLogRepository.findFirstByTargetAndPurposeAndUserIdOrderByIdDesc(
+                target, OtpPurpose.Reset_Password, userId).orElse(null);
+        checkPasswordResetLock(latest);
+        if (latest != null && latest.getCreatedAt() != null
+                && latest.getCreatedAt().plusSeconds(resendCooldownSeconds).isAfter(now)) {
+            return;
+        }
+        if (otpLogRepository.countByUserIdAndPurposeAndCreatedAtAfter(
+                userId, OtpPurpose.Reset_Password, now.minusHours(1)) >= maxRequestsPerHour) {
+            return;
+        }
+        generateAndSaveOtp(target, OtpPurpose.Reset_Password, userId, null);
+    }
+
+    @Transactional
+    public void invalidatePasswordResetOtps(String userId) {
+        otpLogRepository.invalidateByUser(userId, OtpPurpose.Reset_Password, LocalDateTime.now());
+    }
+
+    @Transactional(noRollbackFor = OtpLockedException.class)
     public boolean verifyOtp(String target, String otpCode, OtpPurpose purpose) {
         return verifyOtp(target, otpCode, purpose, null);
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = OtpLockedException.class)
     public boolean verifyOtp(String target, String otpCode, OtpPurpose purpose, String userId) {
         String normalizedOtpCode = otpCode == null ? null : otpCode.trim();
         if (target == null || target.isBlank() || normalizedOtpCode == null || !normalizedOtpCode.matches("\\d{6}") || purpose == null) {
             return false;
         }
         String normalizedTarget = normalizeTarget(target);
-        log.info("Verifying OTP: target=\'{}\', purpose={}, currentTime={}", normalizedTarget, purpose, LocalDateTime.now());
-        OtpLog otpLog = (userId == null ? otpLogRepository.findFirstByTargetAndPurposeAndIsUsedFalseOrderByIdDesc(normalizedTarget, purpose) : otpLogRepository.findFirstByTargetAndPurposeAndUserIdAndIsUsedFalseOrderByIdDesc(normalizedTarget, purpose, userId)).orElse(null);
-        if (otpLog == null) {
-            log.warn("OTP verification failed: no active OTP for target=\'{}\', purpose={}", normalizedTarget, purpose);
+        // Inspect the newest row even after it is used; never fall back to an older code.
+        OtpLog otpLog = (userId == null ? otpLogRepository.findFirstByTargetAndPurposeOrderByIdDesc(normalizedTarget, purpose) : otpLogRepository.findFirstByTargetAndPurposeAndUserIdOrderByIdDesc(normalizedTarget, purpose, userId)).orElse(null);
+        if (purpose == OtpPurpose.Reset_Password) {
+            checkPasswordResetLock(otpLog);
+        }
+        if (otpLog == null || Boolean.TRUE.equals(otpLog.getIsUsed())) {
             return false;
         }
         if (otpLog.getExpiresAt() == null || !otpLog.getExpiresAt().isAfter(LocalDateTime.now())) {
@@ -84,9 +119,26 @@ public class OtpService {
         if (valid) {
             otpLog.setIsUsed(true);
             otpLog.setUsedAt(LocalDateTime.now());
+        } else if (purpose == OtpPurpose.Reset_Password
+                && otpLog.getAttemptCount() >= otpLog.getMaxAttempts()) {
+            // Start the wait at the fifth failure, not at the time the email was requested.
+            otpLog.setLockedUntil(LocalDateTime.now().plusSeconds(resendCooldownSeconds));
         }
         otpLogRepository.save(otpLog);
+        if (!valid && purpose == OtpPurpose.Reset_Password) {
+            checkPasswordResetLock(otpLog);
+        }
         return valid;
+    }
+
+    private void checkPasswordResetLock(OtpLog otpLog) {
+        if (otpLog == null || otpLog.getLockedUntil() == null) {
+            return;
+        }
+        long remainingMillis = Duration.between(LocalDateTime.now(), otpLog.getLockedUntil()).toMillis();
+        if (remainingMillis > 0) {
+            throw new OtpLockedException((remainingMillis + 999) / 1000);
+        }
     }
 
     private String normalizeTarget(String target) {

@@ -2,7 +2,7 @@
 
 Luồng: Identity Service → Outbox_Events (DB Identity) → RabbitMQ → OtpEmailConsumer → NotificationService → EmailService → SMTP.
 
-Identity vẫn sinh, băm, lưu, xác minh OTP và **giữ nguyên phần in OTP trên terminal**. Engagement không truy cập database Identity; chỉ giữ `user_id` như một tham chiếu. `EmailService` chỉ dựng/gửi email, `NotificationService` quản lý trạng thái, `NotificationRepository` lưu bảng `Notifications` trong `smart_cafe_engagement_db`.
+Identity sinh, băm, lưu và xác minh OTP. Mặc định không in mã ra log; chỉ bật `OTP_LOG_CODES=true` khi debug cục bộ. Engagement không truy cập database Identity; chỉ giữ `user_id` như một tham chiếu. `EmailService` chỉ dựng/gửi email, `NotificationService` quản lý trạng thái, `NotificationRepository` lưu bảng `Notifications` trong `smart_cafe_engagement_db`.
 
 ## 1. Chuẩn bị
 
@@ -115,7 +115,7 @@ Invoke-RestMethod -Method Post -Uri 'http://localhost:8081/api/v1/auth/otp/resen
     -ContentType 'application/json' -Body $body
 ```
 
-Mở hộp thư, kiểm tra cả Spam. Mã trong email phải trùng mã được in trên terminal Identity. Gửi mã vào API xác minh hiện có:
+Mở hộp thư, kiểm tra cả Spam. Lấy mã từ email và gửi vào API xác minh hiện có:
 
 ```powershell
 $body = @{ phone_email = 'your-real-email@gmail.com'; otp_code = '123456' } | ConvertTo-Json
@@ -123,7 +123,7 @@ Invoke-RestMethod -Method Post -Uri 'http://localhost:8081/api/v1/auth/otp/verif
     -ContentType 'application/json' -Body $body
 ```
 
-OTP vẫn có thời hạn 5 phút và tối đa 5 lần thử. Mọi yêu cầu tạo OTP có đích là email đều đi qua luồng này: đăng ký, gửi lại, quên mật khẩu, đổi mật khẩu và đổi email. Đăng ký có cả email và số điện thoại ưu tiên xác minh email; đăng ký chỉ có số điện thoại vẫn in mã ra terminal, chưa có SMS.
+OTP có thời hạn 5 phút và tối đa 5 lần thử. Mọi yêu cầu tạo OTP có đích là email đều đi qua luồng này: đăng ký, gửi lại, quên mật khẩu và đổi email. Đăng ký có cả email và số điện thoại ưu tiên xác minh email. Chưa tích hợp SMS; chỉ có thể xem mã điện thoại trong môi trường debug khi bật `OTP_LOG_CODES=true`. Riêng khôi phục mật khẩu yêu cầu email và không báo đã gửi SMS. Xem [luồng quên mật khẩu](../identity-service/PASSWORD_RECOVERY.md). [Đổi mật khẩu khi đã đăng nhập](../identity-service/CHANGE_PASSWORD.md) dùng mật khẩu hiện tại và mật khẩu mới, không dùng OTP.
 
 ## 4. Theo dõi trạng thái và lỗi
 

@@ -33,7 +33,7 @@ class OtpServiceTest {
                 .isUsed(false)
                 .build();
 
-        when(repository.findFirstByTargetAndPurposeAndIsUsedFalseOrderByIdDesc(
+        when(repository.findFirstByTargetAndPurposeOrderByIdDesc(
                 "customer@example.com", OtpPurpose.Reset_Password))
                 .thenReturn(Optional.of(otpLog));
         when(passwordEncoder.matches("123456", "hashed-otp")).thenReturn(true);
@@ -41,7 +41,7 @@ class OtpServiceTest {
         assertTrue(otpService.verifyOtp(
                 " customer@example.com ", "123456", OtpPurpose.Reset_Password));
 
-        verify(repository).findFirstByTargetAndPurposeAndIsUsedFalseOrderByIdDesc(
+        verify(repository).findFirstByTargetAndPurposeOrderByIdDesc(
                 "customer@example.com", OtpPurpose.Reset_Password);
         assertTrue(otpLog.getIsUsed());
     }
@@ -59,7 +59,7 @@ class OtpServiceTest {
                 .isUsed(false)
                 .build();
 
-        when(repository.findFirstByTargetAndPurposeAndUserIdAndIsUsedFalseOrderByIdDesc(
+        when(repository.findFirstByTargetAndPurposeAndUserIdOrderByIdDesc(
                 "new@example.com", OtpPurpose.Change_Email, "user-1"))
                 .thenReturn(Optional.of(otpLog));
         when(passwordEncoder.matches("123456", "hashed-otp")).thenReturn(true);
@@ -67,7 +67,7 @@ class OtpServiceTest {
         assertTrue(otpService.verifyOtp(
                 " New@Example.com ", " 123456 ", OtpPurpose.Change_Email, "user-1"));
 
-        verify(repository).findFirstByTargetAndPurposeAndUserIdAndIsUsedFalseOrderByIdDesc(
+        verify(repository).findFirstByTargetAndPurposeAndUserIdOrderByIdDesc(
                 "new@example.com", OtpPurpose.Change_Email, "user-1");
         assertTrue(otpLog.getIsUsed());
     }
@@ -87,7 +87,7 @@ class OtpServiceTest {
         verify(repository).save(otpLogCaptor.capture());
         OtpLog savedOtp = otpLogCaptor.getValue();
         assertEquals("new@example.com", savedOtp.getTarget());
-        when(repository.findFirstByTargetAndPurposeAndUserIdAndIsUsedFalseOrderByIdDesc(
+        when(repository.findFirstByTargetAndPurposeAndUserIdOrderByIdDesc(
                 "new@example.com", OtpPurpose.Change_Email, "user-1"))
                 .thenReturn(Optional.of(savedOtp));
 

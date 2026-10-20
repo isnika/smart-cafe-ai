@@ -7,6 +7,7 @@ import com.smart_cafe_ai.identity_service.dto.auth.ForgotPasswordRequest;
 import com.smart_cafe_ai.identity_service.dto.auth.LoginRequest;
 import com.smart_cafe_ai.identity_service.dto.auth.GoogleLoginRequest;
 import com.smart_cafe_ai.identity_service.exception.GoogleAuthException;
+import com.smart_cafe_ai.identity_service.exception.OtpLockedException;
 import com.smart_cafe_ai.identity_service.security.GoogleIdentity;
 import com.smart_cafe_ai.identity_service.dto.auth.RefreshTokenRequest;
 import com.smart_cafe_ai.identity_service.dto.auth.RegisterRequest;
@@ -263,71 +264,91 @@ public class AuthService {
 
     @Transactional
     public ApiResponse<String> forgotPassword(ForgotPasswordRequest request) {
-        String phoneEmail = request.getPhoneEmail() == null ? null : request.getPhoneEmail().trim();
-        userRepository.findByIdentifier(phoneEmail).ifPresent(user -> {
-            otpService.generateAndSaveOtp(phoneEmail, OtpPurpose.Reset_Password, user.getId(), null);
-        });
-        log.info("[DEV ONLY] OTP generated for password reset: target={}", phoneEmail);
-        return ApiResponse.success("Nếu tài khoản tồn tại, mã OTP đã được gửi đến " + phoneEmail);
+        String email = normalizeRecoveryEmail(request == null ? null : request.getPhoneEmail());
+        if (email == null) {
+            return ApiResponse.error("VALIDATION_ERROR", "Nhập email hợp lệ đã đăng ký để nhận OTP; chưa hỗ trợ khôi phục bằng SMS");
+        }
+        User user = userRepository.findByEmailForUpdate(email).orElse(null);
+        if (user != null && user.getStatus() == UserStatus.Active) {
+            otpService.requestPasswordResetOtp(email, user.getId());
+        }
+        // Account existence and account-specific throttling have the same public response.
+        return ApiResponse.success("Nếu email thuộc tài khoản đang hoạt động, yêu cầu gửi OTP đã được tiếp nhận. "
+                + "Vui lòng kiểm tra hộp thư và Spam; chờ ít nhất 60 giây trước khi yêu cầu mã mới.");
     }
 
-    @Transactional
+    // The fifth failed attempt and its lock must commit even though the API returns 429.
+    @Transactional(noRollbackFor = OtpLockedException.class)
     public ApiResponse<Void> resetPassword(ResetPasswordRequest request) {
-        String phoneEmail = request.getPhoneEmail() == null ? null : request.getPhoneEmail().trim();
-        boolean isValid = otpService.verifyOtp(phoneEmail, request.getOtpCode(), OtpPurpose.Reset_Password);
+        String email = normalizeRecoveryEmail(request == null ? null : request.getPhoneEmail());
+        if (email == null || request.getOtpCode() == null || !request.getOtpCode().trim().matches("\\d{6}")) {
+            return ApiResponse.error("VALIDATION_ERROR", "Email hợp lệ và mã OTP gồm 6 chữ số là bắt buộc");
+        }
+        String newPassword = request.getNewPassword();
+        if (!isValidNewPassword(newPassword)) {
+            return ApiResponse.error("VALIDATION_ERROR", "Mật khẩu mới cần ít nhất 8 ký tự, gồm chữ và số, tối đa 72 byte UTF-8");
+        }
+        User user = userRepository.findByEmailForUpdate(email).orElse(null);
+        if (user == null || user.getStatus() != UserStatus.Active) {
+            return ApiResponse.error("OTP_INVALID", "Mã OTP không hợp lệ hoặc đã hết hạn");
+        }
+        boolean isValid = otpService.verifyOtp(email, request.getOtpCode(), OtpPurpose.Reset_Password, user.getId());
         if (!isValid) {
             return ApiResponse.error("OTP_INVALID", "Mã OTP không hợp lệ hoặc đã hết hạn");
         }
-        User user = userRepository.findByIdentifier(phoneEmail).orElseThrow(() -> new RuntimeException("Tài khoản không tồn tại"));
-        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepository.save(user);
+        refreshTokenRepository.revokeAllByUserId(user.getId());
+        otpService.invalidatePasswordResetOtps(user.getId());
         return ApiResponse.success(null);
     }
 
-    @Transactional
-    public ApiResponse<String> requestChangePasswordOtp(String userId) {
-        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("Tài khoản không tồn tại"));
-        String target = getChangePasswordOtpTarget(user);
-        if (target == null) {
-            return ApiResponse.error("VALIDATION_ERROR", "Tài khoản chưa có email hoặc số điện thoại để nhận OTP");
+    private String normalizeRecoveryEmail(String value) {
+        if (value == null) {
+            return null;
         }
-        otpService.generateAndSaveOtp(target, OtpPurpose.Change_Password, user.getId(), null);
-        return ApiResponse.success(target.contains("@")
-                ? "Yêu cầu gửi OTP đến email " + target + " đã được tiếp nhận"
-                : "OTP đã được tạo cho " + target + "; hiện kiểm tra mã trong log của identity-service");
+        String email = value.trim().toLowerCase(Locale.ROOT);
+        return email.length() <= 100 && email.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$") ? email : null;
     }
 
     @Transactional
-    public ApiResponse<Void> changePassword(String userId, ChangePasswordRequest request) {
-        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("Tài khoản không tồn tại"));
-        if (user.getPasswordHash() != null && !user.getPasswordHash().isBlank()) {
-            if (request.getCurrentPassword() == null || !passwordEncoder.matches(request.getCurrentPassword(), user.getPasswordHash())) {
-                return ApiResponse.error("VALIDATION_ERROR", "Mật khẩu hiện tại không đúng");
-            }
+    public ApiResponse<String> changePassword(String userId, ChangePasswordRequest request) {
+        if (request == null || request.getCurrentPassword() == null || request.getCurrentPassword().isBlank()) {
+            return ApiResponse.error("VALIDATION_ERROR", "Mật khẩu hiện tại là bắt buộc");
         }
-        String otpTarget = getChangePasswordOtpTarget(user);
-        if (otpTarget == null || !otpService.verifyOtp(otpTarget, request.getOtpCode(), OtpPurpose.Change_Password)) {
-            return ApiResponse.error("OTP_INVALID", "Mã OTP không hợp lệ hoặc đã hết hạn");
+        String newPassword = request.getNewPassword();
+        if (!isValidNewPassword(newPassword)) {
+            return ApiResponse.error("VALIDATION_ERROR", "Mật khẩu mới cần ít nhất 8 ký tự, gồm chữ và số, tối đa 72 byte UTF-8");
         }
-        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        // Serialize password checks and updates so two requests cannot both use the old password.
+        User user = userRepository.findByIdForUpdate(userId).orElse(null);
+        if (user == null) {
+            return ApiResponse.error("UNAUTHORIZED", "Tài khoản không tồn tại");
+        }
+        if (user.getStatus() != UserStatus.Active) {
+            return ApiResponse.error("ACCOUNT_DISABLED", "Tài khoản chưa xác thực, đã bị khóa hoặc đã bị vô hiệu hóa");
+        }
+        if (user.getPasswordHash() == null || user.getPasswordHash().isBlank()) {
+            return ApiResponse.error("CURRENT_PASSWORD_NOT_SET", "Tài khoản chưa có mật khẩu. Hãy dùng chức năng quên mật khẩu để thiết lập mật khẩu");
+        }
+        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPasswordHash())) {
+            return ApiResponse.error("CURRENT_PASSWORD_INVALID", "Mật khẩu hiện tại không đúng");
+        }
+        if (passwordEncoder.matches(newPassword, user.getPasswordHash())) {
+            return ApiResponse.error("VALIDATION_ERROR", "Mật khẩu mới phải khác mật khẩu hiện tại");
+        }
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepository.save(user);
-        return ApiResponse.success(null);
+        refreshTokenRepository.revokeAllByUserId(user.getId());
+        otpService.invalidatePasswordResetOtps(user.getId());
+        return ApiResponse.success("Đổi mật khẩu thành công");
     }
 
-    private String getChangePasswordOtpTarget(User user) {
-        if (user.getEmail() != null && !user.getEmail().isBlank() && user.getEmailVerifiedAt() != null) {
-            return user.getEmail().trim();
-        }
-        if (user.getPhone() != null && !user.getPhone().isBlank() && user.getPhoneVerifiedAt() != null) {
-            return user.getPhone().trim();
-        }
-        if (user.getEmail() != null && !user.getEmail().isBlank()) {
-            return user.getEmail().trim();
-        }
-        if (user.getPhone() != null && !user.getPhone().isBlank()) {
-            return user.getPhone().trim();
-        }
-        return null;
+    private boolean isValidNewPassword(String password) {
+        return password != null && password.length() >= 8
+                && password.getBytes(StandardCharsets.UTF_8).length <= 72
+                && password.codePoints().anyMatch(Character::isLetter)
+                && password.codePoints().anyMatch(Character::isDigit);
     }
 
     private AuthResponse issueTokens(User user, String deviceInfo) {
