@@ -1,23 +1,26 @@
 package com.smart_cafe_ai.identity_service.service;
 
 import com.smart_cafe_ai.identity_service.dto.ApiResponse;
-import com.smart_cafe_ai.identity_service.dto.RoleRequest;
-import com.smart_cafe_ai.identity_service.dto.RoleResponse;
+import com.smart_cafe_ai.identity_service.dto.role.RoleRequest;
+import com.smart_cafe_ai.identity_service.dto.role.RoleResponse;
 import com.smart_cafe_ai.identity_service.model.Role;
 import com.smart_cafe_ai.identity_service.repository.RoleRepository;
 import com.smart_cafe_ai.identity_service.repository.UserRepository;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
-@RequiredArgsConstructor
 public class RoleService {
 
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
+
+    public RoleService(RoleRepository roleRepository, UserRepository userRepository) {
+        this.roleRepository = roleRepository;
+        this.userRepository = userRepository;
+    }
 
     @Transactional(readOnly = true)
     public ApiResponse<List<RoleResponse>> getAllRoles() {
@@ -77,3 +80,4 @@ public class RoleService {
         return ApiResponse.success(null);
     }
 }
+

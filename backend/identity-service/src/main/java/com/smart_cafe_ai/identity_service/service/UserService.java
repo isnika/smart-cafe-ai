@@ -1,10 +1,12 @@
 package com.smart_cafe_ai.identity_service.service;
 
-import com.smart_cafe_ai.identity_service.dto.*;
+import com.smart_cafe_ai.identity_service.dto.ApiResponse;
+import com.smart_cafe_ai.identity_service.dto.user.UpdateContactRequest;
+import com.smart_cafe_ai.identity_service.dto.user.UpdateProfileRequest;
+import com.smart_cafe_ai.identity_service.dto.user.UserResponse;
 import com.smart_cafe_ai.identity_service.model.OtpPurpose;
 import com.smart_cafe_ai.identity_service.model.User;
 import com.smart_cafe_ai.identity_service.repository.UserRepository;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -13,12 +15,21 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
-@RequiredArgsConstructor
 public class UserService {
 
     private final UserRepository userRepository;
     private final OtpService otpService;
     private final CloudinaryService cloudinaryService;
+
+    public UserService(
+            UserRepository userRepository,
+            OtpService otpService,
+            CloudinaryService cloudinaryService
+    ) {
+        this.userRepository = userRepository;
+        this.otpService = otpService;
+        this.cloudinaryService = cloudinaryService;
+    }
 
     @Transactional(readOnly = true)
     public ApiResponse<UserResponse> getProfile(String userId) {
@@ -83,7 +94,8 @@ public class UserService {
         OtpPurpose purpose = hasEmail ? OtpPurpose.Change_Email : OtpPurpose.Change_Phone;
         otpService.generateAndSaveOtp(target, purpose, user.getId(), null);
         return ApiResponse.success(
-                "OTP đã được tạo cho " + target + "; hiện kiểm tra mã trong log của identity-service");
+                hasEmail ? "Yêu cầu gửi OTP đến email " + target + " đã được tiếp nhận"
+                        : "OTP đã được tạo cho " + target + "; hiện kiểm tra mã trong log của identity-service");
     }
 
     @Transactional
@@ -194,3 +206,4 @@ public class UserService {
                 .toList();
     }
 }
+

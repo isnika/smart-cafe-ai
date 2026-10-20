@@ -1,10 +1,9 @@
 package com.smart_cafe_ai.identity_service.controller;
 
 import com.smart_cafe_ai.identity_service.dto.ApiResponse;
-import com.smart_cafe_ai.identity_service.dto.RoleRequest;
-import com.smart_cafe_ai.identity_service.dto.RoleResponse;
+import com.smart_cafe_ai.identity_service.dto.role.RoleRequest;
+import com.smart_cafe_ai.identity_service.dto.role.RoleResponse;
 import com.smart_cafe_ai.identity_service.service.RoleService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -13,10 +12,13 @@ import java.util.List;
 
 @RestController
 @RequestMapping({"/admin/roles", "/api/v1/admin/roles", "/api/roles"})
-@RequiredArgsConstructor
 public class RoleController {
 
     private final RoleService roleService;
+
+    public RoleController(RoleService roleService) {
+        this.roleService = roleService;
+    }
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<RoleResponse>>> getRoles() {

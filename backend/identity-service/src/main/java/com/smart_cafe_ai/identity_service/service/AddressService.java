@@ -7,18 +7,21 @@ import com.smart_cafe_ai.identity_service.model.Address;
 import com.smart_cafe_ai.identity_service.model.User;
 import com.smart_cafe_ai.identity_service.repository.AddressRepository;
 import com.smart_cafe_ai.identity_service.repository.UserRepository;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
-@RequiredArgsConstructor
 public class AddressService {
 
     private final AddressRepository addressRepository;
     private final UserRepository userRepository;
+
+    public AddressService(AddressRepository addressRepository, UserRepository userRepository) {
+        this.addressRepository = addressRepository;
+        this.userRepository = userRepository;
+    }
 
     @Transactional(readOnly = true)
     public ApiResponse<List<AddressResponse>> getUserAddresses(String userId) {
@@ -139,3 +142,4 @@ public class AddressService {
         return ApiResponse.success(null);
     }
 }
+

@@ -1,9 +1,14 @@
 package com.smart_cafe_ai.identity_service.controller;
 
-import com.smart_cafe_ai.identity_service.dto.*;
+import com.smart_cafe_ai.identity_service.dto.ApiResponse;
+import com.smart_cafe_ai.identity_service.dto.admin.AdminUserCreateRequest;
+import com.smart_cafe_ai.identity_service.dto.admin.AdminUserResetPasswordRequest;
+import com.smart_cafe_ai.identity_service.dto.admin.AdminUserRoleRequest;
+import com.smart_cafe_ai.identity_service.dto.admin.AdminUserStatusRequest;
+import com.smart_cafe_ai.identity_service.dto.admin.AdminUserUpdateRequest;
+import com.smart_cafe_ai.identity_service.dto.user.UserResponse;
 import com.smart_cafe_ai.identity_service.model.UserStatus;
 import com.smart_cafe_ai.identity_service.service.AdminUserService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -14,10 +19,13 @@ import java.util.List;
 
 @RestController
 @RequestMapping({"/admin/users", "/api/v1/admin/users"})
-@RequiredArgsConstructor
 public class AdminUserController {
 
     private final AdminUserService adminUserService;
+
+    public AdminUserController(AdminUserService adminUserService) {
+        this.adminUserService = adminUserService;
+    }
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<UserResponse>>> getAllUsers(
@@ -75,3 +83,4 @@ public class AdminUserController {
         return ResponseEntity.ok(adminUserService.resetUserPassword(id, request.getNewPassword()));
     }
 }
+

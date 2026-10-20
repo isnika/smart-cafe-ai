@@ -5,7 +5,6 @@ import com.smart_cafe_ai.identity_service.dto.AddressResponse;
 import com.smart_cafe_ai.identity_service.dto.ApiResponse;
 import com.smart_cafe_ai.identity_service.security.UserPrincipal;
 import com.smart_cafe_ai.identity_service.service.AddressService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -15,10 +14,13 @@ import java.util.List;
 
 @RestController
 @RequestMapping({"/users/me/addresses", "/api/v1/users/me/addresses"})
-@RequiredArgsConstructor
 public class AddressController {
 
     private final AddressService addressService;
+
+    public AddressController(AddressService addressService) {
+        this.addressService = addressService;
+    }
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<AddressResponse>>> getUserAddresses(@AuthenticationPrincipal UserPrincipal principal) {
@@ -86,3 +88,4 @@ public class AddressController {
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
     }
 }
+

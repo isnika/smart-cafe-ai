@@ -1,7 +1,7 @@
 package com.smart_cafe_ai.identity_service.service;
 
-import com.smart_cafe_ai.identity_service.dto.ChangePasswordRequest;
-import com.smart_cafe_ai.identity_service.dto.UpdateContactRequest;
+import com.smart_cafe_ai.identity_service.dto.auth.ChangePasswordRequest;
+import com.smart_cafe_ai.identity_service.dto.user.UpdateContactRequest;
 import com.smart_cafe_ai.identity_service.model.OtpPurpose;
 import com.smart_cafe_ai.identity_service.model.User;
 import com.smart_cafe_ai.identity_service.repository.RefreshTokenRepository;
