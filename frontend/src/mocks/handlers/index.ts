@@ -4,5 +4,6 @@ import { orderHandlers } from './order';
 import { storeHandlers } from './store';
 import { orderReadHandlers } from './order-read';
 import { identityHandlers } from './identity';
+import { authFlowHandlers } from './auth-flow';
 
-export const handlers = [...cashierHandlers, ...catalogHandlers, ...storeHandlers, ...orderHandlers, ...identityHandlers, ...orderReadHandlers];
+export const handlers = [...cashierHandlers, ...catalogHandlers, ...storeHandlers, ...orderHandlers, ...identityHandlers, ...orderReadHandlers, ...authFlowHandlers];

@@ -1,9 +1,11 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { ShieldCheck } from "lucide-react";
+import { roleHome } from "@/app/routes";
 import { isApiError } from "@/shared/api/http";
 import { Button } from "@/shared/ui";
 import { authFlowApi } from "../api";
+import { useAuthStore } from "../store";
 import { useRecoveryStore } from "../recovery-store";
 import { useCountdown } from "../hooks/useCountdown";
 import { AuthHeading, AuthShell, authLinkMuted } from "../components/AuthShell";
@@ -14,10 +16,17 @@ import { maskIdentifier } from "../validators";
 const OTP_LENGTH = 6;
 const RESEND_SECONDS = 60;
 
+/**
+ * Dùng chung cho 2 luồng (phân biệt bằng recovery-store.purpose):
+ *   register : xác minh tài khoản mới → server cấp phiên → auto-login vào trang theo vai trò
+ *   reset    : quên mật khẩu → nhận resetToken → /reset-password
+ */
 export default function VerifyOtpPage() {
   const navigate = useNavigate();
   const identifier = useRecoveryStore((s) => s.identifier);
+  const purpose = useRecoveryStore((s) => s.purpose);
   const setResetToken = useRecoveryStore((s) => s.setResetToken);
+  const applySession = useAuthStore((s) => s.applySession);
   const { remaining, restart } = useCountdown(RESEND_SECONDS);
 
   const [otp, setOtp] = useState("");
@@ -26,8 +35,20 @@ export default function VerifyOtpPage() {
   const [submitting, setSubmitting] = useState(false);
   const [resending, setResending] = useState(false);
 
-  // Vào thẳng /verify-otp (reload, gõ URL) → chưa có ngữ cảnh → về bước 1
+  // Xác minh đăng ký xong: dọn recovery store SAU khi rời trang. Xoá ngay lúc thành công thì
+  // guard bên dưới sẽ đá về /forgot-password trước khi kịp chuyển sang /login.
+  const finished = useRef(false);
+  useEffect(
+    () => () => {
+      if (finished.current) useRecoveryStore.getState().reset();
+    },
+    [],
+  );
+
+  // Vào thẳng /verify-otp (reload, gõ URL) → chưa có ngữ cảnh → về bước đầu của luồng tương ứng
   if (!identifier) return <Navigate to="/forgot-password" replace />;
+
+  const isRegister = purpose === "register";
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -40,11 +61,21 @@ export default function VerifyOtpPage() {
     setNotice(null);
     setSubmitting(true);
     try {
-      const { resetToken } = await authFlowApi.verifyOtp(identifier, otp);
-      setResetToken(resetToken);
-      navigate("/reset-password", { replace: true });
+      if (isRegister) {
+        // Server xác minh OTP và cấp luôn phiên → auto-login, không cần nhập lại mật khẩu
+        const session = await authFlowApi.verifyRegistration(identifier, otp);
+        finished.current = true;
+        applySession(session);
+        navigate(roleHome[session.roleName], { replace: true });
+      } else {
+        const { resetToken } = await authFlowApi.verifyOtp(identifier, otp);
+        setResetToken(resetToken);
+        navigate("/reset-password", { replace: true });
+      }
     } catch (err) {
-      setError(isApiError(err) ? err.message : "Không thể xác nhận, vui lòng thử lại");
+      setError(
+        isApiError(err) ? err.message : "Không thể xác nhận, vui lòng thử lại",
+      );
       setOtp("");
       setSubmitting(false);
     }
@@ -55,12 +86,18 @@ export default function VerifyOtpPage() {
     setResending(true);
     setError(null);
     try {
-      await authFlowApi.requestOtp(identifier);
+      await (isRegister
+        ? authFlowApi.resendRegistrationOtp(identifier)
+        : authFlowApi.requestOtp(identifier));
       setOtp("");
       setNotice("Đã gửi lại mã xác nhận.");
       restart();
     } catch (err) {
-      setError(isApiError(err) ? err.message : "Không thể gửi lại mã, vui lòng thử lại");
+      setError(
+        isApiError(err)
+          ? err.message
+          : "Không thể gửi lại mã, vui lòng thử lại",
+      );
     } finally {
       setResending(false);
     }
@@ -87,7 +124,7 @@ export default function VerifyOtpPage() {
       <AuthHeading
         icon={<ShieldCheck />}
         tone="success"
-        title="Xác nhận OTP"
+        title={isRegister ? "Xác minh tài khoản" : "Xác nhận OTP"}
         subtitle={`Nhập mã ${OTP_LENGTH} số đã được gửi đến ${maskIdentifier(identifier)}`}
       />
       <form onSubmit={onSubmit} noValidate className="space-y-4">
@@ -106,17 +143,29 @@ export default function VerifyOtpPage() {
           autoFocus
         />
 
-        <p className="text-center text-caption text-gray-500" aria-live="polite">
+        <p
+          className="text-center text-caption text-gray-500"
+          aria-live="polite"
+        >
           {remaining > 0 ? (
             <>
-              Gửi lại mã sau <span className="tabular font-semibold text-primary-600">{remaining}s</span>
+              Gửi lại mã sau{" "}
+              <span className="tabular font-semibold text-primary-600">
+                {remaining}s
+              </span>
             </>
           ) : (
             "Bạn có thể yêu cầu gửi lại mã"
           )}
         </p>
 
-        <Button type="submit" size="lg" fullWidth loading={submitting} disabled={otp.length < OTP_LENGTH}>
+        <Button
+          type="submit"
+          size="lg"
+          fullWidth
+          loading={submitting}
+          disabled={otp.length < OTP_LENGTH}
+        >
           Xác nhận
         </Button>
       </form>

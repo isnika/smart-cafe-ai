@@ -24,17 +24,10 @@ async function bootstrap() {
   });
 
   // 2) MSW phải sẵn sàng TRƯỚC khi hydrate, nếu không /me sẽ đi thẳng ra mạng thật.
+  //    enableMocking() cũng seed đơn demo và gắn window.__mock (db, auth helpers).
   if (import.meta.env.DEV && import.meta.env.VITE_USE_MOCK === "true") {
-    const { worker } = await import("./mocks/browser");
-    await worker.start({
-      onUnhandledFrame({ frame, defaults }) {
-        // Chỉ cảnh báo với request /api chưa có handler; bỏ qua file tĩnh, HMR, điều hướng trang
-        const { request } = frame.data as { request?: Request };
-        if (request && new URL(request.url).pathname.startsWith("/api")) {
-          defaults.warn();
-        }
-      },
-    });
+    const { enableMocking } = await import("./mocks/browser");
+    await enableMocking();
   }
 
   // 3) Không await: render ngay, guard hiển thị loading khi status === 'booting'.

@@ -5,7 +5,7 @@ import type { OrderDetail } from '@/shared/types';
 import { db, resetDb } from '../db';
 import { seedDemoOrders } from '../seed';
 import { mockConfig, url } from '../utils';
-import { MOCK_ACCOUNTS } from './identity';
+import { MOCK_ACCOUNTS, resetAuthMock } from './identity';
 import { handlers } from './index';
 
 // Chạy với: VITE_API_BASE_URL=http://localhost/api vitest run src/mocks
@@ -14,6 +14,7 @@ beforeAll(() => server.listen());
 afterAll(() => server.close());
 beforeEach(() => {
   resetDb();
+  resetAuthMock();
   seedDemoOrders();
   mockConfig.latencyMs = 0;
   mockConfig.enforceAuth = false;
@@ -28,9 +29,10 @@ async function get<T>(path: string, token?: string) {
   const res = await fetch(url(path), { headers: token ? { Authorization: `Bearer ${token}` } : {} });
   return { status: res.status, body: (await res.json()) as T };
 }
-async function login(email: string, password: string) {
+// Body khớp LoginInput thật: { identifier, password }
+async function login(identifier: string, password: string) {
   const res = await fetch(url('/identity/auth/login'), {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }),
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ identifier, password }),
   });
   return { status: res.status, body: (await res.json()) as Record<string, any> };
 }
@@ -109,19 +111,38 @@ describe('GET /orders-svc/orders/:id', () => {
 });
 
 describe('identity', () => {
-  it.each(MOCK_ACCOUNTS.map((a) => [a.role, a] as const))('login %s → token dùng được cho /me', async (_role, a) => {
+  // Chỉ lấy tài khoản Active (banned/unverified có test riêng bên dưới)
+  const active = MOCK_ACCOUNTS.filter((a) => a.status === 'Active');
+
+  it.each(active.map((a) => [a.roleName, a] as const))('login %s → AuthSession đúng shape, token dùng được cho /me', async (_role, a) => {
     const res = await login(a.email, a.password);
     expect(res.status).toBe(200);
-    expect(res.body.user).toMatchObject({ email: a.email, role: a.role });
+    expect(res.body).toMatchObject({ roleName: a.roleName, branchId: a.branchId });
+    expect(res.body.accessToken).toEqual(expect.any(String));
+    expect(res.body.user).toMatchObject({ email: a.email, status: 'Active' });
+    expect(res.body.user.roleId).toEqual(expect.any(Number));
     expect(res.body.user.password).toBeUndefined();
     const me = await get<Record<string, unknown>>('/identity/users/me', res.body.accessToken);
     expect([me.status, me.body.email]).toEqual([200, a.email]);
   });
 
+  it('login bằng số điện thoại (kể cả +84) cũng được', async () => {
+    const c = MOCK_ACCOUNTS.find((a) => a.roleName === 'Customer' && a.status === 'Active')!;
+    expect((await login(c.phone!, c.password)).status).toBe(200);
+    expect((await login(`+84${c.phone!.slice(1)}`, c.password)).status).toBe(200);
+  });
+
   it('sai mật khẩu → 401 INVALID_CREDENTIALS, thiếu field → 400', async () => {
-    const bad = await login('cashier@smartcafe.vn', 'sai');
+    const bad = await login('staff@smartcafe.vn', 'sai');
     expect([bad.status, bad.body.code]).toEqual([401, 'INVALID_CREDENTIALS']);
     expect((await login('', '')).status).toBe(400);
+  });
+
+  it('tài khoản Banned / Unverified → 403', async () => {
+    const banned = await login('banned@smartcafe.vn', '123456');
+    expect([banned.status, banned.body.code]).toEqual([403, 'ACCOUNT_BANNED']);
+    const unverified = await login('unverified@smartcafe.vn', '123456');
+    expect([unverified.status, unverified.body.code]).toEqual([403, 'ACCOUNT_UNVERIFIED']);
   });
 
   it('/me không token hoặc token rác → 401', async () => {

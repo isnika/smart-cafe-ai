@@ -55,6 +55,11 @@ interface AuthState {
   branchId: number | null;
 
   login: (input: LoginInput) => Promise<AuthSession>;
+  /**
+   * Áp dụng một phiên đã được server cấp (lưu storage + chuyển sang authenticated).
+   * Dùng cho login và cho auto-login sau khi xác minh OTP đăng ký.
+   */
+  applySession: (session: AuthSession) => void;
   /** Gọi API logout (best-effort) rồi xoá phiên local. */
   logout: () => Promise<void>;
   /** Gọi 1 lần ở entry sau khi MSW sẵn sàng. */
@@ -76,6 +81,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   login: async (input) => {
     const session = await identityApi.login(input); // auth:false → 401 sai mật khẩu không kích hoạt onUnauthorized
+    get().applySession(session);
+    return session;
+  },
+
+  applySession: (session) => {
     save({
       accessToken: session.accessToken,
       refreshToken: session.refreshToken ?? null,
@@ -90,7 +100,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       roleName: session.roleName,
       branchId: session.branchId ?? null,
     });
-    return session;
   },
 
   logout: async () => {
