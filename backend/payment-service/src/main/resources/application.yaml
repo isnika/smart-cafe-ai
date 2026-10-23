@@ -4,6 +4,8 @@ server:
 spring:
   application:
     name: payment-service
+  jackson:
+    property-naming-strategy: SNAKE_CASE
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/smart_cafe_payment_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true}
     username: ${SPRING_DATASOURCE_USERNAME:root}
@@ -12,9 +14,21 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
+    show-sql: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    template:
+      retry:
+        enabled: true
+        initial-interval: 1000ms
+        max-attempts: 3
 
 eureka:
   client:
@@ -24,3 +38,36 @@ eureka:
     register-with-eureka: true
   instance:
     prefer-ip-address: true
+
+# Security JWT
+jwt:
+  secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+  expiration: 86400000 # 24 hours
+
+# Payment Gateways Configuration (Sandbox Default)
+payment:
+  vnpay:
+    url: ${VNPAY_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
+    tmn-code: ${VNPAY_TMN_CODE:SMARTCAFE}
+    hash-secret: ${VNPAY_HASH_SECRET:SECRETKEYVNPAYSMARTCAFE12345678}
+    return-url: ${VNPAY_RETURN_URL:http://localhost:3000/payment/vnpay-return}
+    version: "2.1.0"
+    command: "pay"
+    currency: "VND"
+    locale: "vn"
+  momo:
+    endpoint: ${MOMO_ENDPOINT:https://test-payment.momo.vn/v2/gateway/api/create}
+    partner-code: ${MOMO_PARTNER_CODE:MOMO}
+    access-key: ${MOMO_ACCESS_KEY:MOMO_ACCESS_KEY}
+    secret-key: ${MOMO_SECRET_KEY:MOMO_SECRET_KEY}
+    return-url: ${MOMO_RETURN_URL:http://localhost:3000/payment/momo-return}
+    notify-url: ${MOMO_NOTIFY_URL:http://localhost:8085/payments/momo/ipn}
+
+# RabbitMQ Exchange & Queues
+rabbitmq:
+  exchange:
+    payment: smartcafe.payment.exchange
+  routing-key:
+    payment-succeeded: payment.succeeded
+    payment-failed: payment.failed
+    refund-processed: refund.processed
