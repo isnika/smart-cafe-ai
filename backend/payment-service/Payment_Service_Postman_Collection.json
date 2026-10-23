@@ -1,0 +1,350 @@
+{
+  "info": {
+    "_postman_id": "b1a2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+    "name": "Smart Cafe AI - Payment Service Test Suite",
+    "description": "Bộ test API toàn diện cho Payment Service (Port 8085): Quản lý thanh toán (Cash, VNPay, Momo), Ca thu ngân, Hoàn tiền và Hóa đơn điện tử VAT.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8085",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdGFmZl8wMDEiLCJ1c2VyX2lkIjoic3RhZmZfMDAxIiwicm9sZXMiOlsiUk9MRV9TVEFGRiIsIlJPTEVfQ0FTSElFUiIsIlJPTEVfTUFOQUdFUiIsIlJPTEVfQURNSU4iXSwiYnJhbmNoX2lkIjoxLCJpYXQiOjE3OTI1Njg1MjksImV4cCI6MTgyNDEwNDUyOX0.KNFZWRWiy-ezTB2nqCD6TYTmVjkiZNLTb7aqWrOLSZprXLTKAQZwze5leFzG_MZeowFRtF2xUyGXOgplqJJ1kQ",
+      "type": "string"
+    },
+    {
+      "key": "payment_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "shift_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "refund_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "invoice_id",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Cashier Shifts (Ca Thu Ngân)",
+      "item": [
+        {
+          "name": "Mở ca thu ngân",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branch_id\": 1,\n  \"register_code\": \"MAIN\",\n  \"opening_cash\": 1000000\n}"
+            },
+            "url": { "raw": "{{base_url}}/cashier-shifts/open", "host": ["{{base_url}}"], "path": ["cashier-shifts", "open"] }
+          }
+        },
+        {
+          "name": "Xem ca hiện tại",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/cashier-shifts/current", "host": ["{{base_url}}"], "path": ["cashier-shifts", "current"] }
+          }
+        },
+        {
+          "name": "Chi tiết ca thu ngân",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/cashier-shifts/{{shift_id}}", "host": ["{{base_url}}"], "path": ["cashier-shifts", "{{shift_id}}"] }
+          }
+        },
+        {
+          "name": "Ghi nhận biến động quỹ tiền mặt (Rút két/Nạp thêm)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"movement_type\": \"Safe_Drop\",\n  \"amount\": 500000,\n  \"reason\": \"Chuyển bớt tiền mặt vào két an toàn\"\n}"
+            },
+            "url": { "raw": "{{base_url}}/cashier-shifts/{{shift_id}}/movements", "host": ["{{base_url}}"], "path": ["cashier-shifts", "{{shift_id}}", "movements"] }
+          }
+        },
+        {
+          "name": "Lịch sử biến động quỹ trong ca",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/cashier-shifts/{{shift_id}}/movements", "host": ["{{base_url}}"], "path": ["cashier-shifts", "{{shift_id}}", "movements"] }
+          }
+        },
+        {
+          "name": "Đóng ca thu ngân (Chốt két)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"closing_cash\": 1500000\n}"
+            },
+            "url": { "raw": "{{base_url}}/cashier-shifts/{{shift_id}}/close", "host": ["{{base_url}}"], "path": ["cashier-shifts", "{{shift_id}}", "close"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Payments (Thanh Toán)",
+      "item": [
+        {
+          "name": "Tạo giao dịch thanh toán VNPay",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": 10024,\n  \"payment_method\": \"VNPay\",\n  \"return_url\": \"http://localhost:3000/order/10024/result\"\n}"
+            },
+            "url": { "raw": "{{base_url}}/payments", "host": ["{{base_url}}"], "path": ["payments"] }
+          }
+        },
+        {
+          "name": "Tạo giao dịch thanh toán Tiền mặt (Cash)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": 10024,\n  \"payment_method\": \"Cash\"\n}"
+            },
+            "url": { "raw": "{{base_url}}/payments", "host": ["{{base_url}}"], "path": ["payments"] }
+          }
+        },
+        {
+          "name": "Lịch sử thanh toán của tôi (me)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/payments/me?page=1&size=20", "host": ["{{base_url}}"], "path": ["payments", "me"], "query": [{ "key": "page", "value": "1" }, { "key": "size", "value": "20" }] }
+          }
+        },
+        {
+          "name": "Chi tiết giao dịch thanh toán",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/payments/{{payment_id}}", "host": ["{{base_url}}"], "path": ["payments", "{{payment_id}}"] }
+          }
+        },
+        {
+          "name": "Thu ngân xác nhận tiền mặt (Confirm Cash)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cash_received\": 100000\n}"
+            },
+            "url": { "raw": "{{base_url}}/payments/{{payment_id}}/confirm-cash", "host": ["{{base_url}}"], "path": ["payments", "{{payment_id}}", "confirm-cash"] }
+          }
+        },
+        {
+          "name": "Danh sách các thanh toán (Phân trang)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/payments?branch_id=1&page=1&size=20", "host": ["{{base_url}}"], "path": ["payments"], "query": [{ "key": "branch_id", "value": "1" }, { "key": "page", "value": "1" }, { "key": "size", "value": "20" }] }
+          }
+        },
+        {
+          "name": "VNPay Callback Return URL (Mock)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/payments/vnpay/return?vnp_TxnRef={{payment_id}}&vnp_ResponseCode=00&vnp_TransactionNo=14123456",
+              "host": ["{{base_url}}"],
+              "path": ["payments", "vnpay", "return"],
+              "query": [
+                { "key": "vnp_TxnRef", "value": "{{payment_id}}" },
+                { "key": "vnp_ResponseCode", "value": "00" },
+                { "key": "vnp_TransactionNo", "value": "14123456" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Refunds (Hoàn Tiền)",
+      "item": [
+        {
+          "name": "Tạo yêu cầu hoàn tiền",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payment_id\": {{payment_id}},\n  \"amount\": 50000,\n  \"reason\": \"Khách đổi ý hủy đơn trước khi pha chế\"\n}"
+            },
+            "url": { "raw": "{{base_url}}/refunds", "host": ["{{base_url}}"], "path": ["refunds"] }
+          }
+        },
+        {
+          "name": "Yêu cầu hoàn tiền của tôi (me)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/refunds/me?page=1&size=20", "host": ["{{base_url}}"], "path": ["refunds", "me"], "query": [{ "key": "page", "value": "1" }, { "key": "size", "value": "20" }] }
+          }
+        },
+        {
+          "name": "Chi tiết yêu cầu hoàn tiền",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/refunds/{{refund_id}}", "host": ["{{base_url}}"], "path": ["refunds", "{{refund_id}}"] }
+          }
+        },
+        {
+          "name": "Duyệt/Xử lý hoàn tiền (APPROVE)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"APPROVE\",\n  \"note\": \"Quản lý đồng ý hoàn tiền\"\n}"
+            },
+            "url": { "raw": "{{base_url}}/refunds/{{refund_id}}/process", "host": ["{{base_url}}"], "path": ["refunds", "{{refund_id}}", "process"] }
+          }
+        },
+        {
+          "name": "Danh sách yêu cầu hoàn tiền",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/refunds?page=1&size=20", "host": ["{{base_url}}"], "path": ["refunds"], "query": [{ "key": "page", "value": "1" }, { "key": "size", "value": "20" }] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Invoices (Hóa Đơn VAT)",
+      "item": [
+        {
+          "name": "Yêu cầu xuất hóa đơn VAT",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": 10024,\n  \"buyer_name\": \"Cong ty TNHH Cong Nghe Smart Cafe\",\n  \"buyer_tax_code\": \"0109988776\",\n  \"buyer_address\": \"123 Nguyen Trai, Ha Noi\",\n  \"email\": \"finance@smartcafe.vn\"\n}"
+            },
+            "url": { "raw": "{{base_url}}/invoices", "host": ["{{base_url}}"], "path": ["invoices"] }
+          }
+        },
+        {
+          "name": "Hóa đơn VAT của tôi (me)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/invoices/me?page=1&size=20", "host": ["{{base_url}}"], "path": ["invoices", "me"], "query": [{ "key": "page", "value": "1" }, { "key": "size", "value": "20" }] }
+          }
+        },
+        {
+          "name": "Chi tiết hóa đơn VAT",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/invoices/{{invoice_id}}", "host": ["{{base_url}}"], "path": ["invoices", "{{invoice_id}}"] }
+          }
+        },
+        {
+          "name": "Phát hành hóa đơn điện tử (Issue)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/invoices/{{invoice_id}}/issue", "host": ["{{base_url}}"], "path": ["invoices", "{{invoice_id}}", "issue"] }
+          }
+        },
+        {
+          "name": "Tải file PDF hóa đơn VAT",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/invoices/{{invoice_id}}/pdf", "host": ["{{base_url}}"], "path": ["invoices", "{{invoice_id}}", "pdf"] }
+          }
+        },
+        {
+          "name": "Danh sách hóa đơn",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/invoices?page=1&size=20", "host": ["{{base_url}}"], "path": ["invoices"], "query": [{ "key": "page", "value": "1" }, { "key": "size", "value": "20" }] }
+          }
+        }
+      ]
+    }
+  ]
+}
