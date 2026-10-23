@@ -11,3 +11,6 @@ target/
 # Environment
 .env
 **/.env
+
+# Local duplicates / legacy
+backend/Backend/
