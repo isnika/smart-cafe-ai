@@ -106,6 +106,17 @@ class OtpEmailFlowTest {
     }
 
     @Test
+    void phoneChangeOtpUsesExistingEmailDelivery() throws Exception {
+        OtpEmailEvent event = new OtpEmailEvent(UUID.randomUUID().toString(), "user-1", "customer@example.com",
+                "012345", "Change_Phone", Instant.now().plusSeconds(300));
+        consumer.consume(message(event));
+        verify(mailSender).send(any(MimeMessage.class));
+        assertEquals("customer@example.com", mimeMessage.getAllRecipients()[0].toString());
+        assertEquals(Notification.Channel.Email, repository.findByEventId(event.eventId()).orElseThrow().getChannel());
+        assertTrue(mimeMessage.getSubject().contains("đổi số điện thoại"));
+    }
+
+    @Test
     void expiredOtpIsNotSent() throws Exception {
         OtpEmailEvent event = event(Instant.now().minusSeconds(1));
         consumer.consume(message(event));

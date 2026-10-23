@@ -34,6 +34,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.Locale;
+import static com.smart_cafe_ai.identity_service.validation.ProfileValidation.*;
 
 @Service
 public class AuthService {
@@ -58,42 +59,40 @@ public class AuthService {
 
     @Transactional
     public ApiResponse<UserResponse> register(RegisterRequest request) {
-        if (request.getFullName() == null || request.getFullName().isBlank()) {
-            return ApiResponse.error("VALIDATION_ERROR", "Họ và tên (fullName) là bắt buộc");
-        }
-        if ((request.getEmail() == null || request.getEmail().isBlank()) && (request.getPhone() == null || request.getPhone().isBlank())) {
-            return ApiResponse.error("VALIDATION_ERROR", "Email hoặc Số điện thoại là bắt buộc");
-        }
-        if (request.getEmail() != null && !request.getEmail().isBlank() && userRepository.existsByEmail(request.getEmail())) {
+        ApiResponse<String> name = validateFullName(request == null ? null : request.getFullName());
+        if (!name.isSuccess()) return ApiResponse.error(name.getError().getCode(), name.getError().getMessage());
+        String email = normalizeEmail(request.getEmail());
+        String phone = normalizePhone(request.getPhone());
+        if (email == null) return ApiResponse.error("VALIDATION_ERROR", "email là bắt buộc, phải đúng định dạng và tối đa 100 ký tự");
+        if (phone == null) return ApiResponse.error("VALIDATION_ERROR", "phone là bắt buộc: số di động Việt Nam gồm 10 chữ số, đầu 03/05/07/08/09 hoặc dạng +84 tương ứng");
+        if (!isValidNewPassword(request.getPassword())) return ApiResponse.error("VALIDATION_ERROR",
+                "Mật khẩu cần ít nhất 8 ký tự, gồm chữ và số, tối đa 72 byte UTF-8");
+        if (userRepository.existsByEmailIgnoreCase(email)) {
             return ApiResponse.error("CONFLICT", "Email đã được sử dụng");
         }
-        if (request.getPhone() != null && !request.getPhone().isBlank() && userRepository.existsByPhone(request.getPhone())) {
+        if (userRepository.existsByPhoneIn(phoneAliases(phone))) {
             return ApiResponse.error("CONFLICT", "Số điện thoại đã được sử dụng");
         }
         Role customerRole = roleRepository.findByName("Customer").orElseGet(() -> roleRepository.save(Role.builder().name("Customer").description("Default Customer role").build()));
-        User user = User.builder().fullName(request.getFullName()).email(request.getEmail()).phone(request.getPhone()).passwordHash(passwordEncoder.encode(request.getPassword())).role(customerRole).status(UserStatus.Unverified).build();
+        User user = User.builder().fullName(name.getData()).email(email).phone(phone).passwordHash(passwordEncoder.encode(request.getPassword())).role(customerRole).status(UserStatus.Unverified).build();
         User savedUser = userRepository.save(user);
-        String target = request.getEmail() != null && !request.getEmail().isBlank() ? request.getEmail() : request.getPhone();
-        otpService.generateAndSaveOtp(target, OtpPurpose.Register, savedUser.getId(), null);
+        otpService.generateAndSaveOtp(email, OtpPurpose.Register, savedUser.getId(), null);
         return ApiResponse.success(UserResponse.fromEntity(savedUser));
     }
 
     @Transactional
     public ApiResponse<AuthResponse> verifyOtp(VerifyOtpRequest request) {
-        String target = request.getPhoneEmail();
-        boolean isValid = otpService.verifyOtp(target, request.getOtpCode(), OtpPurpose.Register);
+        User user = userRepository.findByIdentifier(normalizeIdentifier(request.getPhoneEmail()))
+                .orElseThrow(() -> new RuntimeException("Tài khoản không tồn tại"));
+        String target = normalizeEmail(user.getEmail());
+        boolean isValid = otpService.verifyOtp(target, request.getOtpCode(), OtpPurpose.Register, user.getId());
         if (!isValid) {
             return ApiResponse.error("OTP_INVALID", "Mã OTP không hợp lệ hoặc đã hết hạn");
         }
-        User user = userRepository.findByIdentifier(target).orElseThrow(() -> new RuntimeException("Tài khoản không tồn tại"));
         if (user.getStatus() == UserStatus.Unverified) {
             user.setStatus(UserStatus.Active);
         }
-        if (target.contains("@")) {
-            user.setEmailVerifiedAt(LocalDateTime.now());
-        } else {
-            user.setPhoneVerifiedAt(LocalDateTime.now());
-        }
+        user.setEmailVerifiedAt(LocalDateTime.now());
         user.setLastLoginAt(LocalDateTime.now());
         user = userRepository.save(user);
         return ApiResponse.success(issueTokens(user, null));
@@ -101,15 +100,15 @@ public class AuthService {
 
     @Transactional
     public ApiResponse<String> resendOtp(ResendOtpRequest request) {
-        String phoneEmail = request.getPhoneEmail();
+        String phoneEmail = normalizeIdentifier(request.getPhoneEmail());
         User user = userRepository.findByIdentifier(phoneEmail).orElseThrow(() -> new RuntimeException("Tài khoản không tồn tại"));
-        otpService.generateAndSaveOtp(phoneEmail, OtpPurpose.Register, user.getId(), null);
-        return ApiResponse.success("Đã gửi lại mã OTP thành công");
+        otpService.generateAndSaveOtp(user.getEmail(), OtpPurpose.Register, user.getId(), null);
+        return ApiResponse.success("Yêu cầu gửi lại OTP tới email đăng ký đã được tiếp nhận");
     }
 
     @Transactional
     public ApiResponse<AuthResponse> login(LoginRequest request) {
-        User user = userRepository.findByIdentifier(request.getIdentifier()).orElse(null);
+        User user = userRepository.findByIdentifier(normalizeIdentifier(request.getIdentifier())).orElse(null);
         if (user == null || user.getPasswordHash() == null || user.getPasswordHash().isBlank()
                 || request.getPassword() == null || !passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
             return ApiResponse.error("UNAUTHORIZED", "Tên đăng nhập hoặc mật khẩu không chính xác");
@@ -309,6 +308,13 @@ public class AuthService {
         }
         String email = value.trim().toLowerCase(Locale.ROOT);
         return email.length() <= 100 && email.matches("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$") ? email : null;
+    }
+
+    private String normalizeIdentifier(String value) {
+        String email = normalizeEmail(value);
+        if (email != null) return email;
+        String phone = normalizePhone(value);
+        return phone != null ? phone : value;
     }
 
     @Transactional

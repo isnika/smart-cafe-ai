@@ -57,10 +57,15 @@ class OtpEmailOutboxFlowTest {
     }
 
     @Test
-    void phoneOtpStillWorksWithoutCreatingAnEmailRequest() {
+    void phoneChangeOtpUsesEmailDeliveryButRemainsBoundToPhoneAndUser() throws Exception {
         long count = outbox.count();
-        String code = otpService.generateAndSaveOtp("0901234567", OtpPurpose.Register);
-        assertEquals(count, outbox.count());
-        assertTrue(otpService.verifyOtp("0901234567", code, OtpPurpose.Register));
+        String code = otpService.generateAndSaveOtp("0901234567", OtpPurpose.Change_Phone, "phone-user", null, "customer@example.com");
+        assertEquals(count + 1, outbox.count());
+        OutboxEvent row = outbox.findAll().stream().filter(e -> "phone-user".equals(e.getAggregateId())).findFirst().orElseThrow();
+        OtpEmailEvent event = mapper.readValue(row.getPayload(), OtpEmailEvent.class);
+        assertEquals("customer@example.com", event.email());
+        assertEquals("Change_Phone", event.purpose());
+        assertFalse(otpService.verifyOtp(event.email(), code, OtpPurpose.Change_Phone, "phone-user"));
+        assertTrue(otpService.verifyOtp("0901234567", code, OtpPurpose.Change_Phone, "phone-user"));
     }
 }

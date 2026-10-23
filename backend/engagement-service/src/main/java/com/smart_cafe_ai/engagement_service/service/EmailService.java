@@ -28,6 +28,7 @@ public class EmailService {
             case "Reset_Password" -> "đặt lại mật khẩu";
             case "Change_Password" -> "đổi mật khẩu";
             case "Change_Email" -> "xác thực email mới";
+            case "Change_Phone" -> "xác nhận đổi số điện thoại";
             default -> throw new IllegalArgumentException("Unsupported OTP purpose");
         };
         long remainingSeconds = Math.max(1, Duration.between(Instant.now(), event.expiresAt()).getSeconds());

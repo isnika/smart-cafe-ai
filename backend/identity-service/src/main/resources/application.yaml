@@ -64,6 +64,9 @@ cloudinary:
   api-secret: ${CLOUDINARY_API_SECRET:}
 
 app:
+  contact-change:
+    resend-cooldown-seconds: ${CONTACT_OTP_RESEND_COOLDOWN_SECONDS:60}
+    max-requests-per-hour: ${CONTACT_OTP_MAX_REQUESTS_PER_HOUR:5}
   password-recovery:
     resend-cooldown-seconds: ${PASSWORD_RESET_RESEND_COOLDOWN_SECONDS:60}
     max-requests-per-hour: ${PASSWORD_RESET_MAX_REQUESTS_PER_HOUR:5}

@@ -2,13 +2,19 @@ package com.smart_cafe_ai.identity_service.dto.auth;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.smart_cafe_ai.identity_service.dto.StrictStringDeserializer;
 
 public class RegisterRequest {
     @JsonProperty("full_name")
     @JsonAlias({"full_name", "fullName"})
+    @JsonDeserialize(using = StrictStringDeserializer.class)
     private String fullName;
+    @JsonDeserialize(using = StrictStringDeserializer.class)
     private String email;
+    @JsonDeserialize(using = StrictStringDeserializer.class)
     private String phone;
+    @JsonDeserialize(using = StrictStringDeserializer.class)
     private String password;
     public static class RegisterRequestBuilder {
         private String fullName;

@@ -32,13 +32,13 @@ class ChangeOtpFlowTest {
         UpdateContactRequest request = UpdateContactRequest.builder()
                 .email("new@example.com")
                 .build();
-        when(users.findById("user-1")).thenReturn(Optional.of(user));
+        when(users.findByIdForUpdate("user-1")).thenReturn(Optional.of(user));
         when(users.existsByEmail("new@example.com")).thenReturn(false);
 
         assertTrue(userService.requestContactOtp("user-1", request).isSuccess());
 
-        verify(otpService).generateAndSaveOtp(
-                "new@example.com", OtpPurpose.Change_Email, "user-1", null);
+        verify(otpService).requestContactChangeOtp(
+                "new@example.com", OtpPurpose.Change_Email, "user-1", "new@example.com");
     }
 
     @Test
@@ -51,13 +51,13 @@ class ChangeOtpFlowTest {
                 .email("old@example.com")
                 .newEmail("new@example.com")
                 .build();
-        when(users.findById("user-1")).thenReturn(Optional.of(user));
+        when(users.findByIdForUpdate("user-1")).thenReturn(Optional.of(user));
         when(users.existsByEmail("new@example.com")).thenReturn(false);
 
         assertTrue(userService.requestContactOtp("user-1", request).isSuccess());
 
-        verify(otpService).generateAndSaveOtp(
-                "new@example.com", OtpPurpose.Change_Email, "user-1", null);
+        verify(otpService).requestContactChangeOtp(
+                "new@example.com", OtpPurpose.Change_Email, "user-1", "new@example.com");
     }
 
     @Test
@@ -71,12 +71,12 @@ class ChangeOtpFlowTest {
                 .newEmail("new@example.com")
                 .otpCode("123456")
                 .build();
-        when(users.findById("user-1")).thenReturn(Optional.of(user));
+        when(users.findByIdForUpdate("user-1")).thenReturn(Optional.of(user));
         when(users.existsByEmail("new@example.com")).thenReturn(false);
         when(otpService.verifyOtp(
                 "new@example.com", "123456", OtpPurpose.Change_Email, "user-1"))
                 .thenReturn(true);
-        when(users.save(user)).thenReturn(user);
+        when(users.saveAndFlush(user)).thenReturn(user);
 
         assertTrue(userService.updateContact("user-1", request).isSuccess());
 
@@ -89,19 +89,20 @@ class ChangeOtpFlowTest {
     void updatesPhoneFromCurrentValueToNewValueAfterOtpVerification() {
         UserRepository users = mock(UserRepository.class);
         OtpService otpService = mock(OtpService.class);
-        User user = User.builder().id("user-1").phone("0900000000").build();
+        User user = User.builder().id("user-1").phone("0900000000").email("old@example.com")
+                .emailVerifiedAt(LocalDateTime.now()).build();
         UserService userService = new UserService(users, otpService, mock(CloudinaryService.class));
         UpdateContactRequest request = UpdateContactRequest.builder()
                 .phone("0900000000")
                 .newPhone("0911111111")
                 .otpCode("123456")
                 .build();
-        when(users.findById("user-1")).thenReturn(Optional.of(user));
+        when(users.findByIdForUpdate("user-1")).thenReturn(Optional.of(user));
         when(users.existsByPhone("0911111111")).thenReturn(false);
         when(otpService.verifyOtp(
                 "0911111111", "123456", OtpPurpose.Change_Phone, "user-1"))
                 .thenReturn(true);
-        when(users.save(user)).thenReturn(user);
+        when(users.saveAndFlush(user)).thenReturn(user);
 
         assertTrue(userService.updateContact("user-1", request).isSuccess());
 

@@ -24,6 +24,9 @@ public interface OtpLogRepository extends JpaRepository<OtpLog, Long> {
 
     long countByUserIdAndPurposeAndCreatedAtAfter(String userId, OtpPurpose purpose, LocalDateTime since);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<OtpLog> findFirstByUserIdAndPurposeOrderByIdDesc(String userId, OtpPurpose purpose);
+
     @Modifying(flushAutomatically = true)
     @Query("UPDATE OtpLog o SET o.isUsed = true, o.usedAt = :now "
             + "WHERE o.target = :target AND o.purpose = :purpose AND o.isUsed = false "

@@ -2,19 +2,26 @@ package com.smart_cafe_ai.identity_service.dto.user;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.smart_cafe_ai.identity_service.dto.StrictStringDeserializer;
 
 public class UpdateContactRequest {
-    // Existing contact value, used to ensure the requested change matches this account.
+    // email/phone alone are the new value; with new_email/new_phone they are the current value.
+    @JsonDeserialize(using = StrictStringDeserializer.class)
     private String email;
+    @JsonDeserialize(using = StrictStringDeserializer.class)
     private String phone;
     @JsonAlias("newEmail")
     @JsonProperty("new_email")
+    @JsonDeserialize(using = StrictStringDeserializer.class)
     private String newEmail;
     @JsonAlias("newPhone")
     @JsonProperty("new_phone")
+    @JsonDeserialize(using = StrictStringDeserializer.class)
     private String newPhone;
     @JsonAlias("otpCode")
     @JsonProperty("otp_code")
+    @JsonDeserialize(using = StrictStringDeserializer.class)
     private String otpCode;
     public static class UpdateContactRequestBuilder {
         private String email;

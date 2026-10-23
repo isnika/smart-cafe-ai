@@ -33,7 +33,8 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<UserResponse>> register(@RequestBody RegisterRequest request) {
         ApiResponse<UserResponse> response = authService.register(request);
-        return ResponseEntity.status(response.isSuccess() ? HttpStatus.CREATED : HttpStatus.BAD_REQUEST).body(response);
+        return ResponseEntity.status(response.isSuccess() ? HttpStatus.CREATED
+                : "CONFLICT".equals(response.getError().getCode()) ? HttpStatus.CONFLICT : HttpStatus.BAD_REQUEST).body(response);
     }
 
     @PostMapping("/otp/verify")

@@ -13,7 +13,7 @@ public record OtpEmailEvent(
         @Size(max = 36) String userId,
         @NotBlank @Email @Size(max = 255) String email,
         @NotBlank @Pattern(regexp = "[0-9]{6}") String otpCode,
-        @NotBlank @Pattern(regexp = "Register|Reset_Password|Change_Password|Change_Email") String purpose,
+        @NotBlank @Pattern(regexp = "Register|Reset_Password|Change_Password|Change_Email|Change_Phone") String purpose,
         @NotNull Instant expiresAt) {
     @Override
     public String toString() {

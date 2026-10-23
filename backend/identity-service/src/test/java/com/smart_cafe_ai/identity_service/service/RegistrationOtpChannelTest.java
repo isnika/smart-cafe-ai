@@ -23,8 +23,14 @@ class RegistrationOtpChannelTest {
     }
 
     @Test
-    void registrationWithOnlyPhoneRetainsPhoneOtp() {
-        assertRegistrationTarget(null, "0901234567");
+    void registrationWithOnlyPhoneIsRejectedWithoutCreatingOtp() {
+        UserRepository users = mock(UserRepository.class);
+        OtpService otp = mock(OtpService.class);
+        AuthService auth = new AuthService(users, mock(RoleRepository.class), mock(RefreshTokenRepository.class),
+                mock(PasswordEncoder.class), mock(JwtService.class), otp, mock(GoogleTokenVerifierService.class));
+        var response = auth.register(RegisterRequest.builder().fullName("Customer").phone("0901234567").password("Password123!").build());
+        org.junit.jupiter.api.Assertions.assertFalse(response.isSuccess());
+        verifyNoInteractions(users, otp);
     }
 
     private void assertRegistrationTarget(String email, String expectedTarget) {

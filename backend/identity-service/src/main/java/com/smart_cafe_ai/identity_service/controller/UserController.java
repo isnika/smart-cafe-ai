@@ -11,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import java.util.Map;
 
 @RestController
 @RequestMapping({"/users", "/api/v1/users"})
@@ -40,7 +41,7 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("UNAUTHORIZED", "Bạn chưa đăng nhập"));
         }
         ApiResponse<UserResponse> response = userService.updateProfile(principal.getId(), request);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.status(response.isSuccess() ? HttpStatus.OK : HttpStatus.BAD_REQUEST).body(response);
     }
 
     @PostMapping("/me/contact/otp")
@@ -52,7 +53,8 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("UNAUTHORIZED", "Bạn chưa đăng nhập"));
         }
         ApiResponse<String> response = userService.requestContactOtp(principal.getId(), request);
-        return ResponseEntity.status(response.isSuccess() ? HttpStatus.OK : HttpStatus.BAD_REQUEST).body(response);
+        return ResponseEntity.status(response.isSuccess() ? HttpStatus.OK
+                : "CONFLICT".equals(response.getError().getCode()) ? HttpStatus.CONFLICT : HttpStatus.BAD_REQUEST).body(response);
     }
 
     @PutMapping("/me/contact")
@@ -64,11 +66,12 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("UNAUTHORIZED", "Bạn chưa đăng nhập"));
         }
         ApiResponse<UserResponse> response = userService.updateContact(principal.getId(), request);
-        return ResponseEntity.status(response.isSuccess() ? HttpStatus.OK : HttpStatus.BAD_REQUEST).body(response);
+        return ResponseEntity.status(response.isSuccess() ? HttpStatus.OK
+                : "CONFLICT".equals(response.getError().getCode()) ? HttpStatus.CONFLICT : HttpStatus.BAD_REQUEST).body(response);
     }
 
     @PostMapping("/me/avatar")
-    public ResponseEntity<ApiResponse<String>> uploadAvatar(
+    public ResponseEntity<ApiResponse<Map<String, String>>> uploadAvatar(
             @AuthenticationPrincipal UserPrincipal principal,
             @RequestParam(value = "file", required = false) MultipartFile file
     ) {
@@ -79,7 +82,7 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(ApiResponse.error("VALIDATION_ERROR", "Vui lòng chọn file ảnh tải lên trong Body form-data với Key tên là 'file' (chọn kiểu File)"));
         }
-        ApiResponse<String> response = userService.uploadAvatar(principal.getId(), file);
+        ApiResponse<Map<String, String>> response = userService.uploadAvatar(principal.getId(), file);
         return ResponseEntity.ok(response);
     }
 }

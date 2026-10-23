@@ -12,6 +12,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import java.util.Collection;
 
 @Repository
 public interface UserRepository extends JpaRepository<User, String>, JpaSpecificationExecutor<User> {
@@ -28,11 +29,15 @@ public interface UserRepository extends JpaRepository<User, String>, JpaSpecific
     Optional<User> findByIdForUpdate(@Param("id") String id);
     Optional<User> findByPhone(String phone);
 
-    @Query("SELECT u FROM User u WHERE u.email = :identifier OR u.phone = :identifier")
+    @Query("SELECT u FROM User u WHERE LOWER(u.email) = LOWER(:identifier) OR u.phone = :identifier")
     Optional<User> findByIdentifier(@Param("identifier") String identifier);
 
     boolean existsByEmail(String email);
     boolean existsByPhone(String phone);
+    boolean existsByEmailIgnoreCase(String email);
+    boolean existsByEmailIgnoreCaseAndIdNot(String email, String id);
+    boolean existsByPhoneIn(Collection<String> phones);
+    boolean existsByPhoneInAndIdNot(Collection<String> phones, String id);
 
     long countByRoleId(Integer roleId);
 }

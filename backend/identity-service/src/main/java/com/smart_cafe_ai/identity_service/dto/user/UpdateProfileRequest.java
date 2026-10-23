@@ -1,11 +1,15 @@
 package com.smart_cafe_ai.identity_service.dto.user;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.smart_cafe_ai.identity_service.dto.StrictStringDeserializer;
 
 public class UpdateProfileRequest {
     @JsonProperty("full_name")
+    @JsonDeserialize(using = StrictStringDeserializer.class)
     private String fullName;
     private String avatar;
+
     public static class UpdateProfileRequestBuilder {
         private String fullName;
         private String avatar;

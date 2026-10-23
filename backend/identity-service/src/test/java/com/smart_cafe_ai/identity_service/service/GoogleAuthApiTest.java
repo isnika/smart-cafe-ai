@@ -9,20 +9,26 @@ import com.smart_cafe_ai.identity_service.model.UserStatus;
 import com.smart_cafe_ai.identity_service.repository.RoleRepository;
 import com.smart_cafe_ai.identity_service.repository.UserRepository;
 import com.smart_cafe_ai.identity_service.security.GoogleIdentity;
+import com.smart_cafe_ai.identity_service.security.JwtService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -39,6 +45,8 @@ class GoogleAuthApiTest {
     @Autowired UserRepository users;
     @Autowired RoleRepository roles;
     @Autowired PasswordEncoder passwords;
+    @Autowired JwtService jwt;
+    @Autowired Environment environment;
     @MockBean GoogleTokenVerifierService google;
 
     private static final String BODY = "{\"id_token\":\"google-token\",\"device_info\":\"Postman\"}";
@@ -59,7 +67,10 @@ class GoogleAuthApiTest {
         String refreshToken = first.path("refresh_token").asText();
 
         mvc.perform(get("/api/v1/users/me").header("Authorization", "Bearer " + accessToken))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.id").value(userId));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.id").value(userId))
+                .andExpect(jsonPath("$.data.email").value("api-test@gmail.com"))
+                .andExpect(jsonPath("$.data.password_hash").doesNotExist())
+                .andExpect(jsonPath("$.data.passwordHash").doesNotExist());
         JsonNode second = login("/api/v1/auth");
         assertFalse(second.path("is_new_user").asBoolean());
         assertEquals(userId, second.path("user").path("id").asText());
@@ -79,6 +90,76 @@ class GoogleAuthApiTest {
         mvc.perform(post("/api/v1/auth/refresh").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refresh_token\":\"" + rotated + "\"}"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/users/me", "/api/v1/users/me"})
+    void profileWithoutTokenReturnsUnauthorizedJson(String path) throws Exception {
+        mvc.perform(get(path))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"))
+                .andExpect(jsonPath("$.traceId").isNotEmpty())
+                .andExpect(jsonPath("$.data").doesNotExist());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Bearer invalid-token", "Bearer ", "Basic credentials", "Bearer null"})
+    void profileRejectsMalformedAuthentication(String authorization) throws Exception {
+        mvc.perform(get("/api/v1/users/me").header("Authorization", authorization))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = UserStatus.class, names = {"Active", "Banned", "Deactivated"})
+    void profileRejectsExpiredTokenBeforeCheckingAccountStatus(UserStatus status) throws Exception {
+        User user = existingUser(status);
+        JwtService expired = new JwtService();
+        ReflectionTestUtils.setField(expired, "secretKey", environment.getRequiredProperty("jwt.secret"));
+        ReflectionTestUtils.setField(expired, "accessTokenExpirationMs", -60000L);
+        mvc.perform(get("/api/v1/users/me").header("Authorization", "Bearer "
+                        + expired.generateAccessToken(user.getId(), "Customer")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    void profileRejectsRefreshTokenAndUnknownUser() throws Exception {
+        User user = existingUser(UserStatus.Active);
+        for (String token : List.of(jwt.generateRefreshToken(user.getId()),
+                jwt.generateAccessToken("nonexistent-user", "Customer"))) {
+            mvc.perform(get("/api/v1/users/me").header("Authorization", "Bearer " + token))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = UserStatus.class, names = {"Unverified", "Banned", "Deactivated"})
+    void profileRejectsAccountDisabledAfterTokenWasIssued(UserStatus status) throws Exception {
+        User user = existingUser(UserStatus.Active);
+        String token = jwt.generateAccessToken(user.getId(), "Customer");
+        user.setStatus(status);
+        users.saveAndFlush(user);
+        mvc.perform(get("/api/v1/users/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("ACCOUNT_DISABLED"))
+                .andExpect(jsonPath("$.data").doesNotExist());
+    }
+
+    @Test
+    void authenticatedCustomerWithoutAdminPermissionGetsForbiddenJson() throws Exception {
+        User user = existingUser(UserStatus.Active);
+        mvc.perform(get("/api/v1/admin/users").header("Authorization", "Bearer "
+                        + jwt.generateAccessToken(user.getId(), "Customer")))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
     }
 
     @ParameterizedTest
