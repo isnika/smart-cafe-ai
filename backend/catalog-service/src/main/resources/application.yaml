@@ -4,17 +4,26 @@ server:
 spring:
   application:
     name: catalog-service
+
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/smart_cafe_catalog_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true}
     username: ${SPRING_DATASOURCE_USERNAME:root}
-    password: ${SPRING_DATASOURCE_PASSWORD:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:123456}
     driver-class-name: com.mysql.cj.jdbc.Driver
+
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: update # Có thể dùng 'none' hoặc 'validate' khi DB đã tạo bảng sẵn từ SQL script
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+    show-sql: ${SHOW_SQL:false}
+    open-in-view: false
     properties:
       hibernate:
+        format_sql: true
         dialect: org.hibernate.dialect.MySQLDialect
+        jdbc:
+          time_zone: UTC
 
 eureka:
   client:
@@ -24,3 +33,8 @@ eureka:
     register-with-eureka: true
   instance:
     prefer-ip-address: true
+    instance-id: ${spring.application.name}:${spring.application.instance_id:${random.value}}
+
+# --- CẤU HÌNH JWT ---
+jwt:
+  secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}

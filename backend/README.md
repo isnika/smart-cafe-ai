@@ -17,6 +17,8 @@ Backend is organized as independent Spring Boot microservices. Each service owns
 | `engagement-service` | 8087 | `smart_cafe_engagement_db` | Loyalty, vouchers, reviews, notifications |
 | `intelligence-service` | 8088 | `smart_cafe_intelligence_db` | Chat, knowledge base, forecasts, recommendations |
 
+Catalog public menu APIs (categories, product search, product detail): see [setup, API contract and tests](catalog-service/README.md).
+
 ## Structure
 
 ```text
