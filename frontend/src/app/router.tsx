@@ -9,6 +9,7 @@ import RegisterPage from "@/features/auth/pages/RegisterPage";
 import VerifyOtpPage from "@/features/auth/pages/VerifyOtpPage";
 import ForgotPasswordPage from "@/features/auth/pages/ForgotPasswordPage";
 import ResetPasswordPage from "@/features/auth/pages/ResetPasswordPage";
+import DineInTablePage from "@/features/dine-in/pages/DineInTablePage";
 import PlaceholderPage from "@/pages/PlaceholderPage";
 
 const P = PlaceholderPage;
@@ -53,6 +54,9 @@ export const router = createBrowserRouter([
   { path: PATHS.resetPassword, element: <ResetPasswordPage /> },
   ...devRoutes,
 
+  // ── Dine-in: trang QR Ordering có khung riêng (sticky bar giỏ hàng, không bottom-nav) ──
+  { path: PATHS.dineInTable, element: <DineInTablePage /> },
+
   // ── Khách ───────────────────────────────────────────────────────────
   // Dine-in và duyệt menu: không cần đăng nhập (quét QR tại bàn vẫn đặt món được).
   // Online checkout, đơn hàng, hồ sơ: cần đăng nhập.
@@ -85,15 +89,6 @@ export const router = createBrowserRouter([
       },
 
       // Dine-in
-      {
-        path: PATHS.dineInTable,
-        element: (
-          <P
-            title="Menu tại bàn"
-            note="QR Ordering Page + Order Status Mini Card"
-          />
-        ),
-      },
       {
         path: PATHS.dineInCheckout,
         element: (

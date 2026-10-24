@@ -1,4 +1,4 @@
-import type { Product, ProductOption, ProductOptionGroup, ProductVariant, Table } from '@/shared/types';
+import type { Category, Product, ProductOption, ProductOptionGroup, ProductVariant, Table } from '@/shared/types';
 
 /**
  * Quy ước ID để dễ đọc khi debug:
@@ -79,4 +79,11 @@ export const seedProducts = (): SeedProduct[] => [
 export const seedTables = (): Table[] => [
   ...[1, 2, 3, 4, 5].map((n) => ({ id: n, branchId: BRANCH_ID, tableNumber: String(n).padStart(2, '0'), qrCode: `QR-B1-T0${n}`, isActive: true })),
   { id: 6, branchId: BRANCH_ID, tableNumber: '06', qrCode: 'QR-B1-T06', isActive: false }, // bàn đang khoá
+];
+
+/** categoryId của seedProducts: 1 = cà phê, 2 = trà/matcha/đá xay, 3 = bánh. */
+export const seedCategories = (): Category[] => [
+  { id: 1, name: 'Cà phê', image: null, sortOrder: 1, status: 'Active' },
+  { id: 2, name: 'Trà & Đá xay', image: null, sortOrder: 2, status: 'Active' },
+  { id: 3, name: 'Bánh ngọt', image: null, sortOrder: 3, status: 'Active' },
 ];
