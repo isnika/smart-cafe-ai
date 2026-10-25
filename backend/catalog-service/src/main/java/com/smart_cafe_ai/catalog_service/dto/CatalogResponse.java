@@ -12,6 +12,19 @@ public final class CatalogResponse {
             @JsonProperty("sort_order") int sortOrder, MenuStatus status,
             @JsonProperty("product_count") long productCount) {}
 
+    public record CategoryStatusResponse(Integer id, MenuStatus status) {}
+
+    public record CategoryDeletedResponse(Integer id) {}
+
+    public record CategoryAdminResponse(Integer id, String name, String image,
+            @JsonProperty("sort_order") int sortOrder, MenuStatus status,
+            @JsonProperty("total_product_count") long totalProductCount,
+            @JsonProperty("active_product_count") long activeProductCount) {
+        // Preserve the existing admin-list field for clients that already consume it.
+        @JsonProperty("product_count")
+        public long productCount() { return activeProductCount; }
+    }
+
     public record ProductResponse(Integer id, @JsonProperty("category_id") Integer categoryId,
             String name, String image, String description, Temperature temperature,
             @JsonProperty("caffeine_level") CaffeineLevel caffeineLevel,

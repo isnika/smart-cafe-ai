@@ -19,27 +19,29 @@ public class CatalogAccess {
         key = Keys.hmacShaKeyFor(bytes.length < 32 ? secret.getBytes(StandardCharsets.UTF_8) : bytes);
     }
 
-    // Invoked only for status=Inactive. Active menu browsing remains public.
-    public void requireManager(String authorization) {
+    // Used by administration endpoints and inactive-category browsing.
+    public String requireManager(String authorization) {
         if (authorization == null || !authorization.startsWith("Bearer ")) {
-            throw new ApiException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Cần đăng nhập để xem danh mục Inactive");
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Vui lòng đăng nhập để quản lý danh mục.");
         }
         Claims claims;
         try {
             claims = Jwts.parser().verifyWith(key).build()
                     .parseSignedClaims(authorization.substring(7)).getPayload();
-            if (claims.getExpiration() == null || claims.getSubject() == null || claims.getSubject().isBlank()) {
+            if (claims.getExpiration() == null || claims.getSubject() == null || claims.getSubject().isBlank()
+                    || claims.getSubject().length() > 36) {
                 throw new IllegalArgumentException("Access token requires subject and expiration");
             }
         } catch (ExpiredJwtException ex) {
-            throw new ApiException(HttpStatus.UNAUTHORIZED, "TOKEN_EXPIRED", "Token đã hết hạn");
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "TOKEN_EXPIRED", "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
         } catch (JwtException | IllegalArgumentException ex) {
-            throw new ApiException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Token không hợp lệ");
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.");
         }
         Object role = claims.get("role");
         if (!"Manager".equals(role) && !"Admin".equals(role)) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Chỉ Manager hoặc Admin được xem danh mục Inactive");
+            throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Bạn không có quyền quản lý danh mục.");
         }
+        return claims.getSubject();
     }
 }
 

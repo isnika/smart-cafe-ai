@@ -1,4 +1,4 @@
-# Catalog Service — 3 API xem thực đơn
+# Catalog Service — xem thực đơn và quản lý danh mục
 
 Service Spring Boot độc lập, cổng `8082`, database riêng `smart_cafe_catalog_db`, đăng ký Eureka theo cấu hình hiện có. Triển khai theo `SmartAPI.xlsx` (sheet Chuẩn chung và 2. Catalog) và schema `SmartCoffeeDT.sql`. Word có các mô tả cũ như `Out_Of_Stock`, `rating_avg`, hard-delete; phần triển khai này dùng hợp đồng Excel/SQL: `Active/Inactive`, khả dụng theo bảng ngoại lệ của từng chi nhánh.
 
@@ -6,15 +6,15 @@ Service Spring Boot độc lập, cổng `8082`, database riêng `smart_cafe_cat
 
 ```text
 controller/   Nhận HTTP và query parameters
-service/      Nghiệp vụ đọc thực đơn, ghép variants/options/availability
+service/      Đọc thực đơn, quản lý danh mục và ghi audit trong transaction
 repository/   JPA, bộ lọc sản phẩm, truy vấn batch
-model/        Mapping 7 bảng Catalog và enum
+model/        Mapping 8 bảng Catalog (gồm Audit_Logs) và enum
 dto/          Response JSON snake_case, bộ lọc và validation
-security/     Xác minh JWT khi yêu cầu danh mục Inactive
+security/     Xác minh JWT và quyền Manager/Admin cho quản trị danh mục
 exception/    Chuẩn hóa HTTP status và response lỗi
 ```
 
-Mỗi request chạy trong transaction read-only. DTO được tạo trong service; không trả trực tiếp entity JPA, không cần Open Session in View. Catalog không truy vấn database Identity/Store/Inventory. `branch_id` là external reference, không tạo khóa ngoại hay gọi Store để kiểm tra chi nhánh tồn tại trong 3 API này.
+Các thao tác đọc chạy trong transaction read-only; tạo/sửa/đổi trạng thái/xóa danh mục và audit chạy trong cùng transaction ghi. DTO được tạo trong service; không trả trực tiếp entity JPA, không cần Open Session in View. Catalog không truy vấn database Identity/Store/Inventory. `branch_id` và `actor_user_id` là external reference, không tạo khóa ngoại xuyên service. Theo yêu cầu bổ sung, cho phép hard delete danh mục trống tạo nhầm; danh mục có dữ liệu phụ thuộc vẫn phải giữ lại và chuyển Inactive.
 
 ## API
 
@@ -25,8 +25,106 @@ Mỗi request chạy trong transaction read-only. DTO được tạo trong servi
 | GET | `/api/v1/catalog/categories` | Mặc định Active, sắp theo `sort_order`, rồi `id`; `product_count` chỉ đếm sản phẩm Active. |
 | GET | `/api/v1/catalog/products` | Tìm tên, lọc danh mục/thuộc tính/giá, phân trang, sắp xếp, khả dụng theo chi nhánh. |
 | GET | `/api/v1/catalog/products/{id}` | Thông tin sản phẩm + variants + option_groups/options + trạng thái khả dụng và lý do ngừng bán theo chi nhánh. |
+| GET | `/api/v1/catalog/admin/categories` | Manager/Admin xem cả Active/Inactive, tìm theo tên và phân trang. |
+| POST | `/api/v1/catalog/categories` | Manager/Admin tạo danh mục, trả 201 và header Location. |
+| PUT | `/api/v1/catalog/categories/{id}` | Manager/Admin thay thế thông tin danh mục. |
+| PATCH | `/api/v1/catalog/categories/{id}/status` | Manager/Admin bật/tắt danh mục, không xóa dữ liệu. |
+| DELETE | `/api/v1/catalog/categories/{id}` | Manager/Admin xóa vĩnh viễn danh mục không còn dữ liệu phụ thuộc, trả 200 kèm thông báo. |
 
-Các API Active là public. `categories?status=Inactive` yêu cầu `Authorization: Bearer <access_token>` do Identity cấp, chữ ký và hạn dùng hợp lệ, claim `role` là `Manager` hoặc `Admin`. Catalog dùng cùng `JWT_SECRET` và cách giải mã khóa như Identity; không tin header vai trò từ client. Thiếu/sai/hết hạn token trả `401`, sai quyền trả `403`. Chưa triển khai API quản trị ghi dữ liệu.
+Các API GET xem thực đơn Active là public. `categories?status=Inactive` và 5 API quản trị danh mục yêu cầu `Authorization: Bearer <access_token>` do Identity cấp, chữ ký và hạn dùng hợp lệ, claim `role` là `Manager` hoặc `Admin`. Catalog dùng cùng `JWT_SECRET` và cách giải mã khóa như Identity; không tin header vai trò từ client. Thiếu/sai/hết hạn token trả `401`, sai quyền trả `403`. `@ManagerOnly` và MVC interceptor bảo vệ các API quản trị trước bước đọc/validate body, áp dụng cho cả alias `/catalog` và `/api/v1/catalog`.
+
+### Quản trị danh mục và nghiệp vụ
+
+`GET /catalog/admin/categories?q=ca%20phe&status=Inactive&sort=sort_order,asc&page=1&size=20`:
+
+- Bỏ `status` để xem cả Active và Inactive. `status` khác `Active`/`Inactive` trả `400 VALIDATION_ERROR`.
+- `q` tìm chuỗi trong tên không phân biệt hoa thường/dấu tiếng Việt, kể cả `đ/Đ`: `ca phe` tìm được “Cà phê”, `do uong` tìm được “Đồ uống”. Chuẩn hóa Unicode và khoảng trắng ở query; các phép lower/fold ký tự chạy trong truy vấn SQL trước khi lọc, đếm tổng và phân trang. Cùng một bộ quy tắc dùng cho MySQL/H2, không phụ thuộc collation mặc định để bỏ dấu tiếng Việt. `%`, `_`, `!` được tìm như ký tự thường, không phải regex/wildcard do client điều khiển.
+- `page` mặc định 1, `size` mặc định 20; page >= 1, size từ 1–100. Âm/0/sai kiểu hoặc size > 100 trả `400 VALIDATION_ERROR`. Không có kết quả, database rỗng hoặc trang vượt quá tổng số trang vẫn trả 200, `data: []`, meta chính xác.
+- `sort` cho phép `id`, `name`, `sort_order`, `status`, kèm `,asc` hoặc `,desc`; bỏ chiều thì dùng asc. Mặc định `sort_order,asc`. Luôn thêm `id,asc` làm tiêu chí phụ trừ khi đang sort theo id. Field/chiều sai, kể cả yêu cầu sort theo các trường đếm chưa được hỗ trợ, trả 400; không chèn trực tiếp tham số sort vào SQL.
+- Trả `CategoryAdminResponse` và `meta`: `total_product_count` đếm tất cả sản phẩm trong danh mục; `active_product_count` chỉ đếm sản phẩm Active, kể cả khi danh mục đang Inactive. Trường `product_count` cũ được giữ bằng active_product_count để tương thích client. Danh mục không có sản phẩm trả cả hai số bằng 0. Dùng một truy vấn GROUP BY cho cả trang, đếm Products, không đếm variants/options.
+- `total_product_count = 0` giúp nhận biết danh mục có thể cần xóa. API DELETE vẫn kiểm tra lại dữ liệu hiện tại và ràng buộc khóa ngoại khi thực hiện, vì số đếm có thể đã thay đổi sau khi tải danh sách. Không có cờ `can_delete`.
+
+Ví dụ một phần tử trong danh sách quản trị:
+
+```json
+{
+  "id": 10,
+  "name": "Cà phê",
+  "image": null,
+  "status": "Active",
+  "sort_order": 1,
+  "total_product_count": 12,
+  "active_product_count": 9,
+  "product_count": 9
+}
+```
+
+Body POST/PUT (JSON snake_case):
+
+```json
+{
+  "name": "Cà phê rang xay",
+  "image": "https://example.com/coffee.png",
+  "sort_order": 1,
+  "status": "Active"
+}
+```
+
+- `name` bắt buộc: chuẩn hóa Unicode NFC, gộp khoảng trắng, trim, tối đa 100 ký tự; không nhận ký tự điều khiển/ẩn. Cho phép chữ, số và dấu câu để đặt tên danh mục thực tế.
+- Tên không được trùng cả với danh mục Inactive. Kiểm tra không phân biệt hoa thường; MySQL dùng thêm quy tắc collation của schema gốc (ví dụ coi tên khác dấu là tương đương). Khi cập nhật, tên hiện tại của chính danh mục được phép giữ nguyên.
+- `image` tùy chọn: `null` hoặc rỗng để bỏ ảnh; nếu có phải là URL HTTP/HTTPS hợp lệ, tối đa 255 ký tự, không chứa thông tin đăng nhập. API này chỉ lưu URL, không tải hay upload ảnh.
+- `sort_order` là số nguyên JSON không âm, mặc định 0. `status` chỉ nhận đúng `Active`/`Inactive`, mặc định Active. Không nhận số thay enum, chuỗi thay số, explicit null cho sort_order/status hoặc tên trường không được hỗ trợ.
+- **PUT thay thế các trường có thể sửa**: bắt buộc name; bỏ image sẽ xóa ảnh, bỏ sort_order sẽ về 0, bỏ status sẽ về Active. Client nên gửi đầy đủ body để giữ các giá trị hiện tại. Chỉ đổi trạng thái thì dùng PATCH.
+- Không tìm thấy ID trả 404; trùng tên trả `409 CATEGORY_NAME_EXISTS`. UNIQUE(name) tại DB là lớp bảo vệ cuối cho hai request tạo/đổi tên trùng cùng lúc.
+
+Body PATCH:
+
+```json
+{ "status": "Inactive" }
+```
+
+PATCH chỉ nhận trường status và trả `data: {id,status}`. Gửi lại cùng trạng thái trả 200, không ghi thêm audit. PATCH không xóa danh mục hoặc đổi status của sản phẩm con: tắt danh mục ẩn danh mục/sản phẩm khỏi menu public và chi tiết trả 404; bật lại chỉ hiện các sản phẩm vốn Active, sản phẩm Inactive vẫn ẩn. Các variants/options và lịch sử đã lưu được giữ nguyên.
+
+Tạo/sửa/đổi trạng thái/xóa thực sự sẽ ghi `CATEGORY_CREATED`, `CATEGORY_UPDATED`, `CATEGORY_STATUS_CHANGED`, `CATEGORY_DELETED` vào `Audit_Logs`: actor lấy từ JWT đã xác minh, IP lấy từ kết nối (không tin X-Forwarded-For do client tự gửi), entity ID, dữ liệu trước/sau và thời gian UTC. Khi xóa, lưu snapshot cũ và `new_value = null`; giữ nguyên lịch sử audit trước đó. Nếu ghi audit thất bại, thay đổi hoặc xóa danh mục rollback cùng transaction. PUT không thay đổi dữ liệu không tạo audit thừa.
+
+PUT/PATCH/DELETE khóa dòng danh mục trong transaction để tuần tự hóa các thao tác đồng thời; lỗi timeout/deadlock khóa trả `409 CONCURRENT_MODIFICATION` để client thử lại. DELETE kết hợp khóa dòng và khóa ngoại không cho phép xóa cha đang có sản phẩm, bảo vệ cả trường hợp thêm sản phẩm đồng thời. Schema Categories chưa có version nên cơ chế này không phát hiện một form PUT đã cũ trên client; client cần tải lại thông tin trước khi chỉnh sửa. Các thao tác danh mục không tạo event không được định nghĩa trong tài liệu.
+
+Test trực tiếp trong Postman: base URL `http://localhost:8082/catalog`, Authorization → Bearer Token dùng access token Manager/Admin, Body → raw → JSON cho POST/PUT/PATCH. Tạo POST trước, lấy `data.id` trả về để dùng cho PUT/PATCH. Qua Gateway dùng `http://localhost:8080/api/v1/catalog`.
+
+### Xóa danh mục tạo nhầm
+
+Trong Postman chọn **DELETE** `http://localhost:8082/catalog/categories/{id}`, thay `{id}` bằng ID thật, dùng Bearer Token Manager/Admin, không gửi body.
+
+- Danh mục không có sản phẩm được xóa vĩnh viễn dù đang Active hay Inactive. Trả `200 OK` và thông báo xác nhận.
+- Có bất kỳ sản phẩm nào liên kết, kể cả sản phẩm Inactive: trả `409 CATEGORY_IN_USE`. Không xóa sản phẩm, không tự đổi trạng thái danh mục. Muốn ngừng hiển thị thì gọi PATCH status với `{"status":"Inactive"}`.
+- Ràng buộc khóa ngoại trong database tiếp tục chặn xóa nếu còn dữ liệu phụ thuộc cần bảo toàn. Hiện schema Catalog có liên kết trực tiếp từ Products đến Categories.
+- ID không hợp lệ trả 400; ID không tồn tại hoặc đã xóa trả 404. Thiếu token trả 401, sai quyền trả 403. Hai request xóa cùng ID chỉ một request thành công và ghi audit một lần.
+- Sau khi xóa, có thể tạo lại tên danh mục với ID mới; lịch sử audit vẫn giữ ID cũ.
+
+Ví dụ thành công:
+
+```json
+{
+  "success": true,
+  "data": { "id": 10 },
+  "message": "Xóa danh mục thành công.",
+  "trace_id": "UUID"
+}
+```
+
+Ví dụ không được xóa do có sản phẩm (HTTP 409):
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "CATEGORY_IN_USE",
+    "message": "Không thể xóa danh mục vì vẫn còn sản phẩm liên kết, kể cả sản phẩm đã ngừng bán. Vui lòng chuyển danh mục sang Inactive để ngừng hiển thị.",
+    "details": []
+  },
+  "trace_id": "UUID"
+}
+```
 
 ### Query của danh sách sản phẩm
 
@@ -64,7 +162,37 @@ Response theo quy ước Excel:
 }
 ```
 
-`meta` chỉ có ở danh sách sản phẩm. Lỗi có `success:false`, `error:{code,message,details:[]}` và `trace_id`. Lỗi hệ thống trả `500` với thông báo chung; stack trace chỉ nằm trong log kèm trace_id.
+`meta` có ở danh sách sản phẩm và danh sách danh mục quản trị. Lỗi có `success:false`, `error:{code,message,details:[]}` và `trace_id`. Lỗi hệ thống trả `500` với thông báo chung; stack trace chỉ nằm trong log kèm trace_id.
+
+### Thông báo cho giao diện
+
+Response thành công có thêm `message` khi cần xác nhận thao tác hoặc giải thích trạng thái rỗng. Các request GET có dữ liệu không thêm thông báo không cần thiết. Frontend dùng `message` để hiện xác nhận cho POST/PUT/PATCH/DELETE hoặc gợi ý ở danh sách rỗng; khi có lỗi, đọc `error.message`. Tiếp tục dựa vào HTTP status và error.code để xử lý nghiệp vụ, không phân tích nội dung tiếng Việt.
+
+| Trường hợp | Thông báo |
+| --- | --- |
+| POST tạo danh mục | Tạo danh mục thành công. |
+| PUT thay đổi thông tin | Cập nhật danh mục thành công. |
+| PUT dữ liệu giống hiện tại | Thông tin danh mục không thay đổi. |
+| PATCH Active | Kích hoạt danh mục thành công. |
+| PATCH Inactive | Đã ngừng hiển thị danh mục và các sản phẩm thuộc danh mục trên thực đơn. |
+| PATCH trạng thái vốn đã đúng | Danh mục đã ở trạng thái đang hiển thị/ngừng hiển thị. |
+| DELETE danh mục trống | Xóa danh mục thành công. |
+| GET admin chưa có danh mục | Chưa có danh mục nào. Bạn có thể tạo danh mục mới. |
+| GET admin không khớp bộ lọc | Không tìm thấy danh mục phù hợp. Bạn hãy thử thay đổi bộ lọc. |
+| GET admin vượt số trang | Trang này chưa có danh mục. Bạn hãy chọn trang trước. |
+
+Ví dụ PATCH thành công:
+
+```json
+{
+  "success": true,
+  "data": { "id": 10, "status": "Active" },
+  "message": "Kích hoạt danh mục thành công.",
+  "trace_id": "UUID"
+}
+```
+
+Lỗi nhập liệu có thông báo cụ thể theo trường: “Vui lòng nhập tên danh mục.”, “Thứ tự hiển thị phải là số nguyên không âm.”, “Số mục trên mỗi trang phải là số nguyên từ 1 đến 100.”. Lỗi JSON được chuyển thành thông báo dễ đọc, không trả exception nội bộ hoặc chi tiết database cho client. Token hết hạn thông báo phiên đăng nhập đã hết hạn và đề nghị đăng nhập lại; trùng tên gợi ý chọn tên khác hoặc kích hoạt lại danh mục đang ngừng hiển thị.
 
 ## Chuẩn bị database và chạy
 
@@ -124,4 +252,12 @@ mvn -f backend/catalog-service/pom.xml test
 
 `CatalogApiTest` dùng Spring Boot + MockMvc + repository thật với database H2 độc lập; không cần MySQL, Eureka hoặc Identity chạy. Bao phủ các API public, JWT danh mục Inactive, lọc kết hợp/JSON membership, giá từ variant, phân trang, dữ liệu ẩn, dữ liệu rỗng, kiểm tra đầu vào, branch availability và option groups.
 
-H2 dùng hàm giả lập `JSON_CONTAINS` chỉ trong test. Cần kiểm tra thêm trên MySQL thực với schema gốc trước khi triển khai môi trường chạy chung; bộ test H2 không xác minh index JSON và collation riêng của MySQL.
+`CategoryAdminApiTest` kiểm tra CRUD danh mục, phân quyền cả hai alias, kiểu JSON nghiêm ngặt, Content-Type, tên trùng, chuẩn hóa Unicode/khoảng trắng, tìm có dấu/không dấu và đ/Đ, whitelist sort, phân trang ổn định, đếm tổng/Active, audit và ảnh hưởng đến menu public. DELETE bao phủ danh mục trống Active/Inactive, chặn mọi sản phẩm kể cả Inactive, giữ audit và tạo lại tên sau khi xóa. `CategoryAdminTransactionTest` kiểm tra rollback khi audit lỗi (gồm DELETE), tranh chấp tên đồng thời, khóa dòng, PATCH idempotent, xóa đồng thời và khóa ngoại chặn xóa khi kiểm tra trước bỏ sót liên kết.
+
+H2 dùng hàm giả lập `JSON_CONTAINS` chỉ trong test. Để kiểm tra thêm collation, schema SQL gốc, audit JSON và request đồng thời trên MySQL, sau `mvn test` chạy:
+
+```powershell
+python -X utf8 backend/catalog-service/tools/check-category-admin-mysql.py
+```
+
+Script cần quyền CREATE/DROP DATABASE và MySQL client trên PATH (hoặc biến `MYSQL_CLIENT` trỏ đến mysql.exe). Script dùng credential datasource hiện tại, tạo database `smart_cafe_catalog_test_<random>` riêng, import schema gốc, chạy JVM ở cổng local trống với `ddl-auto=validate`, test qua HTTP rồi dừng JVM/xóa đúng database thử nghiệm. Không đổi database Catalog đang dùng. Bao phủ collation tên, tìm kiếm tiếng Việt (cả dữ liệu Unicode decomposed import từ SQL), sort, thống kê sản phẩm, audit JSON, DELETE danh mục trống/có sản phẩm và concurrency, gồm thêm sản phẩm trong lúc xóa danh mục để kiểm tra không tạo dữ liệu mồ côi. Log nằm trong `target/category-admin-mysql.log`.

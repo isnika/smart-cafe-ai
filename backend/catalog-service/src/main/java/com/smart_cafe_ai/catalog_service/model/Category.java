@@ -18,5 +18,20 @@ public class Category {
     private int sortOrder;
     @Enumerated(EnumType.STRING) @Column(nullable = false)
     private MenuStatus status;
+
+    public Category(String name, String image, int sortOrder, MenuStatus status) {
+        replace(name, image, sortOrder, status);
+    }
+
+    public void replace(String name, String image, int sortOrder, MenuStatus status) {
+        this.name = name;
+        this.image = image;
+        this.sortOrder = sortOrder;
+        this.status = status;
+    }
+
+    public void changeStatus(MenuStatus status) {
+        this.status = status;
+    }
 }
 

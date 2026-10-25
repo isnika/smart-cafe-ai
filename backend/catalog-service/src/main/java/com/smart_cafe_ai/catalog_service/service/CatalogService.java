@@ -38,13 +38,17 @@ public class CatalogService {
         var sellableIds = activeVariants.stream().filter(v -> isAvailable(v.getId(), availability))
                 .map(ProductVariant::getProductId).collect(Collectors.toSet());
         var data = page.getContent().stream().map(p -> productResponse(p, sellableIds.contains(p.getId()))).toList();
+        String message = data.isEmpty() ? (page.getTotalElements() > 0
+                ? "Trang này chưa có sản phẩm. Bạn hãy chọn trang trước."
+                : "Hiện chưa có sản phẩm phù hợp để hiển thị.") : null;
         return ApiResponse.success(data, new ApiResponse.PageMeta(filter.page(), filter.size(),
-                page.getTotalElements(), page.getTotalPages()));
+                page.getTotalElements(), page.getTotalPages()), message);
     }
 
     public ProductDetail product(Integer id, Integer branchId) {
         Product product = products.findByIdAndStatusAndCategoryStatus(id, MenuStatus.Active, MenuStatus.Active)
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "Sản phẩm không tồn tại"));
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND",
+                        "Sản phẩm không tồn tại hoặc hiện không còn hiển thị."));
         var activeVariants = variants.findByProductIdInAndStatusOrderBySortOrderAscIdAsc(List.of(id), MenuStatus.Active);
         var variantAvailability = variantAvailability(branchId, activeVariants);
         var variantResponses = activeVariants.stream().map(v -> {

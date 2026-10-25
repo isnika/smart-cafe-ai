@@ -23,7 +23,8 @@ public class CatalogController {
             @RequestParam(defaultValue = "Active") MenuStatus status,
             @RequestHeader(value = "Authorization", required = false) String authorization) {
         if (status == MenuStatus.Inactive) access.requireManager(authorization);
-        return ApiResponse.success(service.categories(status));
+        var data = service.categories(status);
+        return ApiResponse.success(data, data.isEmpty() ? "Hiện chưa có danh mục phù hợp để hiển thị." : null);
     }
 
     @GetMapping("/products")
