@@ -7,7 +7,7 @@ export const PATHS = {
   resetPassword: "/reset-password",
 
   // Customer
-  start: "/", // Order Mode Selection (entry)
+  start: "/", // Order Mode Selection (entry, công khai)
   home: "/home",
   menu: "/menu",
   product: "/menu/:id",

@@ -10,6 +10,14 @@ import VerifyOtpPage from "@/features/auth/pages/VerifyOtpPage";
 import ForgotPasswordPage from "@/features/auth/pages/ForgotPasswordPage";
 import ResetPasswordPage from "@/features/auth/pages/ResetPasswordPage";
 import DineInTablePage from "@/features/dine-in/pages/DineInTablePage";
+import DineInCartPage from "@/features/dine-in/pages/DineInCartPage";
+import DineInCheckoutPage from "@/features/dine-in/pages/DineInCheckoutPage";
+import CounterPaymentPage from "@/features/dine-in/pages/CounterPaymentPage";
+import HomePage from "@/features/home/pages/HomePage";
+import MenuBrowsePage from "@/features/home/pages/MenuBrowsePage";
+import OrderModePage from "@/features/home/pages/OrderModePage";
+import OrderDetailPage from "@/features/order-queue/pages/OrderDetailPage";
+import OrderQueuePage from "@/features/order-queue/pages/OrderQueuePage";
 import PlaceholderPage from "@/pages/PlaceholderPage";
 
 const P = PlaceholderPage;
@@ -42,7 +50,8 @@ const devRoutes: RouteObject[] = import.meta.env.DEV
     ]
   : [];
 
-export const router = createBrowserRouter([
+/** Tách ra khỏi createBrowserRouter để test dựng router bộ nhớ từ đúng cấu hình thật. */
+export const routes: RouteObject[] = [
   // ── Auth (spec #1–5, CORE) ──────────────────────────────────────────
   { path: PATHS.login, element: <LoginPage /> },
   {
@@ -54,8 +63,13 @@ export const router = createBrowserRouter([
   { path: PATHS.resetPassword, element: <ResetPasswordPage /> },
   ...devRoutes,
 
+  // ── Công khai, khung riêng (không bottom-nav) ───────────────────────
+  { path: PATHS.start, element: <OrderModePage /> },
+
   // ── Dine-in: trang QR Ordering có khung riêng (sticky bar giỏ hàng, không bottom-nav) ──
   { path: PATHS.dineInTable, element: <DineInTablePage /> },
+  // Màn xác nhận sau khi đặt: chỉ đọc đơn đã lưu, không bao giờ gửi lại đơn khi F5
+  { path: PATHS.counterPayment, element: <CounterPaymentPage /> },
 
   // ── Khách ───────────────────────────────────────────────────────────
   // Dine-in và duyệt menu: không cần đăng nhập (quét QR tại bàn vẫn đặt món được).
@@ -63,50 +77,13 @@ export const router = createBrowserRouter([
   {
     element: <CustomerLayout />,
     children: [
-      {
-        path: PATHS.start,
-        element: (
-          <P
-            title="Chọn hình thức đặt món"
-            note="Order Mode Selection: Dine-in hoặc Online"
-          />
-        ),
-      },
-      {
-        path: PATHS.home,
-        element: <P title="Trang chủ" note="Có CTA Đặt món" />,
-      },
-      { path: PATHS.menu, element: <P title="Thực đơn" /> },
+      { path: PATHS.home, element: <HomePage /> },
+      { path: PATHS.menu, element: <MenuBrowsePage /> },
       { path: PATHS.product, element: <P title="Chi tiết sản phẩm" /> },
-      {
-        path: PATHS.cart,
-        element: (
-          <P
-            title="Giỏ hàng"
-            note="Badge chế độ dine-in / giao hàng / mang đi"
-          />
-        ),
-      },
+      { path: PATHS.cart, element: <DineInCartPage /> },
 
       // Dine-in
-      {
-        path: PATHS.dineInCheckout,
-        element: (
-          <P
-            title="Thanh toán tại bàn"
-            note="Không địa chỉ; chọn Online / Tại quầy"
-          />
-        ),
-      },
-      {
-        path: PATHS.counterPayment,
-        element: (
-          <P
-            title="Mã QR thanh toán tại quầy"
-            note="QR tĩnh chứa order_id + countdown UI"
-          />
-        ),
-      },
+      { path: PATHS.dineInCheckout, element: <DineInCheckoutPage /> },
       { path: PATHS.payment, element: <P title="Cổng thanh toán" /> },
       {
         path: PATHS.paymentSuccess,
@@ -150,13 +127,8 @@ export const router = createBrowserRouter([
               <P title="Staff Dashboard" note="Tab Tổng quan và tab Thu ngân" />
             ),
           },
-          { path: PATHS.staffQueue, element: <P title="Hàng đợi đơn" /> },
-          {
-            path: PATHS.staffOrder,
-            element: (
-              <P title="Chi tiết đơn" note="Mở Bill Modal / Cancel Popup" />
-            ),
-          },
+          { path: PATHS.staffQueue, element: <OrderQueuePage /> },
+          { path: PATHS.staffOrder, element: <OrderDetailPage /> },
           { path: PATHS.staffCheckin, element: <P title="Check-in QR" /> },
         ],
       },
@@ -193,4 +165,6 @@ export const router = createBrowserRouter([
   },
 
   { path: "*", element: <NotFound /> },
-]);
+];
+
+export const router = createBrowserRouter(routes);

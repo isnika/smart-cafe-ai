@@ -8,7 +8,7 @@ import { QuantityStepper } from "./QuantityStepper";
 interface Props {
   open: boolean;
   onClose: () => void;
-  /** Giai đoạn 2 truyền vào để hiện nút gửi đơn; chưa truyền thì không hiện. */
+  /** Chuyển sang bước xác nhận đặt món; không truyền thì không hiện nút. */
   onCheckout?: () => void;
 }
 
@@ -46,7 +46,7 @@ export function CartDrawer({ open, onClose, onCheckout }: Props) {
               <Button variant="outline" onClick={onClose}>
                 Chọn thêm
               </Button>
-              {onCheckout && <Button onClick={onCheckout}>Gửi đơn</Button>}
+              {onCheckout && <Button onClick={onCheckout}>Tiến hành đặt hàng</Button>}
             </div>
           </div>
         )

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { isApiError } from "@/shared/api";
 import { PATHS } from "@/app/routes";
 import { formatVnd } from "@/shared/lib";
@@ -23,7 +23,7 @@ const BackToStart = () => (
   </Link>
 );
 
-/** QR Ordering Page: mở phiên bàn → menu theo danh mục → giỏ hàng (Zustand). Gửi đơn ở giai đoạn 2. */
+/** QR Ordering Page: mở phiên bàn → menu theo danh mục → giỏ hàng (Zustand). Gửi đơn ở trang checkout. */
 export default function DineInTablePage() {
   const { tableCode } = useParams<{ tableCode: string }>();
   const session = useTableSession(tableCode);
@@ -32,8 +32,8 @@ export default function DineInTablePage() {
 
   const sessionId = session.data?.id;
   useEffect(() => {
-    if (sessionId !== undefined) bindSession(sessionId);
-  }, [sessionId, bindSession]);
+    if (sessionId !== undefined) bindSession(sessionId, tableCode);
+  }, [sessionId, tableCode, bindSession]);
 
   if (!isValidTableCode(tableCode)) {
     return (
@@ -122,6 +122,7 @@ function MenuView() {
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [picking, setPicking] = useState<MenuProduct | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
+  const navigate = useNavigate();
 
   const itemCount = countItems(lines);
   const visible = (products.data ?? []).filter(
@@ -197,7 +198,11 @@ function MenuView() {
           setPicking(null);
         }}
       />
-      <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} />
+      <CartDrawer
+        open={cartOpen}
+        onClose={() => setCartOpen(false)}
+        onCheckout={() => navigate(PATHS.dineInCheckout)}
+      />
     </>
   );
 }

@@ -38,14 +38,14 @@ export function Modal({
         if (e.target === ref.current) onClose();
       }} // bấm nền mờ để đóng
       className={cn(
-        "w-[calc(100%-2rem)] rounded-xl p-0 shadow-modal backdrop:bg-gray-900/50",
+        "w-[calc(100%-2rem)] rounded-xl border-0 bg-white p-0 text-gray-900 shadow-modal backdrop:bg-gray-900/50",
         sizes[size],
       )}
     >
       {open && (
         <div className="flex max-h-[85vh] flex-col">
           <header className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-            <h2 className="text-h3">{title}</h2>
+            <h2 className="text-h3 text-gray-900">{title}</h2>
             <button
               onClick={onClose}
               aria-label="Đóng"

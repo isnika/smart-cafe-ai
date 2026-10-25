@@ -22,7 +22,7 @@ beforeEach(() => {
 afterEach(() => server.resetHandlers());
 
 // Cùng giả định với toPage() trong order-read.ts
-interface PageBody { items: OrderDetail[]; total: number; page: number; size: number; totalPages: number }
+interface PageBody { items: OrderDetail[]; total: number; page: number; pageSize: number }
 interface ErrBody { message: string; code: string }
 
 async function get<T>(path: string, token?: string) {
@@ -72,7 +72,7 @@ describe('GET /orders-svc/orders', () => {
 
   it('phân trang: các trang không trùng và phủ hết đơn', async () => {
     const pages = await Promise.all([1, 2, 3].map((p) => get<PageBody>(`/orders-svc/orders?size=5&page=${p}`)));
-    expect(pages[0]!.body.totalPages).toBe(3);
+    expect(Math.ceil(pages[0]!.body.total / pages[0]!.body.pageSize)).toBe(3);
     const ids = pages.flatMap((p) => p.body.items.map((o) => o.id));
     expect(new Set(ids).size).toBe(db.orders.length);
     expect(pages[2]!.body.items).toHaveLength(db.orders.length - 10);

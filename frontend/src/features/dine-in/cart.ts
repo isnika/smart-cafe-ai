@@ -1,3 +1,4 @@
+import { formatVnd } from '@/shared/lib';
 import type { OrderLineInput } from '@/shared/types';
 
 /** Giá/tên chỉ để HIỂN THỊ. Server tính lại tiền từ variantId + optionId khi tạo đơn. */
@@ -54,4 +55,16 @@ export function toOrderLines(lines: readonly DineInCartLine[]): OrderLineInput[]
     ...(l.options.length ? { options: l.options.map((o) => ({ optionId: o.optionId, quantity: o.quantity })) } : {}),
     ...(l.note?.trim() ? { note: l.note.trim() } : {}),
   }));
+}
+
+/** "Size M, Trân châu" – dòng mô tả dưới tên món. */
+export const describeLine = (l: Pick<DineInCartLine, 'variantName' | 'options'>): string =>
+  [l.variantName !== 'Standard' ? `Size ${l.variantName}` : null, ...l.options.map((o) => o.optionName)]
+    .filter(Boolean)
+    .join(', ');
+
+/** "Từ X" khi các variant có giá khác nhau; null khi món không có giá bán. */
+export function priceLabel(p: { price: number | null; maxPrice: number | null }): string | null {
+  if (p.price === null) return null;
+  return p.maxPrice !== null && p.maxPrice > p.price ? `Từ ${formatVnd(p.price)}` : formatVnd(p.price);
 }

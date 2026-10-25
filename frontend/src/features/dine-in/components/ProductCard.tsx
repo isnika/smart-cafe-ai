@@ -1,16 +1,10 @@
 import { Coffee, Plus } from "lucide-react";
-import { formatVnd } from "@/shared/lib";
 import type { MenuProduct } from "@/shared/types";
+import { priceLabel } from "../cart";
 
 interface Props {
   product: MenuProduct;
   onAdd: (product: MenuProduct) => void;
-}
-
-/** "Từ X" khi các variant có giá khác nhau. */
-function priceLabel(p: Pick<MenuProduct, "price" | "maxPrice">): string | null {
-  if (p.price === null) return null;
-  return p.maxPrice !== null && p.maxPrice > p.price ? `Từ ${formatVnd(p.price)}` : formatVnd(p.price);
 }
 
 export function ProductCard({ product, onAdd }: Props) {

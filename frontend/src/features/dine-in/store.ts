@@ -9,9 +9,11 @@ import {
 interface DineInCartState {
   /** Giỏ thuộc về đúng 1 phiên bàn; đổi phiên → giỏ cũ bị bỏ. */
   tableSessionId: number | null;
+  /** Mã QR của bàn (từ URL) để quay lại đúng menu; TableSession không trả số bàn. */
+  tableCode: string | null;
   lines: DineInCartLine[];
 
-  bindSession: (tableSessionId: number) => void;
+  bindSession: (tableSessionId: number, tableCode?: string) => void;
   addLine: (line: NewCartLine, quantity?: number) => void;
   increment: (key: string) => void;
   decrement: (key: string) => void;
@@ -24,10 +26,14 @@ const clamp = (n: number) => Math.min(MAX_LINE_QUANTITY, n);
 // Tổng số lượng / tổng tiền KHÔNG lưu trong state: dùng selector (cart.ts) để luôn suy ra từ `lines`.
 export const useDineInCartStore = create<DineInCartState>((set) => ({
   tableSessionId: null,
+  tableCode: null,
   lines: [],
 
-  bindSession: (tableSessionId) =>
-    set((s) => (s.tableSessionId === tableSessionId ? s : { tableSessionId, lines: [] })),
+  bindSession: (tableSessionId, tableCode) =>
+    set((s) => {
+      if (s.tableSessionId !== tableSessionId) return { tableSessionId, tableCode: tableCode ?? null, lines: [] };
+      return tableCode && s.tableCode !== tableCode ? { tableCode } : s;
+    }),
 
   addLine: (line, quantity = 1) => {
     if (!Number.isInteger(quantity) || quantity < 1) return;
