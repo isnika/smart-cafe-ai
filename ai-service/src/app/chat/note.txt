@@ -1,4 +1,6 @@
 chay service: uvicorn src.app.main:app --reload --port 8000
+http://127.0.0.1:8000/docs
+
 
 ollama run qwen2.5:3b test model
 
