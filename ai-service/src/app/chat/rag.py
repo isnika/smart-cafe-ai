@@ -1,24 +1,12 @@
-"""RAG pipeline: viết lại câu hỏi -> truy xuất -> sinh câu trả lời kèm nguồn.
-
-Phụ thuộc: anthropic (LLM mặc định). Có thể thay bằng LLM khác bằng cách
-implement protocol `LLMClient`.
-
-Ghi chú học tập:
-RAG - Retrieval Augmented Generation - tăng cường tạo nội dung bằng truy xuất
--- > Đưa tài liệu cho model đọc trước khi trả lời
-Giai đoạn 1: Embedding - Toán học của ý nghĩa
-    Độ đo khoảng cách cosine similarity - đo khoảng cách giữa 2 vector
-Giai đoạn 2: Vector database
-Giai đoạn 3: Retrieval
-"""
+"""RAG pipeline: làm sạch lịch sử -> viết lại câu hỏi -> truy xuất -> trả lời có căn cứ."""
 from __future__ import annotations
-from .llm import get_llm
 
 import asyncio
 import logging
 import os
 from typing import Protocol
 
+from .llm import get_llm
 from .prompts import (
     CONDENSE_SYSTEM,
     CONDENSE_USER,
@@ -31,10 +19,12 @@ from .schemas import ChatMessage, SourceChunk
 
 logger = logging.getLogger(__name__)
 
-TOP_K = int(os.getenv("RAG_TOP_K", "3"))
-# Điểm cosine của e5 thường nằm trong khoảng 0.7-0.9 -> cần tinh chỉnh theo dữ liệu thật
-MIN_SCORE = float(os.getenv("RAG_MIN_SCORE", "0.75"))
-MAX_HISTORY_MESSAGES = 6
+TOP_K = max(1, min(int(os.getenv("RAG_TOP_K", "4")), 8))
+MIN_SCORE = float(os.getenv("RAG_MIN_SCORE", "0.68"))
+MAX_HISTORY_MESSAGES = 10
+MAX_HISTORY_CHARS = 6000
+MAX_STANDALONE_QUERY_CHARS = 500
+MAX_CONTEXT_CHARS = 9000
 
 
 class LLMClient(Protocol):
@@ -43,43 +33,49 @@ class LLMClient(Protocol):
     ) -> str: ...
 
 
-class AnthropicLLM:
-    def __init__(self, model: str | None = None):
-        from anthropic import AsyncAnthropic
-
-        self.client = AsyncAnthropic()  # đọc ANTHROPIC_API_KEY từ env
-        self.model = model or os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5-5")
-
-    async def generate(
-        self, system: str, messages: list[dict], max_tokens: int = 800
-    ) -> str:
-        resp = await self.client.messages.create(
-            model=self.model,
-            max_tokens=max_tokens,
-            system=system,
-            messages=messages,
-        )
-        return "".join(b.text for b in resp.content if b.type == "text").strip()
-
-
-def _format_context(hits: list[SearchHit]) -> str:
-    return "\n\n---\n\n".join(f"(Nguồn: {h.chunk.source})\n{h.chunk.text}" for h in hits)
+def _format_context(hits: list[SearchHit], max_chars: int = MAX_CONTEXT_CHARS) -> str:
+    """Giới hạn context để giảm độ trễ và tránh gửi quá nhiều dữ liệu cho LLM."""
+    blocks: list[str] = []
+    used = 0
+    for hit in hits:
+        block = f"(Nguồn: {hit.chunk.source}; mục: {hit.chunk.heading})\n{hit.chunk.text}"
+        remaining = max_chars - used
+        if remaining <= 0:
+            break
+        if len(block) > remaining:
+            if remaining > 120:
+                blocks.append(block[:remaining])
+            break
+        blocks.append(block)
+        used += len(block) + 7
+    return "\n\n---\n\n".join(blocks)
 
 
 def _clean_history(history: list[ChatMessage]) -> list[dict]:
-    """Lấy N tin gần nhất, đảm bảo bắt đầu bằng 'user' và xen kẽ vai trò."""
-    msgs = [{"role": m.role, "content": m.content} for m in history[-MAX_HISTORY_MESSAGES:]]
+    """Chuẩn hóa lịch sử cũ; giữ cả tin user gần nhất vì message hiện tại tách riêng."""
+    msgs: list[dict] = []
+    total_chars = 0
+
+    for item in history[-MAX_HISTORY_MESSAGES:]:
+        content = " ".join(item.content.split()).strip()
+        if not content:
+            continue
+        # Lịch sử không được phép làm phình prompt quá mức.
+        remaining = MAX_HISTORY_CHARS - total_chars
+        if remaining <= 0:
+            break
+        content = content[:remaining]
+        total_chars += len(content)
+
+        if msgs and msgs[-1]["role"] == item.role:
+            msgs[-1]["content"] += "\n" + content
+        else:
+            msgs.append({"role": item.role, "content": content})
+
+    # Một lịch sử hợp lệ bắt đầu bằng user; loại bỏ assistant mở đầu bất thường.
     while msgs and msgs[0]["role"] != "user":
         msgs.pop(0)
-    cleaned: list[dict] = []
-    for m in msgs:
-        if cleaned and cleaned[-1]["role"] == m["role"]:
-            cleaned[-1]["content"] += "\n" + m["content"]
-        else:
-            cleaned.append(m)
-    if cleaned and cleaned[-1]["role"] == "user":
-        cleaned.pop()  # câu hỏi hiện tại sẽ được thêm sau
-    return cleaned
+    return msgs
 
 
 class RAGPipeline:
@@ -92,25 +88,33 @@ class RAGPipeline:
     ):
         self.retriever = retriever or get_retriever()
         self.llm = llm or get_llm()
-        self.top_k = top_k
-        self.min_score = min_score
+        self.top_k = max(1, min(int(top_k), 8))
+        self.min_score = float(min_score)
 
     async def _condense(self, question: str, history: list[dict]) -> str:
-        """Biến câu hỏi nối tiếp ("còn size L thì sao?") thành câu hỏi độc lập để search."""
+        """Viết lại câu hỏi nối tiếp; nếu model lỗi thì vẫn tiếp tục bằng câu hỏi gốc."""
         if not history:
             return question
+
         hist_text = "\n".join(
-            f"{'Khách' if m['role'] == 'user' else 'Bot'}: {m['content']}" for m in history
+            f"{'Khách' if item['role'] == 'user' else 'Bot'}: {item['content']}"
+            for item in history
         )
         try:
             out = await self.llm.generate(
                 CONDENSE_SYSTEM,
-                [{"role": "user", "content": CONDENSE_USER.format(history=hist_text, question=question)}],
-                max_tokens=150,
+                [{
+                    "role": "user",
+                    "content": CONDENSE_USER.format(history=hist_text, question=question),
+                }],
+                max_tokens=120,
             )
-            return out or question
-        except Exception:  # không để lỗi bước phụ làm hỏng cả luồng
-            logger.exception("Condense question thất bại, dùng câu hỏi gốc")
+            standalone = " ".join((out or "").split()).strip()
+            if not standalone:
+                return question
+            return standalone[:MAX_STANDALONE_QUERY_CHARS]
+        except Exception:
+            logger.exception("Không viết lại được câu hỏi; sử dụng câu hỏi gốc")
             return question
 
     async def answer(
@@ -119,31 +123,46 @@ class RAGPipeline:
         history: list[ChatMessage] | None = None,
         category: str | None = None,
     ) -> tuple[str, list[SourceChunk]]:
-        hist = _clean_history(history or [])
-        standalone = await self._condense(question, hist)
-        logger.info("Query tìm kiếm: %s", standalone)
-
-        hits = await asyncio.to_thread(
-            self.retriever.search, standalone, self.top_k, self.min_score, category
-        )
-        if not hits:
+        question = question.strip()
+        if not question:
             return FALLBACK_ANSWER, []
 
-        user_msg = USER_TEMPLATE.format(context=_format_context(hits), question=question)
+        hist = _clean_history(history or [])
+        standalone = await self._condense(question, hist)
+        logger.info("Bắt đầu truy xuất câu hỏi: %s", standalone[:250])
+
+        try:
+            hits = await asyncio.to_thread(
+                self.retriever.search, standalone, self.top_k, self.min_score, category
+            )
+        except Exception:
+            logger.exception("Truy xuất knowledge base thất bại")
+            raise
+
+        if not hits:
+            logger.info("Không tìm thấy nguồn đủ liên quan cho câu hỏi")
+            return FALLBACK_ANSWER, []
+
+        context = _format_context(hits)
+        user_msg = USER_TEMPLATE.format(context=context, question=question)
         answer = await self.llm.generate(
             SYSTEM_PROMPT,
             hist + [{"role": "user", "content": user_msg}],
-            max_tokens=256,
-            )
+            max_tokens=400,
+        )
+
+        answer = (answer or "").strip()
+        if not answer:
+            answer = FALLBACK_ANSWER
 
         sources = [
             SourceChunk(
-                source=h.chunk.source,
-                category=h.chunk.category,
-                heading=h.chunk.heading,
-                score=round(h.score, 4),
-                content=h.chunk.text,
+                source=hit.chunk.source,
+                category=hit.chunk.category,
+                heading=hit.chunk.heading,
+                score=round(hit.score, 4),
+                content=hit.chunk.text,
             )
-            for h in hits
+            for hit in hits
         ]
-        return answer or FALLBACK_ANSWER, sources
+        return answer, sources
