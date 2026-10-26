@@ -7,6 +7,7 @@ import type {
 import { BRANCH_ID, db, findVariant, isSellable, nowNaive } from '../db';
 import { DELIVERY_FEE } from '../fixtures';
 import { fail, guarded, readJson, requireAuth, url } from '../utils';
+import { evaluateVoucher } from './voucher';
 
 /** Mirror CHECK constraint trong DB: QR→Dine_In, POS→Dine_In|Pickup, Online→Delivery|Pickup. */
 const ALLOWED_COMBOS: Record<string, string[]> = {
@@ -17,14 +18,6 @@ const ALLOWED_COMBOS: Record<string, string[]> = {
 const PENDING_PAYMENT_TTL_MS = 15 * 60 * 1000;
 
 type LooseInput = Partial<{ userId: string; createdBy: string; tableSessionId: number; payAt: PayAt } & DeliveryInfoInput>;
-
-/** Mã duy nhất GIAM10: -10%, tối đa 30k, đơn tối thiểu 50k. Đủ để UI test cả nhánh hợp lệ lẫn lỗi. */
-function voucherDiscount(code: string | undefined, net: number): number {
-  if (!code) return 0;
-  if (code.toUpperCase() !== 'GIAM10') fail(400, 'VOUCHER_INVALID', 'Mã giảm giá không tồn tại');
-  if (net < 50_000) fail(400, 'VOUCHER_INVALID', 'Đơn tối thiểu 50.000đ để dùng mã GIAM10');
-  return Math.min(Math.round(net * 0.1), 30_000);
-}
 
 export function buildItem(line: OrderLineInput, branchId: number, orderId: number): OrderItemDetail {
   if (!Number.isInteger(line.quantity) || line.quantity < 1) fail(400, 'VALIDATION_ERROR', 'quantity phải là số nguyên ≥ 1');
@@ -115,7 +108,13 @@ export const orderHandlers = [
       const items = input.lines.map((line) => buildItem(line, input.branchId, orderId));
       const subTotal = items.reduce((s, i) => s + i.quantity * (i.unitPrice + i.optionsUnitTotal), 0);
       const itemDiscountAmount = items.reduce((s, i) => s + i.discountAmount, 0);
-      const voucherDiscountAmount = voucherDiscount(input.voucherCode, subTotal - itemDiscountAmount);
+      const voucherDiscountAmount = input.voucherCode
+        ? (() => {
+            const v = evaluateVoucher(input.voucherCode, subTotal - itemDiscountAmount);
+            if (!v.valid) fail(400, 'VOUCHER_INVALID', v.message ?? 'Mã giảm giá không hợp lệ');
+            return v.discountAmount;
+          })()
+        : 0;
       const deliveryFee = input.fulfillmentType === 'Delivery' ? DELIVERY_FEE : 0;
       const finalAmount = subTotal - itemDiscountAmount - voucherDiscountAmount + deliveryFee;
 

@@ -14,6 +14,7 @@ import { StateMessage } from "../components/StateMessage";
 import { DINE_IN_BRANCH_ID } from "../config";
 import { useCategories, useMenuProducts } from "../hooks/useMenu";
 import { useTableSession } from "../hooks/useTableSession";
+import { useOnlineCartStore } from "@/features/online-order/store";
 import { useDineInCartStore } from "../store";
 import { isValidTableCode } from "../validators";
 
@@ -32,7 +33,11 @@ export default function DineInTablePage() {
 
   const sessionId = session.data?.id;
   useEffect(() => {
-    if (sessionId !== undefined) bindSession(sessionId, tableCode);
+    if (sessionId !== undefined) {
+      bindSession(sessionId, tableCode);
+      // Đã ngồi vào bàn thì giỏ hiện hành là giỏ Dine-in (giỏ Online giữ nguyên nhưng không còn là chế độ đang dùng).
+      useOnlineCartStore.getState().setFulfillment(null);
+    }
   }, [sessionId, tableCode, bindSession]);
 
   if (!isValidTableCode(tableCode)) {

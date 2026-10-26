@@ -5,5 +5,7 @@ import { storeHandlers } from './store';
 import { orderReadHandlers } from './order-read';
 import { identityHandlers } from './identity';
 import { authFlowHandlers } from './auth-flow';
+import { branchHandlers } from './branch';
+import { voucherHandlers } from './voucher';
 
-export const handlers = [...cashierHandlers, ...catalogHandlers, ...storeHandlers, ...orderHandlers, ...identityHandlers, ...orderReadHandlers, ...authFlowHandlers];
+export const handlers = [...cashierHandlers, ...catalogHandlers, ...storeHandlers, ...orderHandlers, ...identityHandlers, ...orderReadHandlers, ...authFlowHandlers, ...branchHandlers, ...voucherHandlers];

@@ -6,7 +6,7 @@ import { DINE_IN_BRANCH_ID } from './config';
 import { usePlacedOrders } from './placed-orders';
 import { useDineInCartStore } from './store';
 
-export type SubmitErrorCode = 'EMPTY_CART' | 'NO_SESSION';
+export type SubmitErrorCode = 'EMPTY_CART' | 'NO_SESSION' | 'NOT_SIGNED_IN' | 'MISSING_DELIVERY' | 'NO_FULFILLMENT';
 
 /** Lỗi do FE chặn trước khi gọi API (khác với ApiError từ server). */
 export class SubmitOrderError extends Error {

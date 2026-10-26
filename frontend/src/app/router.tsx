@@ -10,7 +10,6 @@ import VerifyOtpPage from "@/features/auth/pages/VerifyOtpPage";
 import ForgotPasswordPage from "@/features/auth/pages/ForgotPasswordPage";
 import ResetPasswordPage from "@/features/auth/pages/ResetPasswordPage";
 import DineInTablePage from "@/features/dine-in/pages/DineInTablePage";
-import DineInCartPage from "@/features/dine-in/pages/DineInCartPage";
 import DineInCheckoutPage from "@/features/dine-in/pages/DineInCheckoutPage";
 import CounterPaymentPage from "@/features/dine-in/pages/CounterPaymentPage";
 import HomePage from "@/features/home/pages/HomePage";
@@ -18,6 +17,10 @@ import MenuBrowsePage from "@/features/home/pages/MenuBrowsePage";
 import OrderModePage from "@/features/home/pages/OrderModePage";
 import OrderDetailPage from "@/features/order-queue/pages/OrderDetailPage";
 import OrderQueuePage from "@/features/order-queue/pages/OrderQueuePage";
+import CartPage from "@/features/online-order/pages/CartPage";
+import OnlineCheckoutPage from "@/features/online-order/pages/OnlineCheckoutPage";
+import OrderSuccessPage from "@/features/online-order/pages/OrderSuccessPage";
+import OrderTrackingPage from "@/features/online-order/pages/OrderTrackingPage";
 import PlaceholderPage from "@/pages/PlaceholderPage";
 
 const P = PlaceholderPage;
@@ -80,33 +83,21 @@ export const routes: RouteObject[] = [
       { path: PATHS.home, element: <HomePage /> },
       { path: PATHS.menu, element: <MenuBrowsePage /> },
       { path: PATHS.product, element: <P title="Chi tiết sản phẩm" /> },
-      { path: PATHS.cart, element: <DineInCartPage /> },
+      { path: PATHS.cart, element: <CartPage /> },
 
       // Dine-in
       { path: PATHS.dineInCheckout, element: <DineInCheckoutPage /> },
       { path: PATHS.payment, element: <P title="Cổng thanh toán" /> },
-      {
-        path: PATHS.paymentSuccess,
-        element: <P title="Thanh toán thành công" />,
-      },
 
       // Cần đăng nhập
       {
         element: <RequireRole allow={["Customer"]} />,
         children: [
-          {
-            path: PATHS.checkout,
-            element: (
-              <P title="Thanh toán đơn online" note="Địa chỉ / giờ nhận" />
-            ),
-          },
+          { path: PATHS.checkout, element: <OnlineCheckoutPage /> },
+          // Màn thành công của đơn Online (đọc đơn đã tạo, không bao giờ POST)
+          { path: PATHS.paymentSuccess, element: <OrderSuccessPage /> },
           { path: PATHS.orders, element: <P title="Đơn hàng của tôi" /> },
-          {
-            path: PATHS.order,
-            element: (
-              <P title="Theo dõi đơn" note="Timeline đầy đủ cho đơn online" />
-            ),
-          },
+          { path: PATHS.order, element: <OrderTrackingPage /> },
           { path: PATHS.profile, element: <P title="Hồ sơ & địa chỉ" /> },
         ],
       },

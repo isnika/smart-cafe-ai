@@ -5,10 +5,20 @@ import { useDineInCartStore } from "../store";
 import { QuantityStepper } from "./QuantityStepper";
 
 /** Dòng giỏ hàng dạng card (màn Giỏ hàng). Ảnh thiếu → khối icon, không có <img> hỏng. */
-export function CartLineCard({ line }: { line: DineInCartLine }) {
-  const increment = useDineInCartStore((s) => s.increment);
-  const decrement = useDineInCartStore((s) => s.decrement);
-  const removeLine = useDineInCartStore((s) => s.removeLine);
+export interface CartLineActions {
+  increment: (key: string) => void;
+  decrement: (key: string) => void;
+  removeLine: (key: string) => void;
+}
+
+/** `actions` mặc định là giỏ Dine-in; giỏ Online truyền actions của store riêng của nó. */
+export function CartLineCard({ line, actions }: { line: DineInCartLine; actions?: CartLineActions }) {
+  const dineIn = {
+    increment: useDineInCartStore((s) => s.increment),
+    decrement: useDineInCartStore((s) => s.decrement),
+    removeLine: useDineInCartStore((s) => s.removeLine),
+  };
+  const { increment, decrement, removeLine } = actions ?? dineIn;
   const detail = describeLine(line);
 
   return (

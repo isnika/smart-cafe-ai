@@ -3,6 +3,7 @@ import { Bot, ClipboardList, Coffee, Home, ShoppingCart, User } from "lucide-rea
 import { PATHS } from "@/app/routes";
 import { countItems } from "@/features/dine-in/cart";
 import { useDineInCartStore } from "@/features/dine-in/store";
+import { useOnlineCartStore } from "@/features/online-order/store";
 import { cn } from "@/shared/lib/cn";
 
 const tabs = [
@@ -15,7 +16,10 @@ const tabs = [
 
 /** Khung cho khách: nội dung + bottom-nav + nút chat AI nổi. Khách chưa đăng nhập vẫn vào được. */
 export function CustomerLayout() {
-  const cartCount = useDineInCartStore((s) => countItems(s.lines));
+  const dineInCount = useDineInCartStore((s) => countItems(s.lines));
+  // Khách đang ở chế độ Online thì badge là giỏ Online (hai giỏ không cộng dồn).
+  const onlineCount = useOnlineCartStore((s) => (s.fulfillmentType ? countItems(s.lines) : null));
+  const cartCount = onlineCount ?? dineInCount;
   return (
     <div className="mx-auto min-h-screen max-w-2xl bg-primary-50">
       <main className="pb-24">

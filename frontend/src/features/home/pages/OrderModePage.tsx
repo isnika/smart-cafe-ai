@@ -1,15 +1,23 @@
 import { useState } from "react";
 import { Bike, Coffee, QrCode, ShoppingBag } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { PATHS } from "@/app/routes";
+import { useOnlineCartStore, type OnlineFulfillment } from "@/features/online-order/store";
 import { Button, Modal } from "@/shared/ui";
 import { QrScanner } from "../components/QrScanner";
 import { TableCodeForm } from "../components/TableCodeForm";
 
-/** Order Mode Selection (entry). Công khai. Giao hàng / Mang đi chưa có luồng nên hiển thị "Sắp ra mắt" và không bấm được. */
+/** Order Mode Selection (entry). Công khai. Giao hàng / Mang đi mở luồng Online (menu → giỏ → checkout); quét QR / nhập mã bàn mở luồng Dine-in. */
 export default function OrderModePage() {
   const [scanHelp, setScanHelp] = useState(false);
   const [manual, setManual] = useState(false);
+  const navigate = useNavigate();
+  const setFulfillment = useOnlineCartStore((s) => s.setFulfillment);
+
+  function startOnline(type: OnlineFulfillment) {
+    setFulfillment(type);
+    navigate(PATHS.menu);
+  }
 
   return (
     <main
@@ -81,24 +89,22 @@ export default function OrderModePage() {
           Thưởng thức ở bất cứ đâu. Giao tận nơi hoặc ghé quán nhận món.
         </p>
         <div className="mt-4 grid grid-cols-2 gap-3">
-          {[
-            { label: "Giao hàng", icon: Bike },
-            { label: "Mang đi", icon: ShoppingBag },
-          ].map(({ label, icon: Icon }) => (
+          {(
+            [
+              { type: "Delivery", label: "Giao hàng", icon: Bike },
+              { type: "Pickup", label: "Mang đi", icon: ShoppingBag },
+            ] as const
+          ).map(({ type, label, icon: Icon }) => (
             <button
-              key={label}
+              key={type}
               type="button"
-              disabled
-              aria-label={`${label} (sắp ra mắt)`}
-              className="flex h-12 cursor-not-allowed items-center justify-center gap-2 rounded-lg border border-gray-200 bg-gray-50 font-medium text-gray-600"
+              onClick={() => startOnline(type)}
+              className="flex h-12 items-center justify-center gap-2 rounded-lg border border-primary-200 bg-primary-50 font-medium text-primary-800 hover:bg-primary-100"
             >
               <Icon className="size-5" aria-hidden /> {label}
             </button>
           ))}
         </div>
-        <p className="mt-2 text-center text-caption text-gray-600">
-          Sắp ra mắt
-        </p>
       </section>
 
       <div className="mt-auto pt-10 text-center">

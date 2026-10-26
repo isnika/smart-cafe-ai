@@ -81,11 +81,11 @@ describe('Home page (/home) – khách vãng lai', () => {
 });
 
 describe('Chọn hình thức đặt món (/)', () => {
-  it('hiển thị, Giao hàng/Mang đi chưa hỗ trợ nên bị khoá, không có link bàn giả', async () => {
+  it('hiển thị, Giao hàng/Mang đi dùng được (mở luồng Online), không có link bàn giả', async () => {
     renderApp('/');
     expect(await screen.findByRole('heading', { name: 'Bạn muốn đặt món thế nào?' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Giao hàng (sắp ra mắt)' }).hasAttribute('disabled')).toBe(true);
-    expect(screen.getByRole('button', { name: 'Mang đi (sắp ra mắt)' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Giao hàng' }).hasAttribute('disabled')).toBe(false);
+    expect(screen.getByRole('button', { name: 'Mang đi' }).hasAttribute('disabled')).toBe(false);
     expect(screen.getByRole('link', { name: 'Xem menu trước' }).getAttribute('href')).toBe('/home');
     expect(hrefs().some((h) => h.startsWith('/dine-in'))).toBe(false);
   });

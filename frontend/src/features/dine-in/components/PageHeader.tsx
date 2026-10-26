@@ -18,7 +18,7 @@ export function PageHeader({ title, back, children }: { title: string; back?: bo
         </button>
       )}
       <h1 className="text-h3 text-gray-900">{title}</h1>
-      {children}
+      {children && <div className="ml-auto">{children}</div>}
     </header>
   );
 }
