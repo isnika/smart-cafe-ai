@@ -24,12 +24,14 @@ public class CatalogService {
     private final ProductOptionRepository options;
     private final BranchProductAvailabilityRepository branchVariants;
     private final BranchOptionAvailabilityRepository branchOptions;
+    private final com.smart_cafe_ai.catalog_service.integration.StoreBranchVerifier store;
 
     public List<CategoryResponse> categories(MenuStatus status) {
         return categories.findMenuCategories(status, MenuStatus.Active);
     }
 
     public ApiResponse<List<ProductResponse>> products(ProductFilter filter) {
+        if(filter.branchId()!=null) store.requireExists(filter.branchId());
         var page = products.findAll(ProductSpecifications.publicMenu(filter), filter.pageable());
         var productIds = page.getContent().stream().map(Product::getId).toList();
         List<ProductVariant> activeVariants = productIds.isEmpty() ? List.of()
@@ -49,6 +51,7 @@ public class CatalogService {
         Product product = products.findByIdAndStatusAndCategoryStatus(id, MenuStatus.Active, MenuStatus.Active)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND",
                         "Sản phẩm không tồn tại hoặc hiện không còn hiển thị."));
+        if(branchId!=null) store.requireExists(branchId);
         var activeVariants = variants.findByProductIdInAndStatusOrderBySortOrderAscIdAsc(List.of(id), MenuStatus.Active);
         var variantAvailability = variantAvailability(branchId, activeVariants);
         var variantResponses = activeVariants.stream().map(v -> {

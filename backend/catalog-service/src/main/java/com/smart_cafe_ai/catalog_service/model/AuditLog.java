@@ -35,11 +35,16 @@ public class AuditLog {
 
     public AuditLog(CatalogActor actor, String action, Integer categoryId,
                     Map<String, Object> oldValue, Map<String, Object> newValue) {
+        this(actor, action, "Category", categoryId, oldValue, newValue);
+    }
+
+    public AuditLog(CatalogActor actor, String action, String entityType, Integer entityId,
+                    Map<String, Object> oldValue, Map<String, Object> newValue) {
         this.actorUserId = actor.userId();
         this.ipAddress = actor.ipAddress();
         this.action = action;
-        this.entityType = "Category";
-        this.entityId = categoryId.toString();
+        this.entityType = entityType;
+        this.entityId = entityId.toString();
         this.oldValue = oldValue;
         this.newValue = newValue;
         this.createdAt = LocalDateTime.now(ZoneOffset.UTC);

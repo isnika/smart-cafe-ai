@@ -26,6 +26,13 @@ public class ManagerStaffController {
     public ManagerStaffController(ManagerStaffService managerStaffService) {
         this.managerStaffService = managerStaffService;
     }
+    @ModelAttribute
+    public void requireStoreStaffIntegration() {
+        // Legacy routes must not expose all Staff accounts as a branch-scoped staff list.
+        // Staff_Profiles and branch authorization are owned by Store (backend 2).
+        throw new com.smart_cafe_ai.identity_service.exception.ApiException(HttpStatus.SERVICE_UNAVAILABLE,
+                "STORE_INTEGRATION_REQUIRED","Quản lý nhân viên theo chi nhánh thuộc Store Service và chưa được tích hợp. Vui lòng sử dụng API Store khi backend 2 sẵn sàng.");
+    }
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<UserResponse>>> getStaffList(

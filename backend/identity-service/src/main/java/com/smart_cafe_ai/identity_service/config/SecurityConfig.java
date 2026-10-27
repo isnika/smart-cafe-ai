@@ -3,6 +3,8 @@ package com.smart_cafe_ai.identity_service.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smart_cafe_ai.identity_service.dto.ApiResponse;
 import com.smart_cafe_ai.identity_service.security.JwtAuthenticationFilter;
+import com.smart_cafe_ai.identity_service.security.InternalServiceAuthenticationFilter;
+import org.springframework.beans.factory.annotation.Value;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -37,10 +39,13 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthFilter;
     private final ObjectMapper objectMapper;
+    private final String internalApiKey;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthFilter, ObjectMapper objectMapper) {
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthFilter, ObjectMapper objectMapper,
+            @Value("${app.internal-api-key:}") String internalApiKey) {
         this.jwtAuthFilter = jwtAuthFilter;
         this.objectMapper = objectMapper;
+        this.internalApiKey = internalApiKey;
     }
 
     @Bean
@@ -73,7 +78,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 // Allow CORS pre-flight requests
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                // Public authentication & internal endpoints
+                // Internal paths are separately checked by InternalServiceAuthenticationFilter.
                 .requestMatchers(
                     "/auth/**", "/api/v1/auth/**", "/api/auth/**",
                     "/internal/**", "/api/v1/internal/**", "/api/internal/**",
@@ -87,7 +92,9 @@ public class SecurityConfig {
                 .requestMatchers("/users/**", "/api/v1/users/**", "/api/users/**").authenticated()
                 .anyRequest().authenticated()
             )
-            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(new InternalServiceAuthenticationFilter(internalApiKey, objectMapper),
+                    JwtAuthenticationFilter.class);
 
         return http.build();
     }

@@ -14,11 +14,12 @@ public record ApiResponse<T>(boolean success, T data, String message, PageMeta m
         return success(data, meta, null);
     }
     public static <T> ApiResponse<T> success(T data, PageMeta meta, String message) {
-        return new ApiResponse<>(true, data, message, meta, null, UUID.randomUUID().toString());
+        return new ApiResponse<>(true, data, message, meta, null, traceIdValue());
     }
     public static ApiResponse<Void> error(String code, String message) {
-        return new ApiResponse<>(false, null, null, null, new ApiError(code, message, List.of()), UUID.randomUUID().toString());
+        return new ApiResponse<>(false, null, null, null, new ApiError(code, message, List.of()), traceIdValue());
     }
+    private static String traceIdValue(){String id=org.slf4j.MDC.get("trace_id");return id==null?UUID.randomUUID().toString():id;}
     public record ApiError(String code, String message, List<Object> details) {}
     public record PageMeta(int page, int size, long total, @JsonProperty("total_pages") int totalPages) {}
 }

@@ -22,7 +22,7 @@ public class CatalogAccess {
     // Used by administration endpoints and inactive-category browsing.
     public String requireManager(String authorization) {
         if (authorization == null || !authorization.startsWith("Bearer ")) {
-            throw new ApiException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Vui lòng đăng nhập để quản lý danh mục.");
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Vui lòng đăng nhập để quản lý thực đơn.");
         }
         Claims claims;
         try {
@@ -39,7 +39,7 @@ public class CatalogAccess {
         }
         Object role = claims.get("role");
         if (!"Manager".equals(role) && !"Admin".equals(role)) {
-            throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Bạn không có quyền quản lý danh mục.");
+            throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Bạn không có quyền quản lý thực đơn.");
         }
         return claims.getSubject();
     }

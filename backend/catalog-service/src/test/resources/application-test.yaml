@@ -1,4 +1,9 @@
 debug: false
+app:
+  internal-api-key: catalog-test-internal-key
+  catalog-events:
+    publisher-enabled: false
+    inventory-consumer-enabled: false
 logging:
   level:
     root: WARN

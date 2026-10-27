@@ -17,7 +17,7 @@ spring:
         - id: identity-service
           uri: lb://IDENTITY-SERVICE
           predicates:
-            - Path=/api/v1/auth/**, /api/v1/users/**, /api/v1/admin/users/**, /api/v1/admin/roles/**, /api/v1/internal/users/**
+            - Path=/api/v1/auth/**, /api/v1/users/**, /api/v1/admin/users/**, /api/v1/admin/roles/**
 
         # Catalog Service Routes
         - id: catalog-service
@@ -71,3 +71,5 @@ eureka:
     prefer-ip-address: true
 
 # Block internal routes from external access through gateway
+jwt:
+  secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}

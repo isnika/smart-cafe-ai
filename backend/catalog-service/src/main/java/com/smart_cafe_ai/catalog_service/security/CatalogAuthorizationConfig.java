@@ -12,12 +12,15 @@ import org.springframework.web.servlet.config.annotation.*;
 @RequiredArgsConstructor
 public class CatalogAuthorizationConfig implements WebMvcConfigurer {
     private final CatalogAccess access;
+    private final InternalAccess internal;
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(new HandlerInterceptor() {
             @Override
             public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+                if(handler instanceof HandlerMethod method && (method.hasMethodAnnotation(InternalOnly.class) ||
+                        method.getBeanType().isAnnotationPresent(InternalOnly.class))) internal.require(request.getHeader("X-Service-Key"));
                 if (handler instanceof HandlerMethod method &&
                         (method.hasMethodAnnotation(ManagerOnly.class) ||
                          method.getBeanType().isAnnotationPresent(ManagerOnly.class))) {

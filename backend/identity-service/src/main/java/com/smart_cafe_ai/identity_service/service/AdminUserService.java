@@ -42,6 +42,7 @@ public class AdminUserService {
 
     @Transactional(readOnly = true)
     public ApiResponse<List<UserResponse>> getAllUsers(Integer roleId, Integer branchId, UserStatus status, String query, Pageable pageable) {
+        rejectBranchScope(branchId);
         Specification<User> spec = (root, q, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             if (roleId != null) {
@@ -82,6 +83,7 @@ public class AdminUserService {
 
     @Transactional
     public ApiResponse<UserResponse> createUser(AdminUserCreateRequest request) {
+        rejectBranchScope(request.getBranchId());
         if (request.getEmail() != null && userRepository.existsByEmail(request.getEmail())) {
             return ApiResponse.error("CONFLICT", "Email đã được sử dụng");
         }
@@ -121,6 +123,7 @@ public class AdminUserService {
 
     @Transactional
     public ApiResponse<UserResponse> updateUserRole(String id, AdminUserRoleRequest request) {
+        rejectBranchScope(request.getBranchId());
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy tài khoản"));
 
@@ -151,6 +154,10 @@ public class AdminUserService {
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepository.save(user);
         return ApiResponse.success(null);
+    }
+    private void rejectBranchScope(Integer branchId) {
+        if(branchId!=null) throw new com.smart_cafe_ai.identity_service.exception.ApiException(org.springframework.http.HttpStatus.BAD_REQUEST,
+                "VALIDATION_ERROR","Chi nhánh và hồ sơ nhân viên thuộc Store Service. Identity chỉ quản lý tài khoản và vai trò; không nhận branch_id cho thao tác này.");
     }
 }
 

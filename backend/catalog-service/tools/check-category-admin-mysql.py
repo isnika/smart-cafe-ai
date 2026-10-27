@@ -1,4 +1,4 @@
-"""Run after `mvn test`: exercise category admin APIs against a disposable MySQL DB.
+"""Run after `mvn test`: exercise category/product admin APIs against a disposable MySQL DB.
 
 Uses the datasource credentials from the environment/application.yaml. Creates a
 unique smart_cafe_catalog_test_* database, starts an isolated JVM on a free local
@@ -19,6 +19,7 @@ import re
 import shutil
 import socket
 import subprocess
+import sys
 import threading
 import time
 import unicodedata
@@ -98,6 +99,7 @@ def main():
         return data
 
     process = None
+    gateway_process = None
     created = False
     log_path = MODULE / "target/category-admin-mysql.log"
     try:
@@ -114,6 +116,9 @@ def main():
             process = subprocess.Popen([shutil.which("java") or "java", "-cp", cp,
                 "com.smart_cafe_ai.catalog_service.CatalogServiceApplication",
                 f"--server.port={port}", "--server.address=127.0.0.1", "--eureka.client.enabled=false",
+                "--app.catalog-events.publisher-enabled=false", "--management.health.rabbit.enabled=false",
+                "--app.catalog-events.inventory-consumer-enabled=false", "--app.store.internal-base-url=",
+                "--app.store.auth-header=", "--app.store.auth-value=",
                 "--spring.jpa.hibernate.ddl-auto=validate", "--spring.profiles.active=mysql-smoke",
                 "--debug=false", "--logging.level.root=WARN", "--spring.jpa.show-sql=false"],
                 cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT,
@@ -275,15 +280,186 @@ def main():
                 assert remaining == "1"
             assert sql(f"USE `{database}`; SELECT COUNT(*) FROM Products p LEFT JOIN Categories c ON c.id=p.category_id WHERE c.id IS NULL;") == "0"
             assert sql(f"USE `{database}`; SELECT COUNT(*) FROM Audit_Logs WHERE entity_id='{insert_race}' AND action='CATEGORY_DELETED';") == ("1" if delete_code == 200 else "0")
-            print(f"PASS: {len(checks)} HTTP checks plus MySQL collation, original schema validation, audit JSON and concurrency", flush=True)
+            # Product management, including nested creation and atomic outbox status changes.
+            request("GET", "/admin/products", expected=401, authorization=None)
+            request("POST", "/products", {"category_id": category_id, "name": "Forbidden"}, 403, authorization=token("Customer"))
+            product = request("POST", "/products", {"category_id": category_id, "name": "  Đồ uống mới  ",
+                "flavor_tags": [" CREAMY ", "creamy"], "variants": [
+                    {"variant_name": "M", "price": 40000}, {"variant_name": "L", "price": 50000},
+                    {"variant_name": "Old", "price": 100, "status": "Inactive"}],
+                "option_groups": [{"name": "Sugar", "selection_type": "Single", "is_required": True,
+                    "min_select": 1, "options": [{"option_name": "Normal", "is_default": True},
+                        {"option_name": "Less", "extra_price": 0}]}]}, 201)["data"]
+            product_id = product["id"]
+            assert product["price"] == 40000 and product["max_price"] == 50000
+            assert product["flavor_tags"] == ["creamy"] and product["variant_count"] == 3
+            assert len(product["option_groups"][0]["options"]) == 2
+            before_count = sql(f"USE `{database}`; SELECT COUNT(*) FROM Products;")
+            # MySQL unicode collation also equates ss/ß, beyond the Vietnamese request precheck.
+            request("POST", "/products", {"category_id": category_id, "name": "Collation rollback", "variants": [
+                {"variant_name": "ss", "price": 100}, {"variant_name": "ß", "price": 200}]}, 409)
+            assert sql(f"USE `{database}`; SELECT COUNT(*) FROM Products;") == before_count
+            duplicate_name_id = request("POST", "/products", {"category_id": category_id, "name": "DO UONG MOI"}, 201)["data"]["id"]
+            found = request("GET", "/admin/products?" + urlencode({"q": "do uong moi"}))["data"]
+            assert {row["id"] for row in found} == {product_id, duplicate_name_id} and found[0]["option_group_count"] == 1
+            request("GET", "/admin/products?status=Wrong", expected=400)
+            request("GET", "/admin/products?size=101", expected=400)
+            request("GET", "/admin/products?" + urlencode({"sort": "name;drop table Products"}), expected=400)
+            request("GET", "/admin/products?category_id=0", expected=400)
+            request("POST", "/products", {"category_id": 999999, "name": "Missing category"}, 404)
+            for body in [{"category_id": "1", "name": "Invalid"},
+                         {"category_id": category_id, "name": "Invalid", "temperature": 0},
+                         {"category_id": category_id, "name": "Invalid", "variants": [{"variant_name": "M", "price": 1.5}]}]:
+                request("POST", "/products", body, 400)
+            hidden = request("PATCH", f"/products/{product_id}/status", {"status": "Inactive"})
+            assert hidden["data"]["status"] == "Inactive" and hidden["data"]["updated_at"]
+            request("PATCH", f"/products/{product_id}/status", {"status": "Inactive"})
+            request("GET", f"/products/{product_id}", expected=404)
+            assert sql(f"USE `{database}`; SELECT COUNT(*) FROM Outbox_Events WHERE aggregate_type='Product' AND aggregate_id='{product_id}';") == "1"
+            assert sql(f"USE `{database}`; SELECT JSON_UNQUOTE(JSON_EXTRACT(payload,'$.status')) FROM Outbox_Events WHERE aggregate_id='{product_id}';") == "Inactive"
+            changed = request("PUT", f"/products/{product_id}", {"category_id": category_id, "name": "Updated drink", "status": "Active"})["data"]
+            assert changed["variant_count"] == 3 and changed["price"] == 40000
+            request("PUT", f"/products/{product_id}", {"category_id": category_id, "name": "Updated drink", "status": "Active"})
+            assert sql(f"USE `{database}`; SELECT COUNT(*) FROM Outbox_Events WHERE aggregate_type='Product' AND aggregate_id='{product_id}';") == "2"
+            assert sql(f"USE `{database}`; SELECT COUNT(*) FROM Audit_Logs WHERE entity_type='Product' AND entity_id='{product_id}';") == "3"
+            request("DELETE", f"/products/{product_id}", expected=409)
+            request("PUT", f"/products/{product_id}", {"category_id": category_id, "name": "Bad replacement", "variants": []}, 400)
+            request("DELETE", "/products/0", expected=400)
+            request("DELETE", "/products/999999", expected=404)
+            empty_product = request("POST", "/products", {"category_id": category_id, "name": "Created by mistake"}, 201)["data"]["id"]
+            request("DELETE", f"/products/{empty_product}")
+            request("DELETE", f"/products/{empty_product}", expected=404)
+            assert sql(f"USE `{database}`; SELECT COUNT(*) FROM Audit_Logs WHERE entity_type='Product' AND entity_id='{empty_product}';") == "2"
+            assert sql(f"USE `{database}`; SELECT COUNT(*) FROM Products WHERE id={empty_product};") == "0"
+
+            def product_race(name):
+                return request("POST", "/products", {"category_id": category_id, "name": name}, 201)["data"]["id"]
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                outcomes = list(pool.map(product_race, ["Concurrent product", "CONCURRENT PRODUCT"]))
+            assert len(set(outcomes)) == 2  # Products.name has no UNIQUE constraint in the design.
+            winner = outcomes[0]
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                list(pool.map(lambda _: request("PATCH", f"/products/{winner}/status", {"status": "Inactive"}), range(2)))
+            assert sql(f"USE `{database}`; SELECT COUNT(*) FROM Outbox_Events WHERE aggregate_type='Product' AND aggregate_id='{winner}';") == "1"
+            rename_ids = [request("POST", "/products", {"category_id": category_id, "name": name}, 201)["data"]["id"]
+                          for name in ["Before rename A", "Before rename B"]]
+            def rename_race(product_id):
+                request("PUT", f"/products/{product_id}", {"category_id": category_id, "name": "Concurrent rename"})
+                return 200
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                codes = list(pool.map(rename_race, rename_ids))
+            assert sorted(codes) == [200, 200]
+            assert sql(f"USE `{database}`; SELECT COUNT(*) FROM Products WHERE category_id={category_id} AND name='Concurrent rename';") == "2"
+
+            # A variant created concurrently must either survive with its parent or be rejected by the FK.
+            variant_race = request("POST", "/products", {"category_id": category_id, "name": "Variant delete race"}, 201)["data"]["id"]
+            start = threading.Barrier(2)
+            def delete_during_variant_insert():
+                start.wait(timeout=10)
+                try:
+                    request("DELETE", f"/products/{variant_race}")
+                    return 200
+                except AssertionError as error:
+                    assert error.args[0][2] == 409, error
+                    return 409
+            def insert_variant_during_delete():
+                start.wait(timeout=10)
+                result = subprocess.run(args, input=(f"USE `{database}`; INSERT INTO Product_Variants(product_id,variant_name,price) VALUES ({variant_race},'M',0);").encode(), env=sql_env, capture_output=True)
+                if result.returncode:
+                    assert re.search(r"ERROR (1452|1213|1205)\b", result.stderr.decode("utf-8", errors="replace")), result.stderr
+                return result.returncode == 0
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                deleted_future = pool.submit(delete_during_variant_insert)
+                inserted_future = pool.submit(insert_variant_during_delete)
+                code, inserted = deleted_future.result(timeout=25), inserted_future.result(timeout=25)
+            if code == 200:
+                assert not inserted
+            assert sql(f"USE `{database}`; SELECT COUNT(*) FROM Product_Variants v LEFT JOIN Products p ON p.id=v.product_id WHERE p.id IS NULL;") == "0"
+            # Configuration APIs operate entirely on the real isolated Catalog database.
+            variant = request("POST", f"/products/{product_id}/variants", {"variant_name": "XL", "price": 60000}, 201)["data"]["id"]
+            request("POST", f"/products/{product_id}/variants", {"variant_name": "xl", "price": 1}, 409)
+            request("PUT", f"/variants/{variant}", {"variant_name": "XL new", "sort_order": 5})
+            request("PUT", f"/variants/{variant}", {"variant_name": "XL new", "price": 1}, 400)
+            request("PATCH", f"/variants/{variant}/price", {"price": -1}, 400)
+            request("PATCH", f"/variants/{variant}/price", {"price": 65000})
+            request("PATCH", f"/variants/{variant}/price", {"price": 65000})
+            history = request("GET", f"/variants/{variant}/price-history")
+            assert len(history["data"]) == 1 and history["data"][0]["old_price"] == 60000 and history["data"][0]["new_price"] == 65000
+            assert sql(f"USE `{database}`; SELECT COUNT(*) FROM Outbox_Events WHERE event_type='catalog.variant.price_changed' AND aggregate_id='{variant}';") == "1"
+            request("PATCH", f"/variants/{variant}/status", {"status": "Inactive"})
+            request("PATCH", f"/variants/{variant}/status", {"status": "Active"})
+            group = request("POST", f"/products/{product_id}/option-groups", {
+                "name": "New sugar", "selection_type": "Single", "is_required": True, "min_select": 1, "max_select": 1}, 201)["data"]["id"]
+            request("PUT", f"/option-groups/{group}", {"name": "Sugar", "selection_type": "Single", "max_select": 2}, 400)
+            request("PUT", f"/option-groups/{group}", {"name": "New sugar", "selection_type": "Multiple", "is_required": False, "min_select": 1, "max_select": 2})
+            option = request("POST", f"/option-groups/{group}/options", {"option_name": "Less sugar", "extra_price": 0}, 201)["data"]["id"]
+            request("POST", f"/option-groups/{group}/options", {"option_name": "LESS SUGAR"}, 409)
+            request("PUT", f"/options/{option}", {"option_name": "No sugar", "extra_price": 1000, "is_default": True})
+            request("PATCH", f"/options/{option}/status", {"status": "Inactive"})
+            request("PATCH", f"/options/{option}/status", {"status": "Active"})
+            assert any(v["id"] == variant for v in request("GET", f"/products/{product_id}")["data"]["variants"])
+            # Backend 2 is absent: never fabricate a Store response to make these succeed.
+            for method, path, body in [("GET", "/products?branch_id=1", None),
+                    ("PUT", f"/branches/1/variants/{variant}/availability", {"is_available": False}),
+                    ("PUT", f"/branches/1/options/{option}/availability", {"is_available": False})]:
+                response = request(method, path, body, 503)
+                assert response["error"]["code"] == "STORE_INTEGRATION_NOT_CONFIGURED"
+            assert sql(f"USE `{database}`; SELECT COUNT(*) FROM Branch_Product_Availability;") == "0"
+            if "--with-gateway" in sys.argv:
+                gateway_module = ROOT / "backend/api-gateway"
+                gateway_report = gateway_module / "target/surefire-reports/TEST-com.smart_cafe_ai.api_gateway.ApiGatewayApplicationTests.xml"
+                gateway_cp = ET.parse(gateway_report).getroot().find("properties/property[@name='java.class.path']").get("value")
+                gateway_cp = os.pathsep.join(p for p in gateway_cp.split(os.pathsep) if "test-classes" not in p)
+                with socket.socket() as listener:
+                    listener.bind(("127.0.0.1", 0))
+                    gateway_port = listener.getsockname()[1]
+                with (gateway_module / "target/catalog-routing-mysql.log").open("w", encoding="utf-8") as gateway_log:
+                    # Both processes are real backend-1 services; Store is deliberately absent.
+                    gateway_process = subprocess.Popen([shutil.which("java") or "java", "-cp", gateway_cp,
+                        "com.smart_cafe_ai.api_gateway.ApiGatewayApplication", f"--server.port={gateway_port}",
+                        "--server.address=127.0.0.1", "--eureka.client.enabled=false", "--spring.cloud.discovery.enabled=false",
+                        "--spring.cloud.gateway.discovery.locator.enabled=false", "--logging.level.root=WARN", "--debug=false",
+                        "--spring.cloud.gateway.routes[0].id=catalog-smoke",
+                        f"--spring.cloud.gateway.routes[0].uri=http://127.0.0.1:{port}",
+                        "--spring.cloud.gateway.routes[0].predicates[0]=Path=/api/v1/catalog/**"], cwd=ROOT, env=env,
+                        stdout=gateway_log, stderr=subprocess.STDOUT,
+                        creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
+                    base = f"http://127.0.0.1:{gateway_port}/api/v1/catalog"
+                    for _ in range(180):
+                        if gateway_process.poll() is not None:
+                            raise RuntimeError("Gateway failed to start; see target/catalog-routing-mysql.log")
+                        try:
+                            with urlopen(base + "/categories", timeout=2) as response:
+                                assert response.status == 200
+                                break
+                        except (URLError, TimeoutError):
+                            time.sleep(0.5)
+                    else:
+                        raise RuntimeError("Gateway startup timed out")
+                    request("GET", "/products", authorization=None)
+                    request("GET", "/admin/products", expected=401, authorization=None)
+                    request("GET", "/admin/products", expected=403, authorization=token("Customer"))
+                    request("GET", "/admin/products")
+                    request("POST", f"/products/{product_id}/variants", {"variant_name": "Gateway-created", "price": 75000}, 201)
+                    assert sql(f"USE `{database}`; SELECT COUNT(*) FROM Product_Variants WHERE product_id={product_id} AND variant_name='Gateway-created';") == "1"
+                    request("GET", "/products?branch_id=1", expected=503, authorization=None)
+                    trace = str(uuid.uuid4())
+                    with urlopen(Request(base + "/products", headers={"X-Trace-Id": trace}), timeout=10) as response:
+                        assert response.headers["X-Trace-Id"] == trace and json.load(response)["trace_id"] == trace
+                    base = f"http://127.0.0.1:{gateway_port}"
+                    request("POST", "/api/v1/internal/catalog/resolve", {}, 404)
+                    request("GET", "/identity-service/internal/users/any", expected=404)
+                    print("PASS: real Gateway -> real Catalog -> disposable MySQL routing, JWT and trace; no backend-2 stand-in", flush=True)
+            print(f"PASS: {len(checks)} HTTP checks plus MySQL schema, price history/outbox, audit, concurrency and unavailable Store boundary; backend 2 NOT integration-tested", flush=True)
     finally:
-        if process is not None and process.poll() is None:
-            process.terminate()
-            try:
-                process.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait(timeout=5)
+        for child in [gateway_process, process]:
+            if child is not None and child.poll() is None:
+                child.terminate()
+                try:
+                    child.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    child.kill()
+                    child.wait(timeout=5)
         if created:
             sql(f"DROP DATABASE `{database}`;")
             print("Removed disposable database " + database, flush=True)

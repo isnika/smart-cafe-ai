@@ -8,6 +8,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 @Entity
@@ -44,5 +45,31 @@ public class Product {
     private BigDecimal price;
     @Formula("(select max(v.price) from Product_Variants v where v.product_id = id and v.status = 'Active')")
     private BigDecimal maxPrice;
+
+    public Product(Category category, String name, String image, String description, Temperature temperature,
+                   CaffeineLevel caffeineLevel, List<String> flavorTags, int sortOrder, MenuStatus status) {
+        replace(category, name, image, description, temperature, caffeineLevel, flavorTags, sortOrder, status);
+    }
+
+    public void replace(Category category, String name, String image, String description, Temperature temperature,
+                        CaffeineLevel caffeineLevel, List<String> flavorTags, int sortOrder, MenuStatus status) {
+        this.category = category;
+        this.name = name;
+        this.image = image;
+        this.description = description;
+        this.temperature = temperature;
+        this.caffeineLevel = caffeineLevel;
+        this.flavorTags = List.copyOf(flavorTags);
+        this.sortOrder = sortOrder;
+        this.status = status;
+    }
+
+    public void changeStatus(MenuStatus status) { this.status = status; }
+
+    @PrePersist
+    void created() { createdAt = updatedAt = LocalDateTime.now(ZoneOffset.UTC).withNano(0); }
+
+    @PreUpdate
+    void updated() { updatedAt = LocalDateTime.now(ZoneOffset.UTC).withNano(0); }
 }
 

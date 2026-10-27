@@ -6,6 +6,7 @@ import java.util.Collection;
 import java.util.List;
 
 public interface BranchOptionAvailabilityRepository extends JpaRepository<BranchOptionAvailability, Long> {
+    java.util.Optional<BranchOptionAvailability> findByBranchIdAndOptionId(Integer branchId,Integer optionId);
     List<BranchOptionAvailability> findByBranchIdAndOptionIdIn(Integer branchId, Collection<Integer> optionIds);
 }
 

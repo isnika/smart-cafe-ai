@@ -5,6 +5,27 @@ spring:
   application:
     name: catalog-service
 
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:smartcafe}
+    password: ${RABBITMQ_PASSWORD:smartcafe-local}
+    virtual-host: ${RABBITMQ_VHOST:/}
+    connection-timeout: 5s
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+    listener:
+      simple:
+        prefetch: 1
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          initial-interval: 1s
+          max-attempts: 3
+          multiplier: 2
+
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/smart_cafe_catalog_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true}
     username: ${SPRING_DATASOURCE_USERNAME:root}
@@ -38,3 +59,15 @@ eureka:
 # --- CẤU HÌNH JWT ---
 jwt:
   secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+
+app:
+  store:
+    # Configure only after agreeing the Store internal URL/auth with backend 2. No mock fallback.
+    internal-base-url: ${STORE_INTERNAL_BASE_URL:}
+    auth-header: ${STORE_INTERNAL_AUTH_HEADER:}
+    auth-value: ${STORE_INTERNAL_AUTH_VALUE:}
+  internal-api-key: ${CATALOG_INTERNAL_API_KEY:}
+  catalog-events:
+    publisher-enabled: ${CATALOG_EVENTS_PUBLISHER_ENABLED:true}
+    inventory-consumer-enabled: ${CATALOG_INVENTORY_CONSUMER_ENABLED:false}
+    publish-delay-ms: 1000

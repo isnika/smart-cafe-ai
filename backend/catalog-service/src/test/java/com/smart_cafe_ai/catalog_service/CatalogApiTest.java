@@ -28,6 +28,7 @@ class CatalogApiTest {
     private static final String BASE = "/api/v1/catalog";
     private static final String SECRET = "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970";
     @Autowired MockMvc mvc;
+    @org.springframework.boot.test.mock.mockito.MockBean com.smart_cafe_ai.catalog_service.integration.StoreBranchVerifier store;
 
     @Test void categoriesArePublicOrderedAndCountOnlyActiveProducts() throws Exception {
         mvc.perform(get(BASE + "/categories"))
