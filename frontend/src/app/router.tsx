@@ -20,6 +20,7 @@ import OrderQueuePage from "@/features/order-queue/pages/OrderQueuePage";
 import CartPage from "@/features/online-order/pages/CartPage";
 import OnlineCheckoutPage from "@/features/online-order/pages/OnlineCheckoutPage";
 import OrderSuccessPage from "@/features/online-order/pages/OrderSuccessPage";
+import OrderHistoryPage from '@/features/orders/pages/OrderHistoryPage';
 import OrderTrackingPage from "@/features/online-order/pages/OrderTrackingPage";
 import PlaceholderPage from "@/pages/PlaceholderPage";
 
@@ -96,7 +97,7 @@ export const routes: RouteObject[] = [
           { path: PATHS.checkout, element: <OnlineCheckoutPage /> },
           // Màn thành công của đơn Online (đọc đơn đã tạo, không bao giờ POST)
           { path: PATHS.paymentSuccess, element: <OrderSuccessPage /> },
-          { path: PATHS.orders, element: <P title="Đơn hàng của tôi" /> },
+          { path: PATHS.orders, element: <OrderHistoryPage /> },
           { path: PATHS.order, element: <OrderTrackingPage /> },
           { path: PATHS.profile, element: <P title="Hồ sơ & địa chỉ" /> },
         ],

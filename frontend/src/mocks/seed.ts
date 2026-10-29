@@ -24,6 +24,8 @@ interface Spec {
   cancelFrom?: OrderStatus;
   reason?: string;
   note?: string;
+  /** Chủ đơn Online (mặc định u-customer). */
+  userId?: string;
 }
 
 const CAFE_M: OrderLineInput = { variantId: 12, quantity: 2, options: [{ optionId: 101 }, { optionId: 104 }] }; // M, 100% đường, trân châu
@@ -47,7 +49,7 @@ const SPECS: Spec[] = [
   // Delivery
   { source: 'Online', fulfillment: 'Delivery', status: 'Pending_Payment', minutesAgo: 4, lines: [CAFE_M] },
   { source: 'Online', fulfillment: 'Delivery', status: 'Ready', minutesAgo: 25, lines: [TRA_DAO, CROISSANT] },
-  { source: 'Online', fulfillment: 'Delivery', status: 'Shipping', minutesAgo: 40, lines: [BAC_XIU] },
+  { source: 'Online', fulfillment: 'Delivery', status: 'Shipping', minutesAgo: 40, lines: [BAC_XIU], userId: 'u-customer2' },
   { source: 'Online', fulfillment: 'Delivery', status: 'Cancelled', minutesAgo: 200, cancelFrom: 'Confirmed', reason: 'Khách đổi ý', lines: [AMERICANO] },
 ];
 
@@ -91,7 +93,7 @@ function build(spec: Spec): OrderDetail {
     id,
     orderCode: `SC${String(id).padStart(5, '0')}`,
     idempotencyKey: null,
-    userId: spec.source === 'Online' ? 'u-customer' : null,
+    userId: spec.source === 'Online' ? (spec.userId ?? 'u-customer') : null,
     createdBy: spec.source === 'POS' ? 'u-cashier' : null,
     branchId: BRANCH_ID,
     tableSessionId: session?.id ?? null,

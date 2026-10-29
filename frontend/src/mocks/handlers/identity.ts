@@ -45,6 +45,8 @@ function seedAccounts(): MockAccount[] {
 
   return [
     make('u-customer', 'customer@smartcafe.vn', '0901234567', 'Khách Hàng', 'Customer', null),
+    // Khách thứ hai: dùng để kiểm tra dữ liệu đơn hàng được cô lập theo từng người dùng
+    make('u-customer2', 'customer2@smartcafe.vn', '0907890123', 'Khách Hàng Hai', 'Customer', null),
     make('u-staff', 'staff@smartcafe.vn', '0902345678', 'Nhân Viên', 'Staff', 1),
     make('u-manager', 'manager@smartcafe.vn', '0903456789', 'Quản Lý', 'Manager', 1),
     make('u-admin', 'admin@smartcafe.vn', '0904567890', 'Quản Trị', 'Admin', null),
@@ -113,6 +115,11 @@ let tokenEpoch = 0;
 export const revokeAllTokens = (): void => {
   tokenEpoch += 1;
 };
+
+/** Header mang token do mock cấp (kể cả khi token đã bị thu hồi / sai epoch) → phân biệt với "không có / token lạ". */
+export function hasMockToken(request: Request): boolean {
+  return request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '').startsWith(ACCESS_PREFIX) ?? false;
+}
 
 /** Tìm tài khoản từ header Authorization; dùng lại được ở handler khác. */
 export function accountFromRequest(request: Request): MockAccount | undefined {

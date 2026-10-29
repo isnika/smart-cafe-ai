@@ -3,6 +3,7 @@ import { ORDER_TRANSITIONS, isTerminalOrderStatus } from '@/shared/lib';
 import type { FulfillmentType, OrderDetail, OrderStatus, Page } from '@/shared/types';
 import { db } from '../db';
 import { fail, guarded, requireAuth, url } from '../utils';
+import { accountFromRequest, hasMockToken, type MockAccount } from './identity';
 
 const ALL_FULFILLMENTS = Object.keys(ORDER_TRANSITIONS) as FulfillmentType[];
 const ALL_STATUSES = Object.keys(ORDER_TRANSITIONS.Dine_In) as OrderStatus[];
@@ -33,6 +34,21 @@ function toPage(all: OrderDetail[], page: number, size: number): Page<OrderDetai
   return { items: all.slice(start, start + size), total: all.length, page, pageSize : size };
 }
 
+/**
+ * Xác định người gọi từ token (KHÔNG tin userId trong query/body).
+ * - Token hợp lệ                       → tài khoản tương ứng
+ * - Token do mock cấp nhưng hết hiệu lực → 401 (luôn luôn)
+ * - Không có token / token lạ          → 401 khi mockConfig.enforceAuth; ngược lại giữ hành vi cũ
+ *   (ẩn danh, không có quyền riêng tư nào được cấp) để các test phía nhân viên không đổi.
+ */
+function callerOf(request: Request): MockAccount | undefined {
+  const account = accountFromRequest(request);
+  if (account) return account;
+  if (hasMockToken(request)) fail(401, 'UNAUTHORIZED', 'Phiên đăng nhập không còn hợp lệ');
+  requireAuth(request);
+  return undefined;
+}
+
 const byCreatedAsc = (a: OrderDetail, b: OrderDetail) => a.createdAt.localeCompare(b.createdAt) || a.id - b.id;
 
 export const orderReadHandlers = [
@@ -40,8 +56,17 @@ export const orderReadHandlers = [
   http.get(
     url('/orders-svc/orders'),
     guarded(({ request }) => {
-      requireAuth(request);
+      const caller = callerOf(request);
       const sp = new URL(request.url).searchParams;
+
+      // Phạm vi chủ đơn: khách chỉ thấy đơn của chính mình (lấy từ token). `userId` do client gửi
+      // chỉ được chấp nhận nếu trùng với chính họ; nhân viên/quản lý mới được lọc theo userId bất kỳ.
+      const userIdParam = sp.get('userId');
+      if (userIdParam && !caller) fail(401, 'UNAUTHORIZED', 'Cần đăng nhập để lọc đơn theo người dùng');
+      if (caller?.roleName === 'Customer' && userIdParam && userIdParam !== caller.id) {
+        fail(403, 'FORBIDDEN', 'Bạn không có quyền xem đơn hàng của tài khoản khác');
+      }
+      const ownerId = caller?.roleName === 'Customer' ? caller.id : userIdParam;
 
       const statuses = parseStatuses(sp);
       const fulfillment = sp.get('fulfillmentType') as FulfillmentType | null;
@@ -53,6 +78,7 @@ export const orderReadHandlers = [
       const size = intParam(sp, sp.has('pageSize') ? 'pageSize' : 'size', 20, 1, 100);
 
       const rows = db.orders
+        .filter((o) => ownerId === null || o.userId === ownerId)
         .filter((o) => statuses.length === 0 || statuses.includes(o.status))
         .filter((o) => !fulfillment || o.fulfillmentType === fulfillment)
         .filter((o) => tableSessionId === null || o.tableSessionId === tableSessionId)
@@ -69,9 +95,10 @@ export const orderReadHandlers = [
   http.get(
     url('/orders-svc/orders/:id'),
     guarded(({ request, params }) => {
-      requireAuth(request);
+      const caller = callerOf(request);
       const order = db.orders.find((o) => o.id === Number(params.id));
-      if (!order) fail(404, 'ORDER_NOT_FOUND', `Không tìm thấy đơn ${String(params.id)}`);
+      // Đơn của người khác trả 404 giống đơn không tồn tại (không lộ việc đơn có thật).
+      if (!order || (caller?.roleName === 'Customer' && order.userId !== caller.id)) fail(404, 'ORDER_NOT_FOUND', `Không tìm thấy đơn ${String(params.id)}`);
       return HttpResponse.json(order);
     }),
   ),

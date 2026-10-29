@@ -7,6 +7,7 @@ import type {
 import { BRANCH_ID, db, findVariant, isSellable, nowNaive } from '../db';
 import { DELIVERY_FEE } from '../fixtures';
 import { fail, guarded, readJson, requireAuth, url } from '../utils';
+import { accountFromRequest } from './identity';
 import { evaluateVoucher } from './voucher';
 
 /** Mirror CHECK constraint trong DB: QR→Dine_In, POS→Dine_In|Pickup, Online→Delivery|Pickup. */
@@ -70,6 +71,13 @@ export const orderHandlers = [
     guarded(async ({ request }) => {
       const input = await readJson<CreateOrderInput>(request);
       const r = input as LooseInput;
+
+      // Đơn Online của khách luôn gắn với chủ token; userId trong body không được trỏ sang tài khoản khác.
+      const caller = accountFromRequest(request);
+      if (input.orderSource === 'Online' && caller?.roleName === 'Customer') {
+        if (r.userId && r.userId !== caller.id) fail(403, 'FORBIDDEN', 'Không thể đặt đơn thay cho tài khoản khác');
+        r.userId = caller.id;
+      }
 
       // Idempotency: cùng key → trả lại đơn cũ (200), không tạo đơn mới.
       if (input.idempotencyKey) {
