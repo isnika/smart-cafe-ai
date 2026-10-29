@@ -22,6 +22,7 @@ import OnlineCheckoutPage from "@/features/online-order/pages/OnlineCheckoutPage
 import OrderSuccessPage from "@/features/online-order/pages/OrderSuccessPage";
 import OrderHistoryPage from '@/features/orders/pages/OrderHistoryPage';
 import OrderTrackingPage from "@/features/online-order/pages/OrderTrackingPage";
+import StaffDashboardPage from "@/features/staff-dashboard/pages/StaffDashboardPage";
 import PlaceholderPage from "@/pages/PlaceholderPage";
 
 const P = PlaceholderPage;
@@ -115,9 +116,7 @@ export const routes: RouteObject[] = [
         children: [
           {
             path: PATHS.staff,
-            element: (
-              <P title="Staff Dashboard" note="Tab Tổng quan và tab Thu ngân" />
-            ),
+            element: <StaffDashboardPage />,
           },
           { path: PATHS.staffQueue, element: <OrderQueuePage /> },
           { path: PATHS.staffOrder, element: <OrderDetailPage /> },

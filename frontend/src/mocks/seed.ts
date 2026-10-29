@@ -108,7 +108,8 @@ function build(spec: Spec): OrderDetail {
     vatAmount: Math.round((finalAmount * 8) / 108),
     finalAmount,
     status: spec.status,
-    paymentStatus: 'Unpaid', // TODO: đổi sang giá trị "đã thanh toán" thật khi có enum PaymentStatus trong types.ts
+    // Đơn Online đã qua bước cổng thanh toán (không còn Pending_Payment, chưa bị huỷ) = đã trả online.
+    paymentStatus: spec.source === 'Online' && spec.status !== 'Pending_Payment' && !failed ? 'Paid' : 'Unpaid',
     expiresAt: spec.status === 'Pending_Payment' ? nowNaive(-spec.minutesAgo * 60_000 + 15 * 60_000) : null,
     cancelReason: failed ? (spec.reason ?? null) : null,
     cancelledBy: null,
