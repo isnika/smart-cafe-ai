@@ -107,7 +107,7 @@ describe('Tab Thu ngân', () => {
     expect(screen.getAllByRole('button', { name: /^Mở hóa đơn/ })).toHaveLength(paidOnline().length);
   });
 
-  it('Bill Modal: hiện đủ món/giá/tổng, đóng modal không đổi trạng thái thanh toán, nút thu bị khoá ở phase 1', async () => {
+  it('Bill Modal: hiện đủ món/giá/tổng, đóng modal không đổi trạng thái thanh toán, nút thu bị khoá cho tới khi nhập đủ tiền khách đưa', async () => {
     renderApp('/staff?tab=cashier');
     const target = db.orders.find((o) => o.id === 1)!;
     fireEvent.click(await screen.findByRole('button', { name: new RegExp(`Mở hóa đơn #${target.orderCode}`) }));

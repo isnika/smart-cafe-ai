@@ -1,16 +1,32 @@
-import type { MenuProduct, OrderDetail, ProductVariant, Table, TableSession } from '@/shared/types';
+import type {
+  Invoice, InvoiceItem, MenuProduct, OrderDetail, Payment, PaymentOrderAllocation, ProductVariant, Table, TableSession,
+} from '@/shared/types';
 import { BRANCH_ID, seedProducts, seedTables, type SeedProduct } from './fixtures';
 
 export { BRANCH_ID };
+
+/** Hóa đơn + liên kết nội bộ (Invoice trong contract không mang paymentId/orderId). 1 payment ↔ tối đa 1 hóa đơn. */
+export interface MockInvoiceRecord {
+  invoice: Invoice;
+  paymentId: number;
+  orderIds: number[];
+  items: InvoiceItem[];
+}
 
 export interface MockDb {
   products: SeedProduct[];
   tables: Table[];
   sessions: TableSession[];
   orders: OrderDetail[];
+  payments: Payment[];
+  allocations: PaymentOrderAllocation[];
+  invoices: MockInvoiceRecord[];
   /** "branchId:variantId" – không có key = CÒN HÀNG (đúng quy ước của types.ts). */
   unavailableVariants: Set<string>;
-  seq: { order: number; item: number; option: number; history: number; session: number };
+  seq: {
+    order: number; item: number; option: number; history: number; session: number;
+    payment: number; allocation: number; invoice: number; invoiceItem: number;
+  };
 }
 
 export const availKey = (branchId: number, variantId: number) => `${branchId}:${variantId}`;
@@ -20,8 +36,11 @@ const createDb = (): MockDb => ({
   tables: seedTables(),
   sessions: [],
   orders: [],
+  payments: [],
+  allocations: [],
+  invoices: [],
   unavailableVariants: new Set([availKey(BRANCH_ID, 41)]), // Matcha hết hàng
-  seq: { order: 0, item: 0, option: 0, history: 0, session: 0 },
+  seq: { order: 0, item: 0, option: 0, history: 0, session: 0, payment: 0, allocation: 0, invoice: 0, invoiceItem: 0 },
 });
 
 export const db: MockDb = createDb();

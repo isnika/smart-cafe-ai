@@ -1,5 +1,5 @@
 import { isTerminalOrderStatus } from '@/shared/lib';
-import type { OrderDetail, PaymentStatus } from '@/shared/types';
+import type { OrderDetail, PaymentMethod, PaymentStatus } from '@/shared/types';
 
 /**
  * Hai nhóm hiển thị ở tab Thu ngân, suy ra CHỈ từ dữ liệu có thật của đơn (orderSource + paymentStatus):
@@ -32,6 +32,13 @@ export const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = {
   Refunded: 'Đã hoàn tiền',
 };
 
+export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
+  Cash: 'Tiền mặt',
+  COD: 'Thu hộ khi giao hàng (COD)',
+  VNPay: 'VNPay',
+  Momo: 'Momo',
+};
+
 /** Order không lưu phương thức thanh toán, nên chỉ nêu được kênh thu, không đoán VNPay/Momo. */
 export const PAYMENT_CHANNEL_LABEL: Record<CashierGroup, string> = {
   awaiting_counter: 'Thanh toán tại quầy',
@@ -44,6 +51,10 @@ export function matchesSearch(order: Pick<OrderDetail, 'orderCode' | 'tableNumbe
   if (!term) return true;
   return order.orderCode.toLowerCase().includes(term) || (order.tableNumber ?? '').toLowerCase().includes(term);
 }
+
+const EMAIL = /^\S+@\S+\.\S+$/;
+/** Email nhận hóa đơn là tùy chọn: rỗng thì hợp lệ. */
+export const isValidOptionalEmail = (email: string): boolean => email.trim() === '' || EMAIL.test(email.trim());
 
 /** Tiền thừa khi khách đưa tiền mặt; null khi chưa nhập hoặc chưa đủ tiền. */
 export function changeDue(finalAmount: number, cashReceived: number | null): number | null {

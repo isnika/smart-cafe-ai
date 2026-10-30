@@ -226,8 +226,9 @@ describe('checkout → đặt hàng → màn thành công (thanh toán demo ở 
     expect(requests.filter((r) => /payment|momo|vnpay/i.test(r))).toEqual([]);
     expect(posts()).toHaveLength(1);
     expect(requests.some((r) => r.endsWith('/store/branches/1'))).toBe(true); // spy thật sự quan sát được request
-    // Không có handler/mocked gateway nào trong danh sách handler
-    expect(handlers.some((h) => /payment/i.test(String((h.info as { path?: unknown }).path)))).toBe(false);
+    // Không có mock cổng thanh toán (VNPay/Momo/redirect). Handler POST /payment/payments (phase 2) chỉ thu tiền mặt
+    // tại quầy và từ chối VNPay/Momo; luồng Online ở trên không gọi nó (đã kiểm ở khẳng định request phía trên).
+    expect(handlers.some((h) => /momo|vnpay|gateway/i.test(String((h.info as { path?: unknown }).path)))).toBe(false);
 
     // Theo dõi / về trang chủ
     expect(screen.getByRole('link', { name: 'Về trang chủ' }).getAttribute('href')).toBe('/home');

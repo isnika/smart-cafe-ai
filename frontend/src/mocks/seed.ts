@@ -2,6 +2,7 @@ import type { FulfillmentType, OrderDetail, OrderLineInput, OrderStatus, TableSe
 import { BRANCH_ID, db, nowNaive } from './db';
 import { DELIVERY_FEE } from './fixtures';
 import { buildItem } from './handlers/order';
+import { recordPayment } from './payment-service';
 
 /**
  * Dữ liệu demo cho trình duyệt. KHÔNG nằm trong createDb() để test cũ (handlers.test.ts) vẫn bắt đầu từ db rỗng.
@@ -131,6 +132,10 @@ function build(spec: Spec): OrderDetail {
 export function seedDemoOrders(): void {
   if (db.orders.length > 0) return; // idempotent (HMR / gọi lại không nhân đôi)
   for (const spec of SPECS) db.orders.push(build(spec));
+  // Đơn seed đã `Paid` (đã qua cổng thanh toán) phải có giao dịch + hóa đơn thật, nếu không paymentStatus mâu thuẫn với payment.
+  for (const o of db.orders) {
+    if (o.paymentStatus === 'Paid') recordPayment({ orders: [o], method: 'VNPay', at: o.createdAt });
+  }
 }
 
 /** Dùng trong DevTools: __mock.resetWithDemoData() */

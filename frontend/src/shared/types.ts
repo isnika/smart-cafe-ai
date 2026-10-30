@@ -835,6 +835,31 @@ export interface InvoiceItem {
   vatRate: number;
 }
 
+/** Đơn được hóa đơn bao phủ (mã hiển thị để nhân viên đối chiếu). */
+export interface InvoiceOrderRef {
+  id: number;
+  orderCode: string;
+}
+
+/**
+ * Hóa đơn điện tử kèm dữ liệu đối chiếu: liên kết đúng 1 payment (thành công) và các đơn của payment đó.
+ * `Invoice.subtotalAmount` là trước VAT; `items[].unitPrice/amount` là giá hiển thị cho khách (đã gồm VAT, như trên đơn).
+ * Hóa đơn mock phục vụ demo, không có giá trị pháp lý.
+ */
+export interface InvoiceDetail extends Invoice {
+  paymentId: number;
+  paymentMethod: PaymentMethod;
+  paymentStatus: PaymentGatewayStatus;
+  paidAt: IsoDateTime;
+  orders: InvoiceOrderRef[];
+  items: InvoiceItem[];
+  /** Tạm tính: tổng gross các dòng, trước giảm giá. */
+  grossAmount: number;
+  /** Giảm giá món + voucher. */
+  discountAmount: number;
+  deliveryFee: number;
+}
+
 // ── Payment inputs / results ──────────────────────────────────────────
 export interface InvoiceRequestInput {
   buyerName: string;
