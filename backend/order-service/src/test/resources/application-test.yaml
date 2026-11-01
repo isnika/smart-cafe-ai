@@ -1,0 +1,32 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:orders;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_UPPER=false
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+  rabbitmq:
+    listener:
+      simple:
+        auto-startup: false
+eureka:
+  client:
+    enabled: false
+spring.cloud.discovery.enabled: false
+app:
+  internal-api-key: test-internal-key
+  order:
+    expiry-enabled: false
+  order-events:
+    publisher-enabled: false
+    consumer-enabled: false
+logging:
+  level:
+    root: WARN
+    org.springframework: WARN
+    org.hibernate: WARN
