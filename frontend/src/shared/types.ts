@@ -1182,6 +1182,22 @@ export interface ProductReview {
   createdAt: IsoDateTime;
 }
 
+/**
+ * MỞ RỘNG CỦA MOCK/FE (ProductReview trong spec chỉ có userId, không có tên hiển thị):
+ * review công khai kèm tên người viết để UI không phải gọi thêm Identity.
+ */
+export interface ProductReviewView extends ProductReview {
+  authorName: string;
+}
+
+/**
+ * MỞ RỘNG CỦA MOCK/FE: trang review công khai của 1 món. Chỉ gồm review `Approved`;
+ * `averageRating` tính trên TOÀN BỘ review Approved của món (không chỉ trang hiện tại), null khi chưa có review.
+ */
+export interface ProductReviewPage extends Page<ProductReviewView> {
+  averageRating: number | null;
+}
+
 export interface DeviceToken {
   id: number;
   userId: string;

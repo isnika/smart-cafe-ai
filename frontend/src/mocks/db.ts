@@ -1,9 +1,10 @@
 import type {
   Ingredient, Inventory, InventoryLog, Invoice, InvoiceItem, InvoiceRequestInput, MenuProduct, OrderDetail, Payment, PaymentOrderAllocation,
-  ProductVariant, Table, TableSession,
+  ProductReviewView, ProductVariant, Table, TableSession,
 } from '@/shared/types';
 import { BRANCH_ID, seedProducts, seedTables, type SeedProduct } from './fixtures';
 import { buildInventorySeed } from './inventory-seed';
+import { seedReviews } from './review-seed';
 
 export { BRANCH_ID };
 
@@ -31,6 +32,8 @@ export interface MockDb {
   ingredients: Ingredient[];
   inventory: Inventory[];
   inventoryLogs: InventoryLog[];
+  /** Review món (mọi trạng thái; API công khai chỉ trả Approved). Chỉ đọc – chưa có API tạo review. */
+  reviews: ProductReviewView[];
   seq: {
     order: number; item: number; option: number; history: number; session: number;
     payment: number; allocation: number; invoice: number; invoiceItem: number; inventoryLog: number;
@@ -54,6 +57,7 @@ const createDb = (): MockDb => {
     ingredients: inv.ingredients,
     inventory: inv.inventory,
     inventoryLogs: inv.logs,
+    reviews: seedReviews(),
     seq: {
       order: 0, item: 0, option: 0, history: 0, session: 0, payment: 0, allocation: 0, invoice: 0, invoiceItem: 0,
       inventoryLog: inv.logs.length,

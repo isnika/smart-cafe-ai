@@ -18,6 +18,7 @@ import MenuBrowsePage from "@/features/home/pages/MenuBrowsePage";
 import OrderModePage from "@/features/home/pages/OrderModePage";
 import OrderDetailPage from "@/features/order-queue/pages/OrderDetailPage";
 import OrderQueuePage from "@/features/order-queue/pages/OrderQueuePage";
+import ProductDetailPage from "@/features/product-detail/pages/ProductDetailPage";
 import CartPage from "@/features/online-order/pages/CartPage";
 import OnlineCheckoutPage from "@/features/online-order/pages/OnlineCheckoutPage";
 import OrderSuccessPage from "@/features/online-order/pages/OrderSuccessPage";
@@ -89,7 +90,7 @@ export const routes: RouteObject[] = [
     children: [
       { path: PATHS.home, element: <HomePage /> },
       { path: PATHS.menu, element: <MenuBrowsePage /> },
-      { path: PATHS.product, element: <P title="Chi tiết sản phẩm" /> },
+      { path: PATHS.product, element: <ProductDetailPage /> },
       { path: PATHS.cart, element: <CartPage /> },
 
       // Dine-in

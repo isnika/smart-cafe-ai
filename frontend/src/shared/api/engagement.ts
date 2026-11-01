@@ -3,7 +3,7 @@ import type {
   Notification,
   Page,
   PageParams,
-  ProductReview,
+  ProductReviewPage,
   ValidateVoucherInput,
   VoucherValidation,
 } from '@/shared/types';
@@ -23,6 +23,6 @@ export const listNotifications = (params: PageParams & { type?: string; unreadOn
 export const markNotificationRead = (id: number) => http.post<Notification>(`${P}/notifications/${id}/read`);
 export const markAllNotificationsRead = () => http.post<void>(`${P}/notifications/read-all`);
 
-// Review (chỉ đọc – tạo review chưa có input type)
+// Review (chỉ đọc – tạo review chưa có input type). Chỉ trả review Approved + điểm trung bình (xem ProductReviewPage).
 export const listProductReviews = (productId: number, params: PageParams = {}) =>
-  http.get<Page<ProductReview>>(`${P}/products/${productId}/reviews`, { query: params, auth: false });
+  http.get<ProductReviewPage>(`${P}/products/${productId}/reviews`, { query: params, auth: false });

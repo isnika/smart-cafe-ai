@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { QrCode } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { PATHS } from "@/app/routes";
+import { PATHS, to } from "@/app/routes";
 import { calcSubTotal, countItems } from "@/features/dine-in/cart";
 import { PageHeader } from "@/features/dine-in/components/PageHeader";
 import { ProductCard } from "@/features/dine-in/components/ProductCard";
@@ -53,7 +53,7 @@ export default function MenuBrowsePage() {
         {products.length > 0 && (
           <div className="grid grid-cols-2 gap-3">
             {products.map((p) =>
-              fulfillment ? <ProductCard key={p.id} product={p} onAdd={setPicking} /> : <ProductTile key={p.id} product={p} />,
+              fulfillment ? <ProductCard key={p.id} product={p} onAdd={setPicking} href={to.product(String(p.id))} /> : <ProductTile key={p.id} product={p} />,
             )}
           </div>
         )}
