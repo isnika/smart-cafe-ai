@@ -1,5 +1,5 @@
 import { formatVnd } from '@/shared/lib';
-import { formatCompactVnd, type HourlyRevenue } from '../model';
+import { formatCompactVnd, niceCeil, type HourlyRevenue } from '../model';
 
 const W = 640;
 const H = 220;
@@ -8,12 +8,6 @@ const PAD_R = 8;
 const TOP = 14;
 const BOTTOM = 26;
 const LABEL_EVERY = 3;
-
-/** Làm tròn lên mốc "đẹp" (1/2/5 × 10^k) để trục tiền dễ đọc. */
-function niceCeil(value: number): number {
-  const magnitude = 10 ** Math.floor(Math.log10(value));
-  return ([1, 2, 5, 10].map((m) => m * magnitude).find((v) => v >= value) ?? value);
-}
 
 /** Cột doanh thu đã thu theo 24 giờ trong ngày, vẽ bằng SVG thuần (không dùng thư viện chart). */
 export function HourlyRevenueChart({ data }: { data: HourlyRevenue[] }) {

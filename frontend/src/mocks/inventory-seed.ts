@@ -35,6 +35,9 @@ const SEED: SeedIngredient[] = [
   { ingredient: ing(12, 'Bánh croissant', 'cái'), stock: 40, reserved: 12, reorderLevel: 10, averageCost: 14000, dailyUse: 8 },
 ];
 
+/** Lượng tiêu thụ trung bình/ngày của nguyên liệu (đơn vị cơ sở) — để seed dự báo khớp với seed kho. */
+export const seedDailyUse = (ingredientId: number): number | undefined => SEED.find((s) => s.ingredient.id === ingredientId)?.dailyUse;
+
 const DAY_MS = 86_400_000;
 
 /** Datetime không kèm timezone (UTC) — cùng dạng với nowNaive() trong db.ts. */

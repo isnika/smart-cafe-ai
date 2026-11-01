@@ -10,5 +10,6 @@ import { voucherHandlers } from './voucher';
 import { paymentHandlers } from './payment';
 import { inventoryHandlers } from './inventory';
 import { reviewHandlers } from './review';
+import { intelligenceHandlers } from './intelligence';
 
-export const handlers = [...cashierHandlers, ...catalogHandlers, ...storeHandlers, ...orderHandlers, ...identityHandlers, ...orderReadHandlers, ...authFlowHandlers, ...branchHandlers, ...voucherHandlers, ...paymentHandlers, ...inventoryHandlers, ...reviewHandlers];
+export const handlers = [...cashierHandlers, ...catalogHandlers, ...storeHandlers, ...orderHandlers, ...identityHandlers, ...orderReadHandlers, ...authFlowHandlers, ...branchHandlers, ...voucherHandlers, ...paymentHandlers, ...inventoryHandlers, ...reviewHandlers, ...intelligenceHandlers];

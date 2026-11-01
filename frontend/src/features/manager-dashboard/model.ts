@@ -114,5 +114,11 @@ export function formatCompactVnd(amount: number): string {
   return String(Math.round(amount));
 }
 
+/** Làm tròn lên mốc "đẹp" (1/2/5 × 10^k) để trục tiền dễ đọc. */
+export function niceCeil(value: number): number {
+  const magnitude = 10 ** Math.floor(Math.log10(value));
+  return [1, 2, 5, 10].map((m) => m * magnitude).find((v) => v >= value) ?? value;
+}
+
 /** 0.125 → "12,5%". */
 export const formatPercent = (ratio: number): string => `${trimDecimal(ratio * 100)}%`;

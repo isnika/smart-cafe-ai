@@ -26,6 +26,7 @@ import OrderHistoryPage from '@/features/orders/pages/OrderHistoryPage';
 import OrderTrackingPage from "@/features/online-order/pages/OrderTrackingPage";
 import ManagerDashboardPage from "@/features/manager-dashboard/pages/ManagerDashboardPage";
 import InventoryPage from "@/features/manager-inventory/pages/InventoryPage";
+import ManagerForecastPage from "@/features/manager-forecast/pages/ManagerForecastPage";
 import StaffDashboardPage from "@/features/staff-dashboard/pages/StaffDashboardPage";
 import PlaceholderPage from "@/pages/PlaceholderPage";
 
@@ -138,7 +139,7 @@ export const routes: RouteObject[] = [
         children: [
           { path: PATHS.manager, element: <ManagerDashboardPage /> },
           { path: PATHS.managerInventory, element: <InventoryPage /> },
-          { path: PATHS.managerForecast, element: <P title="Dự báo AI" /> },
+          { path: PATHS.managerForecast, element: <ManagerForecastPage /> },
         ],
       },
     ],

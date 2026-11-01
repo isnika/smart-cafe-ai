@@ -7,14 +7,28 @@ const PAD_X = 8;
 const TOP = 18;
 const BOTTOM = 22;
 
+/** Cột tiêu thụ; `forecast` = true là giá trị dự báo (màu AI), mặc định là số liệu thực tế. */
+export type ConsumptionBar = DailyConsumption & { forecast?: boolean };
+
+interface ConsumptionChartProps {
+  data: ConsumptionBar[];
+  unit: string;
+  /** Mặc định tô đậm cột cuối (hôm nay). Màn hình dự báo tắt đi vì cột cuối là ngày dự báo xa nhất. */
+  highlightLast?: boolean;
+  /** Mô tả cho trình đọc màn hình; mặc định "Tiêu thụ 7 ngày gần nhất". */
+  summaryLabel?: string;
+  /** Chú thích dưới biểu đồ; mặc định là mức trung bình/ngày. */
+  caption?: string;
+}
+
 /** Biểu đồ cột tiêu thụ theo ngày, vẽ bằng SVG thuần (không dùng thư viện chart). */
-export function ConsumptionChart({ data, unit }: { data: DailyConsumption[]; unit: string }) {
+export function ConsumptionChart({ data, unit, highlightLast = true, summaryLabel = 'Tiêu thụ 7 ngày gần nhất', caption }: ConsumptionChartProps) {
   const max = Math.max(...data.map((d) => d.value), 1);
   const plotH = H - TOP - BOTTOM;
   const slot = (W - PAD_X * 2) / data.length;
   const barW = slot * 0.56;
   const total = data.reduce((sum, d) => sum + d.value, 0);
-  const summary = `Tiêu thụ 7 ngày gần nhất: tổng ${formatQty(total)} ${unit}. ${data.map((d) => `${d.label}: ${formatQty(d.value)}`).join('; ')}.`;
+  const summary = `${summaryLabel}: tổng ${formatQty(total)} ${unit}. ${data.map((d) => `${d.label}: ${formatQty(d.value)}${d.forecast ? ' (dự báo)' : ''}`).join('; ')}.`;
 
   return (
     <figure className="space-y-2">
@@ -24,13 +38,14 @@ export function ConsumptionChart({ data, unit }: { data: DailyConsumption[]; uni
           const h = d.value > 0 ? Math.max(3, (d.value / max) * plotH) : 0;
           const x = PAD_X + i * slot + (slot - barW) / 2;
           const y = TOP + plotH - h;
-          const isToday = i === data.length - 1;
+          const isToday = highlightLast && i === data.length - 1;
+          const fill = d.forecast ? 'fill-ai-from' : isToday ? 'fill-primary-700' : 'fill-primary-400';
           return (
             <g key={d.date}>
-              <title>{`${d.label}: ${formatQty(d.value)} ${unit}`}</title>
+              <title>{`${d.label}: ${formatQty(d.value)} ${unit}${d.forecast ? ' (dự báo)' : ''}`}</title>
               {d.value > 0 ? (
                 <>
-                  <rect x={x} y={y} width={barW} height={h} rx={3} className={isToday ? 'fill-primary-700' : 'fill-primary-400'} />
+                  <rect x={x} y={y} width={barW} height={h} rx={3} className={fill} />
                   <text x={x + barW / 2} y={y - 4} textAnchor="middle" fontSize={9} className="fill-gray-600">
                     {formatQty(d.value)}
                   </text>
@@ -46,7 +61,7 @@ export function ConsumptionChart({ data, unit }: { data: DailyConsumption[]; uni
         })}
       </svg>
       <figcaption className="text-caption text-gray-500">
-        {total > 0 ? `Trung bình ${formatQty(Math.round(total / data.length))} ${unit}/ngày · đơn vị: ${unit}` : 'Chưa có tiêu thụ trong 7 ngày qua.'}
+        {caption ?? (total > 0 ? `Trung bình ${formatQty(Math.round(total / data.length))} ${unit}/ngày · đơn vị: ${unit}` : 'Chưa có tiêu thụ trong 7 ngày qua.')}
       </figcaption>
     </figure>
   );
