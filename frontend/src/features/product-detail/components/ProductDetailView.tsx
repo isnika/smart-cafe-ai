@@ -5,6 +5,7 @@ import { PATHS } from "@/app/routes";
 import { countItems, lineUnitTotal, MAX_LINE_QUANTITY } from "@/features/dine-in/cart";
 import { QuantityStepper } from "@/features/dine-in/components/QuantityStepper";
 import { useOnlineCartStore } from "@/features/online-order/store";
+import { RecommendationSection } from "@/features/recommendation/components/RecommendationSection";
 import { formatVnd } from "@/shared/lib";
 import { cn } from "@/shared/lib/cn";
 import type { ProductDetail } from "@/shared/types";
@@ -168,6 +169,10 @@ export function ProductDetailView({ detail, categoryName }: Props) {
               </div>
             </fieldset>
           ))}
+        </div>
+
+        <div className="px-4 pt-6">
+          <RecommendationSection variant="detail" excludeProductId={detail.id} />
         </div>
 
         <ProductReviews productId={detail.id} />

@@ -17,8 +17,8 @@ const P = '/intelligence';
 export const listForecasts = (params: ListForecastsParams) => http.get<AIForecast[]>(`${P}/forecasts`, { query: params });
 
 // Recommendation
-export const listRecommendations = (branchId?: number) =>
-  http.get<RecommendationView[]>(`${P}/recommendations/me`, { query: { branchId } });
+export const listRecommendations = (branchId?: number, signal?: AbortSignal) =>
+  http.get<RecommendationView[]>(`${P}/recommendations/me`, { query: { branchId }, signal });
 export const trackRecommendationClick = (id: number) => http.post<void>(`${P}/recommendations/${id}/click`);
 
 // Chat – khách vãng lai dùng guestKey nên không bắt buộc token

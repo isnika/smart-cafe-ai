@@ -3,6 +3,7 @@ import { ArrowRight, Coffee, ListChecks, QrCode, ShoppingCart, Sparkles, Utensil
 import { Link } from "react-router-dom";
 import { PATHS } from "@/app/routes";
 import { useAuthStore } from "@/features/auth/store";
+import { RecommendationSection } from "@/features/recommendation/components/RecommendationSection";
 import { CategoryChips } from "../components/CategoryChips";
 import { MenuEmpty, MenuError, MenuSkeleton } from "../components/MenuStates";
 import { ProductTile } from "../components/ProductTile";
@@ -59,6 +60,8 @@ export default function HomePage() {
           </Link>
         </div>
       </section>
+
+      <RecommendationSection variant="home" />
 
       <section aria-labelledby="featured-title" className="space-y-4">
         <div className="flex items-center justify-between">
