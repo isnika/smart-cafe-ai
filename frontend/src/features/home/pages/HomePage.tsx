@@ -51,7 +51,7 @@ export default function HomePage() {
         </h1>
         <p className="mt-2 text-body-lg text-primary-100">Chọn món ngay trên điện thoại, gửi đơn tới quầy mà không cần chờ gọi.</p>
         <div className="mt-6 flex flex-wrap gap-3">
-          <Link to={PATHS.start} className="inline-flex h-12 items-center gap-2 rounded-full bg-accent-500 px-6 font-medium text-white hover:bg-accent-600">
+          <Link to={PATHS.start} className="inline-flex h-12 items-center gap-2 rounded-full bg-accent-500 px-6 font-medium !text-white hover:bg-accent-600">
             Đặt món <ArrowRight className="size-4" aria-hidden />
           </Link>
           <Link to={PATHS.menu} className="inline-flex h-12 items-center rounded-full border border-white/40 px-6 font-medium text-white hover:bg-white/10">

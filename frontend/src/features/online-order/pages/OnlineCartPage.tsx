@@ -68,7 +68,7 @@ export default function OnlineCartPage() {
             <Button
               size="lg"
               disabled={!pricing.ready}
-              className="rounded-full bg-accent-500 hover:bg-accent-600 active:bg-accent-700"
+              className="rounded-full bg-accent-500 !text-white hover:bg-accent-600 active:bg-accent-700"
               onClick={() => navigate(PATHS.checkout)}
             >
               Tiến hành đặt hàng

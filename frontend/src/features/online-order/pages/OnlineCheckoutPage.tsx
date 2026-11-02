@@ -225,7 +225,7 @@ export default function OnlineCheckoutPage() {
           size="lg"
           loading={isSubmitting}
           disabled={!method || !pricing.ready}
-          className="rounded-full bg-accent-500 hover:bg-accent-600 active:bg-accent-700"
+          className="rounded-full bg-accent-500 !text-white hover:bg-accent-600 active:bg-accent-700"
           onClick={() => void onConfirm()}
         >
           {isSubmitting ? 'Đang đặt hàng…' : error?.retryable ? 'Thử lại' : 'Đặt hàng'}

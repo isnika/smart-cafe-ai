@@ -199,7 +199,7 @@ export function ProductDetailView({ detail, categoryName }: Props) {
           />
           <Button
             size="lg"
-            className="min-w-0 flex-1 rounded-full bg-accent-500 px-3 hover:bg-accent-600 active:bg-accent-700"
+            className="min-w-0 flex-1 rounded-full bg-accent-500 px-3 !text-white hover:bg-accent-600 active:bg-accent-700"
             disabled={!canAdd}
             onClick={handleAdd}
           >

@@ -75,7 +75,7 @@ export default function MenuBrowsePage() {
         <>
           {lines.length > 0 && (
             <StickyActionBar total={formatVnd(calcSubTotal(lines))}>
-              <Button size="lg" className="rounded-full bg-accent-500 hover:bg-accent-600 active:bg-accent-700" onClick={() => navigate(PATHS.cart)}>
+              <Button size="lg" className="rounded-full bg-accent-500 !text-white hover:bg-accent-600 active:bg-accent-700" onClick={() => navigate(PATHS.cart)}>
                 Xem giỏ hàng ({countItems(lines)})
               </Button>
             </StickyActionBar>

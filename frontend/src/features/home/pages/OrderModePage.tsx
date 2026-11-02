@@ -139,6 +139,7 @@ export default function OrderModePage() {
       >
         <TableCodeForm onDone={() => setManual(false)} />
       </Modal>
+
     </main>
   );
 }

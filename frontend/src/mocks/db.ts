@@ -1,5 +1,5 @@
 import type {
-  AIForecast, Ingredient, Inventory, InventoryLog, Invoice, InvoiceItem, InvoiceRequestInput, MenuProduct, OrderDetail, Payment, PaymentOrderAllocation,
+  AIForecast, ChatMessage, ChatSession, Ingredient, Inventory, InventoryLog, Invoice, InvoiceItem, InvoiceRequestInput, MenuProduct, OrderDetail, Payment, PaymentOrderAllocation,
   ProductReviewView, ProductVariant, Table, TableSession,
 } from '@/shared/types';
 import { BRANCH_ID, seedProducts, seedTables, type SeedProduct } from './fixtures';
@@ -37,9 +37,13 @@ export interface MockDb {
   forecasts: AIForecast[];
   /** Review món (mọi trạng thái; API công khai chỉ trả Approved). Chỉ đọc – chưa có API tạo review. */
   reviews: ProductReviewView[];
+  /** Chat AI cho khách (Intelligence service): phiên + tin nhắn, giữ trong RAM nên F5 là mất (reset cùng resetDb). */
+  chatSessions: ChatSession[];
+  chatMessages: ChatMessage[];
   seq: {
     order: number; item: number; option: number; history: number; session: number;
     payment: number; allocation: number; invoice: number; invoiceItem: number; inventoryLog: number;
+    chatSession: number; chatMessage: number;
   };
 }
 
@@ -62,9 +66,11 @@ const createDb = (): MockDb => {
     inventoryLogs: inv.logs,
     forecasts: buildForecastSeed(),
     reviews: seedReviews(),
+    chatSessions: [],
+    chatMessages: [],
     seq: {
       order: 0, item: 0, option: 0, history: 0, session: 0, payment: 0, allocation: 0, invoice: 0, invoiceItem: 0,
-      inventoryLog: inv.logs.length,
+      inventoryLog: inv.logs.length, chatSession: 0, chatMessage: 0,
     },
   };
 };

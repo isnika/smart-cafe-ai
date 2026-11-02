@@ -1347,6 +1347,18 @@ export interface ListForecastsParams {
   to?: IsoDate;
 }
 
+/**
+ * Thẻ món AI gắn vào tin nhắn, nằm trong `ChatMessage.metadata.products`.
+ * LƯU Ý: contract chưa quy định shape này (metadata là JSON tự do) — đây là giả định của FE, cần chốt với backend.
+ */
+export interface ChatProductCard {
+  productId: number;
+  name: string;
+  price: number | null;
+  maxPrice: number | null;
+  image?: string | null;
+}
+
 export interface CreateChatSessionInput {
   userId?: string;
   guestKey?: string;

@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { createBrowserRouter, Link, type RouteObject } from "react-router-dom";
 import { RequireRole } from "@/app/guards/RequireRole";
 import { CustomerLayout } from "@/app/layouts/CustomerLayout";
+import { CustomerChatLayout } from "@/app/layouts/CustomerChatLayout";
 import { StaffShellLayout } from "@/app/layouts/StaffShellLayout";
 import { PATHS } from "@/app/routes";
 import LoginPage from "@/features/auth/pages/LoginPage";
@@ -73,40 +74,37 @@ export const routes: RouteObject[] = [
   { path: PATHS.resetPassword, element: <ResetPasswordPage /> },
   ...devRoutes,
 
-  // ── Công khai, khung riêng (không bottom-nav) ───────────────────────
-  { path: PATHS.start, element: <OrderModePage /> },
-
-  // ── Dine-in: trang QR Ordering có khung riêng (sticky bar giỏ hàng, không bottom-nav) ──
-  { path: PATHS.dineInTable, element: <DineInTablePage /> },
-  // Màn xác nhận sau khi đặt: chỉ đọc đơn đã lưu, không bao giờ gửi lại đơn khi F5
-  { path: PATHS.counterPayment, element: <CounterPaymentPage /> },
-  // Cổng thanh toán giả lập (VNPay mock): công khai để khách guest quét QR bàn thanh toán được; khung riêng, không bottom-nav.
-  { path: PATHS.payment, element: <PaymentGatewayPage /> },
-
-  // ── Khách ───────────────────────────────────────────────────────────
-  // Dine-in và duyệt menu: không cần đăng nhập (quét QR tại bàn vẫn đặt món được).
-  // Online checkout, đơn hàng, hồ sơ: cần đăng nhập.
+  // ── Toàn bộ luồng đặt món khách hàng dùng chung một chatbot ─────────
   {
-    element: <CustomerLayout />,
+    element: <CustomerChatLayout />,
     children: [
-      { path: PATHS.home, element: <HomePage /> },
-      { path: PATHS.menu, element: <MenuBrowsePage /> },
-      { path: PATHS.product, element: <ProductDetailPage /> },
-      { path: PATHS.cart, element: <CartPage /> },
-
-      // Dine-in
-      { path: PATHS.dineInCheckout, element: <DineInCheckoutPage /> },
-
-      // Cần đăng nhập
       {
-        element: <RequireRole allow={["Customer"]} />,
+        path: PATHS.start,
+        element: <OrderModePage />,
+      },
+      // Dine-in và thanh toán QR là các trang riêng, không có bottom-nav.
+      { path: PATHS.dineInTable, element: <DineInTablePage /> },
+      { path: PATHS.counterPayment, element: <CounterPaymentPage /> },
+      { path: PATHS.payment, element: <PaymentGatewayPage /> },
+      {
+        element: <CustomerLayout />,
         children: [
-          { path: PATHS.checkout, element: <OnlineCheckoutPage /> },
-          // Màn thành công của đơn Online (đọc đơn đã tạo, không bao giờ POST)
-          { path: PATHS.paymentSuccess, element: <OrderSuccessPage /> },
-          { path: PATHS.orders, element: <OrderHistoryPage /> },
-          { path: PATHS.order, element: <OrderTrackingPage /> },
-          { path: PATHS.profile, element: <P title="Hồ sơ & địa chỉ" /> },
+          { path: PATHS.home, element: <HomePage /> },
+          { path: PATHS.menu, element: <MenuBrowsePage /> },
+          { path: PATHS.product, element: <ProductDetailPage /> },
+          { path: PATHS.cart, element: <CartPage /> },
+          { path: PATHS.dineInCheckout, element: <DineInCheckoutPage /> },
+          {
+            element: <RequireRole allow={["Customer"]} />,
+            children: [
+              { path: PATHS.checkout, element: <OnlineCheckoutPage /> },
+              // Màn thành công của đơn Online (đọc đơn đã tạo, không bao giờ POST)
+              { path: PATHS.paymentSuccess, element: <OrderSuccessPage /> },
+              { path: PATHS.orders, element: <OrderHistoryPage /> },
+              { path: PATHS.order, element: <OrderTrackingPage /> },
+              { path: PATHS.profile, element: <P title="Hồ sơ & địa chỉ" /> },
+            ],
+          },
         ],
       },
     ],

@@ -8,14 +8,14 @@ export type ButtonSize = "sm" | "md" | "lg";
 
 const variants: Record<ButtonVariant, string> = {
   primary:
-    "bg-primary-600 text-white hover:bg-primary-700 active:bg-primary-800",
+    "bg-primary-600 !text-white hover:bg-primary-700 active:bg-primary-800",
   secondary:
-    "bg-secondary-700 text-white hover:bg-secondary-800 active:bg-secondary-900",
+    "bg-secondary-700 !text-white hover:bg-secondary-800 active:bg-secondary-900",
   outline:
     "border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 active:bg-gray-100",
   ghost: "text-gray-700 hover:bg-gray-100 active:bg-gray-200",
-  danger: "bg-error text-white hover:bg-error-strong",
-  ai: "bg-ai-gradient text-white hover:brightness-110 active:brightness-95",
+  danger: "bg-error !text-white hover:bg-error-strong",
+  ai: "bg-ai-gradient !text-white hover:brightness-110 active:brightness-95",
 };
 
 const sizes: Record<ButtonSize, string> = {

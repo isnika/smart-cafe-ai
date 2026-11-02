@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { Bot, ClipboardList, Coffee, Home, ShoppingCart, User } from "lucide-react";
+import { ClipboardList, Coffee, Home, ShoppingCart, User } from "lucide-react";
 import { PATHS } from "@/app/routes";
 import { countItems } from "@/features/dine-in/cart";
 import { useDineInCartStore } from "@/features/dine-in/store";
@@ -14,7 +14,7 @@ const tabs = [
   { to: PATHS.profile, label: "Cá nhân", icon: User },
 ];
 
-/** Khung cho khách: nội dung + bottom-nav + nút chat AI nổi. Khách chưa đăng nhập vẫn vào được. */
+/** Khung cho khách: nội dung + bottom-nav. Khách chưa đăng nhập vẫn vào được. */
 export function CustomerLayout() {
   const dineInCount = useDineInCartStore((s) => countItems(s.lines));
   // Khách đang ở chế độ Online thì badge là giỏ Online (hai giỏ không cộng dồn).
@@ -25,15 +25,6 @@ export function CustomerLayout() {
       <main className="pb-24">
         <Outlet />
       </main>
-
-      {/* Placeholder: sẽ thay bằng <FloatingChatBox /> ở bước cuối */}
-      <button
-        type="button"
-        aria-label="Mở trợ lý AI"
-        className="fixed bottom-20 right-4 z-30 flex size-14 items-center justify-center rounded-full bg-ai-gradient text-white shadow-dropdown animate-ai-pulse"
-      >
-        <Bot className="size-6" />
-      </button>
 
       <nav
         aria-label="Điều hướng chính"
