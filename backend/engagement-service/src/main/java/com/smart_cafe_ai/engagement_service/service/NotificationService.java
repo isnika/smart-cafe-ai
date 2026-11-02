@@ -32,27 +32,33 @@ public class NotificationService {
         if (!event.expiresAt().isAfter(Instant.now())) {
             notification.setStatus(Notification.Status.EXPIRED);
             notification.setLastError("OTP expired before email delivery");
-            repository.saveAndFlush(notification);
+            saveDelivery(notification);
             return;
         }
         notification.setAttemptCount(notification.getAttemptCount() + 1);
         notification.setStatus(Notification.Status.PENDING);
         notification.setLastError(null);
-        repository.saveAndFlush(notification);
+        saveDelivery(notification);
         try {
             emailService.sendOtpEmail(event);
         } catch (RuntimeException ex) {
             notification.setStatus(Notification.Status.FAILED);
             // SMTP exceptions can contain recipient/credentials; retain only the error class.
             notification.setLastError(ex.getClass().getSimpleName());
-            repository.saveAndFlush(notification);
+            saveDelivery(notification);
             log.warn("OTP email failed: eventId={}, attempt={}, error={}", event.eventId(),
                     notification.getAttemptCount(), ex.getClass().getSimpleName());
             throw new IllegalStateException("OTP email delivery failed; eventId=" + event.eventId());
         }
         notification.setStatus(Notification.Status.SENT);
         notification.setSentAt(Instant.now());
-        repository.saveAndFlush(notification);
+        saveDelivery(notification);
         log.info("OTP email accepted by SMTP: eventId={}", event.eventId());
+    }
+
+    private void saveDelivery(Notification notification) {
+        // Delivery updates must not overwrite a customer's concurrent mark-read action.
+        repository.updateDelivery(notification.getId(), notification.getStatus(), notification.getAttemptCount(),
+                notification.getLastError(), notification.getSentAt(), Instant.now());
     }
 }

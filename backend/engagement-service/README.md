@@ -1,4 +1,9 @@
-# Gửi OTP qua email
+# Engagement Service
+
+21 API Loyalty, Voucher, Review, Device Token và Notifications được mô tả tại
+[API.md](API.md), gồm cấu hình JWT/service key, script database, ví dụ và giới hạn tích hợp.
+
+## Gửi OTP qua email
 
 Luồng: Identity Service → Outbox_Events (DB Identity) → RabbitMQ → OtpEmailConsumer → NotificationService → EmailService → SMTP.
 
@@ -39,6 +44,22 @@ docker compose up -d rabbitmq
 ```
 
 Chọn một trong hai cách trên. Sau đó, từ thư mục `smart-cafe-ai`, tạo cấu hình Engagement nếu chưa có:
+
+Nếu đã cài RabbitMQ trên Windows nhưng service ở trạng thái `Stopped / Disabled`
+và tài khoản hiện tại không có quyền bật lại Windows service, có thể khởi động broker
+đã cài dưới tài khoản người dùng. Từ thư mục `smart-cafe-ai`:
+
+```powershell
+.\backend\engagement-service\tools\Start-OtpDependencies.ps1
+```
+
+Script kiểm tra cổng 5672 trước khi chạy, giữ nguyên cấu hình/dữ liệu RabbitMQ của
+tài khoản hiện tại và không thay đổi kiểu khởi động Windows service. Script chỉ khởi
+động RabbitMQ, không tạo OTP mới và không khởi động Engagement. Khi broker chạy lại,
+các consumer đang hoạt động có thể xử lý những yêu cầu OTP hợp lệ đang chờ.
+Nếu đang dùng RabbitMQ qua Docker, hãy khởi động container hiện có thay cho script này.
+
+Tiếp theo, tạo file cấu hình Engagement nếu chưa có:
 
 ```powershell
 Copy-Item backend/engagement-service/.env.example backend/engagement-service/.env

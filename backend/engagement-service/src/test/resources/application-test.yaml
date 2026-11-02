@@ -22,6 +22,10 @@ eureka:
   client:
     enabled: false
 app:
+  engagement:
+    internal-api-key: test-service-key
+    consumer-enabled: false
+    publisher-enabled: false
   mail:
     from: sender@example.com
   notifications:
@@ -30,3 +34,15 @@ management:
   health:
     mail:
       enabled: false
+
+# Test-only key; production requires JWT_SECRET from the environment.
+jwt:
+  secret: dGVzdC1vbmx5LWVuZ2FnZW1lbnQtc2lnbmluZy1rZXktMzItYnl0ZXM=
+
+debug: false
+logging:
+  level:
+    root: WARN
+    org.hibernate.SQL: WARN
+    org.springframework: WARN
+    com.smart_cafe_ai: INFO

@@ -14,6 +14,10 @@ spring:
     password: ${RABBITMQ_PASSWORD:smartcafe-local}
     virtual-host: ${RABBITMQ_VHOST:/}
     connection-timeout: 5s
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
     listener:
       simple:
         acknowledge-mode: auto
@@ -52,6 +56,8 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
+        jdbc:
+          time_zone: UTC
 
 eureka:
   client:
@@ -63,7 +69,16 @@ eureka:
     prefer-ip-address: true
 
 app:
+  engagement:
+    internal-api-key: ${ENGAGEMENT_INTERNAL_API_KEY:}
+    consumer-enabled: ${ENGAGEMENT_CONSUMER_ENABLED:true}
+    publisher-enabled: ${ENGAGEMENT_PUBLISHER_ENABLED:true}
+    publish-delay-ms: 1000
   mail:
     from: ${MAIL_FROM:${MAIL_USERNAME:no-reply@smartcafe.local}}
   notifications:
     internal-token: ${NOTIFICATION_INTERNAL_TOKEN:}
+
+jwt:
+  # Existing OTP delivery can start without JWT; authenticated APIs then fail closed.
+  secret: ${JWT_SECRET:}

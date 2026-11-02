@@ -1,18 +1,14 @@
 package com.smart_cafe_ai.engagement_service.model;
 
 import jakarta.persistence.*;
-import lombok.AccessLevel;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 import java.time.Instant;
+import java.util.Map;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "Notifications", uniqueConstraints = @UniqueConstraint(
         name = "uk_notifications_event_id", columnNames = "event_id"))
-@Getter
-@Setter
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Notification {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -33,18 +29,18 @@ public class Notification {
     private String body;
     @Column(name = "is_read", nullable = false)
     private boolean read;
-    @Column(nullable = false, length = 255)
+    @Column(length = 255)
     private String recipient;
-    @Column(nullable = false, length = 40)
+    @Column(length = 40)
     private String purpose;
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = NotificationStatusConverter.class)
     @Column(nullable = false, length = 20)
     private Status status;
     @Column(name = "attempt_count", nullable = false)
     private int attemptCount;
     @Column(name = "last_error", length = 255)
     private String lastError;
-    @Column(name = "expires_at", nullable = false)
+    @Column(name = "expires_at")
     private Instant expiresAt;
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -52,9 +48,59 @@ public class Notification {
     private Instant updatedAt;
     @Column(name = "sent_at")
     private Instant sentAt;
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "json")
+    private Map<String, Object> data;
 
     public enum Status { PENDING, SENT, FAILED, EXPIRED }
     public enum Channel { Push, Email, SMS, In_App }
+
+    protected Notification() { }
+    public Long getId() { return id; }
+    public void setId(Long value) { id=value; }
+    public String getEventId() { return eventId; }
+    public void setEventId(String value) { eventId=value; }
+    public String getUserId() { return userId; }
+    public void setUserId(String value) { userId=value; }
+    public String getType() { return type; }
+    public void setType(String value) { type=value; }
+    public Channel getChannel() { return channel; }
+    public void setChannel(Channel value) { channel=value; }
+    public String getTitle() { return title; }
+    public void setTitle(String value) { title=value; }
+    public String getBody() { return body; }
+    public void setBody(String value) { body=value; }
+    public boolean isRead() { return read; }
+    public void setRead(boolean value) { read=value; }
+    public String getRecipient() { return recipient; }
+    public void setRecipient(String value) { recipient=value; }
+    public String getPurpose() { return purpose; }
+    public void setPurpose(String value) { purpose=value; }
+    public Status getStatus() { return status; }
+    public void setStatus(Status value) { status=value; }
+    public int getAttemptCount() { return attemptCount; }
+    public void setAttemptCount(int value) { attemptCount=value; }
+    public String getLastError() { return lastError; }
+    public void setLastError(String value) { lastError=value; }
+    public Instant getExpiresAt() { return expiresAt; }
+    public void setExpiresAt(Instant value) { expiresAt=value; }
+    public Instant getCreatedAt() { return createdAt; }
+    public void setCreatedAt(Instant value) { createdAt=value; }
+    public Instant getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(Instant value) { updatedAt=value; }
+    public Instant getSentAt() { return sentAt; }
+    public void setSentAt(Instant value) { sentAt=value; }
+    public Map<String,Object> getData() { return data; }
+    public void setData(Map<String,Object> value) { data=value; }
+
+    public static Notification inApp(String userId, String type, String title, String body, Map<String, Object> data) {
+        Notification n = new Notification();
+        n.eventId = java.util.UUID.randomUUID().toString();
+        n.userId = userId; n.type = type; n.title = title; n.body = body; n.data = data;
+        n.channel = Channel.In_App; n.status = Status.SENT;
+        n.createdAt = Instant.now(); n.updatedAt = n.createdAt; n.sentAt = n.createdAt;
+        return n;
+    }
 
     public Notification(String eventId, String userId, String recipient, String purpose, Instant expiresAt) {
         this.eventId = eventId;
