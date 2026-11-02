@@ -12,6 +12,8 @@ public final class Requests {
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record Redeem(@NotBlank @Size(max=36) String userId,@NotNull @Positive Long orderId,@NotBlank @Size(max=64) String idempotencyKey) { }
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public record ReverseBenefits(@NotBlank @Size(max=36) String userId,@NotNull @Positive Long orderId) { }
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record ValidateVoucher(@NotBlank @Size(max=50) String code,@NotNull @Positive Integer branchId,@NotNull Fulfillment fulfillmentType,@NotNull @DecimalMin("0") @Digits(integer=15,fraction=0) BigDecimal orderAmount) { }
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public record ApplyVoucher(@NotBlank @Size(max=50) String code,@NotBlank @Size(max=36) String userId,@NotNull @Positive Long orderId,@NotNull @Positive Integer branchId,@NotNull Fulfillment fulfillmentType,@NotNull @DecimalMin("0") @Digits(integer=15,fraction=0) BigDecimal orderAmount) { }

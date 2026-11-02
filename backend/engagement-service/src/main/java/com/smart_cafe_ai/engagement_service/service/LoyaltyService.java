@@ -20,8 +20,10 @@ public class LoyaltyService {
     private final LoyaltyCardRepository cards;
     private final LoyaltyTransactionRepository transactions;
     private final EngagementEvents events;
-    public LoyaltyService(LoyaltyCardRepository cards,LoyaltyTransactionRepository transactions,EngagementEvents events) {
+    private final OrderBenefitGuard benefitGuard;
+    public LoyaltyService(LoyaltyCardRepository cards,LoyaltyTransactionRepository transactions,EngagementEvents events,OrderBenefitGuard benefitGuard) {
         this.cards=cards; this.transactions=transactions; this.events=events;
+        this.benefitGuard=benefitGuard;
     }
     @Transactional
     public LoyaltyCard mine(String userId) { return card(userId); }
@@ -55,6 +57,7 @@ public class LoyaltyService {
     }
     @Transactional
     public CommandResult redeem(Redeem request) {
+        benefitGuard.requireNotReversed(request.orderId(),request.userId());
         var c=card(request.userId());
         var previous=transactions.findByIdempotencyKey(request.idempotencyKey());
         if(previous.isPresent()) {
@@ -64,6 +67,7 @@ public class LoyaltyService {
             return new CommandResult(t,c,true);
         }
         if(transactions.findByOrderIdAndTransactionType(request.orderId(),TransactionType.Redeem).isPresent()) throw ApiException.conflict("Đơn hàng đã đổi thưởng bằng một yêu cầu khác.");
+        benefitGuard.requireActive(request.orderId(),request.userId());
         if(c.currentStamps<10) throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,"INSUFFICIENT_STAMPS","Bạn cần ít nhất 10 tem để đổi thưởng.");
         var t=change(c,request.orderId(),TransactionType.Redeem,-10,request.idempotencyKey(),null,null,null);
         c.totalRedeemedCups=Math.addExact(c.totalRedeemedCups,1);

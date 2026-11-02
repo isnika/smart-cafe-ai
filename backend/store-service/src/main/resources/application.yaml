@@ -1,6 +1,9 @@
 server:
   port: 8083
 
+app:
+  internal-api-key: ${STORE_INTERNAL_API_KEY:}
+
 spring:
   application:
     name: store-service

@@ -21,8 +21,15 @@ public class EngagementController {
     private final VoucherService vouchers;
     private final ReviewService reviews;
     private final CustomerNotificationService notifications;
-    public EngagementController(Access access,LoyaltyService loyalty,VoucherService vouchers,ReviewService reviews,CustomerNotificationService notifications) {
+    private final OrderBenefitService benefits;
+    public EngagementController(Access access,LoyaltyService loyalty,VoucherService vouchers,ReviewService reviews,CustomerNotificationService notifications,OrderBenefitService benefits) {
         this.access=access; this.loyalty=loyalty; this.vouchers=vouchers; this.reviews=reviews; this.notifications=notifications;
+        this.benefits=benefits;
+    }
+    @PostMapping("/internal/benefits/reverse")
+    public ApiResponse reverseBenefits(@Valid @RequestBody ReverseBenefits body,HttpServletRequest req) {
+        access.internal(req);benefits.reverse(body.orderId(),body.userId());
+        return ApiResponse.ok(java.util.Map.of("order_id",body.orderId(),"status","Reversed"));
     }
     @GetMapping("/loyalty/me")
     public ApiResponse card(HttpServletRequest req) { return ApiResponse.ok(loyalty.mine(access.customer(req).userId())); }

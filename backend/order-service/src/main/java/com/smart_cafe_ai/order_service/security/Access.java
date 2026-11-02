@@ -1,6 +1,7 @@
 package com.smart_cafe_ai.order_service.security;
 
 import com.smart_cafe_ai.order_service.exception.ApiException;
+import com.smart_cafe_ai.order_service.repository.IdentityUserStatusRepository;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
@@ -23,8 +24,10 @@ public class Access {
     public record Context(Actor actor,String sessionCode,String clientKey) {}
     private final SecretKey key;
     private final String internalKey;
-    public Access(@Value("${jwt.secret}") String secret,@Value("${app.internal-api-key:}") String internalKey){
+    private final IdentityUserStatusRepository userStatuses;
+    public Access(@Value("${jwt.secret}") String secret,@Value("${app.internal-api-key:}") String internalKey,IdentityUserStatusRepository userStatuses){
         byte[] bytes=Decoders.BASE64.decode(secret);key=Keys.hmacShaKeyFor(bytes.length<32?secret.getBytes(StandardCharsets.UTF_8):bytes);this.internalKey=internalKey;
+        this.userStatuses=userStatuses;
     }
     public Context context(HttpServletRequest req){return new Context(optional(req.getHeader("Authorization")),req.getHeader("X-Table-Session-Code"),req.getHeader("X-Client-Key"));}
     public Actor optional(String header){
@@ -34,6 +37,12 @@ public class Access {
             var c=Jwts.parser().verifyWith(key).build().parseSignedClaims(header.substring(7)).getPayload();
             String sub=c.getSubject(),role=c.get("role",String.class);
             if(c.getExpiration()==null||sub==null||sub.isBlank()||sub.length()>36||role==null)throw new IllegalArgumentException();
+            userStatuses.findById(sub).ifPresent(status->{
+                if(!"Active".equals(status.status)) {
+                    String code=switch(status.status){case "Banned"->"ACCOUNT_BANNED";case "Deactivated"->"ACCOUNT_DEACTIVATED";default->"ACCOUNT_UNVERIFIED";};
+                    throw new ApiException(FORBIDDEN,code,"Tài khoản không hoạt động. Vui lòng kiểm tra lại trạng thái tài khoản.");
+                }
+            });
             return new Actor(sub,role);
         }catch(ExpiredJwtException ex){throw new ApiException(UNAUTHORIZED,"TOKEN_EXPIRED","Phiên đăng nhập đã hết hạn.");}
         catch(JwtException|IllegalArgumentException ex){throw new ApiException(UNAUTHORIZED,"UNAUTHORIZED","Token không hợp lệ.");}

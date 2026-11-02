@@ -2,6 +2,7 @@ package com.smart_cafe_ai.order_service;
 
 import com.fasterxml.jackson.databind.*;
 import com.smart_cafe_ai.order_service.integration.OrderDependencies;
+import com.smart_cafe_ai.order_service.integration.EngagementClient;
 import com.smart_cafe_ai.order_service.integration.OrderDependencies.*;
 import com.smart_cafe_ai.order_service.model.Types.*;
 import com.smart_cafe_ai.order_service.repository.*;
@@ -41,9 +42,16 @@ class OrderApiTest {
     @Autowired OrderExpiryService expiry;
     @SpyBean OrderEvents eventWriter;
     @MockBean OrderDependencies dependencies;
+    @MockBean EngagementClient engagement;
+    @Autowired EngagementCheckoutRepository checkouts;
+    @Autowired EngagementCheckoutRecovery recovery;
+    @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
     final String customer=token("customer-1","Customer"),other=token("customer-2","Customer"),staff=token("staff-1","Staff"),manager=token("manager-1","Manager"),admin=token("admin-1","Admin");
 
     @BeforeEach void setup(){
+        checkouts.deleteAll();
+        doThrow(new com.smart_cafe_ai.order_service.exception.ApiException(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+                "ENGAGEMENT_INTEGRATION_NOT_CONFIGURED","Missing test configuration")).when(engagement).requireConfigured();
         for(String table:List.of("Order_Payment_Entries","Processed_Events","Outbox_Events","Order_Item_Options","Order_Status_History","Order_Items","Orders","Cart_Item_Options","Cart_Items","Carts"))jdbc.update("delete from "+table);
         jdbc.execute("alter table Carts add if not exists active_online_user_id varchar(36) generated always as (case when cart_source='Online' and status='Active' then user_id else null end)");
         jdbc.execute("create unique index if not exists uq_test_active_online on Carts(active_online_user_id)");
@@ -223,9 +231,83 @@ class OrderApiTest {
         call(get("/api/v1/orders/me"),null,null).andExpect(status().isUnauthorized());
         call(get("/api/v1/orders/me"),"Bearer bad",null).andExpect(status().isUnauthorized());
     }
-    @Test void unsupportedEngagementDoesNotCreateUndiscountedOrder() throws Exception {
+    @Test void unconfiguredEngagementDoesNotCreateUndiscountedOrder() throws Exception {
         long id=cart();String body=orderBody(id,null).replace("}",",\"voucher_code\":\"WELCOME\"}");
         call(post("/api/v1/orders").header("Idempotency-Key","voucher"),customer,body).andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.error.code").value("ENGAGEMENT_INTEGRATION_NOT_CONFIGURED"));assertThat(orders.count()).isZero();
+    }
+    void enableBenefits(){doNothing().when(engagement).requireConfigured();}
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"explicit,50000,90000", "default,20000,120000"})
+    void rewardSelectionUsesRequestedLineOrCheapestBase(String selection,int discount,int amount) throws Exception {
+        enableBenefits();long id=cart();
+        call(post("/api/v1/carts/current/items?source=Online"),customer,"{\"variant_id\":2,\"quantity\":1}").andExpect(status().isCreated());
+        when(dependencies.resolve(anyInt(),anyList())).thenAnswer(call->{
+            List<com.smart_cafe_ai.order_service.dto.Requests.Item> lines=call.getArgument(1);
+            return lines.stream().map(line->new ResolvedItem(line.variantId(),10,"Coffee","M",
+                    new BigDecimal(line.variantId()==1?"50000":"20000"),line.options().stream().map(o->new ResolvedOption(o.optionId(),"Topping",new BigDecimal("5000"),o.quantity())).toList())).toList();
+        });
+        String body=orderBody(id,null).replace("}",",\"redeem_reward\":true"+(selection.equals("explicit")?",\"reward_item_index\":0":"")+"}");
+        call(post("/api/v1/orders").header("Idempotency-Key","selection-"+selection),customer,body)
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.data.item_discount_amount").value(discount))
+                .andExpect(jsonPath("$.data.final_amount").value(amount));
+    }
+    @Test void voucherAndRewardUseServerPricesSplitOneCupAndReplayWithoutSecondCommand() throws Exception {
+        enableBenefits();long cart=cart();
+        when(engagement.apply(eq("SAVE"),eq("customer-1"),anyLong(),eq(1),eq("Pickup"),eq(new BigDecimal("50000")))).thenReturn(new BigDecimal("10000"));
+        String body=orderBody(cart,null).replace("}",",\"voucher_code\":\"save\",\"redeem_reward\":true}");
+        var created=data(call(post("/api/v1/orders").header("Idempotency-Key","benefits-ok"),customer,body)
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.data.sub_total").value(80000))
+                .andExpect(jsonPath("$.data.item_discount_amount").value(30000))
+                .andExpect(jsonPath("$.data.voucher_discount_amount").value(10000))
+                .andExpect(jsonPath("$.data.final_amount").value(40000)).andReturn());
+        long id=created.path("id").asLong();
+        var reward=created.path("items").findValues("is_reward_item");
+        assertThat(reward.stream().filter(JsonNode::asBoolean).count()).isEqualTo(1);
+        for(var item:created.path("items"))if(item.path("is_reward_item").asBoolean()) {
+            assertThat(item.path("quantity").asInt()).isEqualTo(1);assertThat(item.path("line_total").asInt()).isEqualTo(10000);
+        }
+        call(post("/api/v1/orders").header("Idempotency-Key","benefits-ok"),customer,body).andExpect(status().isOk());
+        verify(engagement,times(1)).redeem("customer-1",id);
+        verify(engagement,times(1)).apply("SAVE","customer-1",id,1,"Pickup",new BigDecimal("50000"));
+        verify(engagement,never()).reverse(anyString(),anyLong());
+        assertThat(checkouts.findById(id).orElseThrow().status).isEqualTo("Committed");
+        assertThat(outbox.count()).isEqualTo(1);
+    }
+    @Test void rejectedVoucherAfterRedeemRollsBackOrderAndCompensatesBothBenefits() throws Exception {
+        enableBenefits();long id=cart();
+        when(engagement.apply(anyString(),anyString(),anyLong(),anyInt(),anyString(),any())).thenThrow(
+                new com.smart_cafe_ai.order_service.exception.ApiException(org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY,"VOUCHER_EXPIRED","Expired"));
+        String body=orderBody(id,null).replace("}",",\"voucher_code\":\"OLD\",\"redeem_reward\":true}");
+        call(post("/api/v1/orders").header("Idempotency-Key","benefits-fail"),customer,body)
+                .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.error.code").value("VOUCHER_EXPIRED"));
+        assertThat(orders.count()).isZero();assertThat(outbox.count()).isZero();
+        assertThat(jdbc.queryForObject("select status from Carts where id=?",String.class,id)).isEqualTo("Active");
+        var attempt=checkouts.findAll().get(0);assertThat(attempt.status).isEqualTo("Reversed");
+        verify(engagement).redeem("customer-1",attempt.orderId);verify(engagement).reverse("customer-1",attempt.orderId);
+    }
+    @Test void persistenceFailureAfterRemoteSuccessAlsoCompensates() throws Exception {
+        enableBenefits();long id=cart();
+        doAnswer(i->{throw new IllegalStateException("DB write failed");}).when(eventWriter).emit(anyString(),any(),any(),any(),any());
+        String body=orderBody(id,null).replace("}",",\"redeem_reward\":true}");
+        call(post("/api/v1/orders").header("Idempotency-Key","benefits-db-fail"),customer,body).andExpect(status().isInternalServerError());
+        assertThat(orders.count()).isZero();assertThat(checkouts.findAll().get(0).status).isEqualTo("Reversed");
+        verify(engagement).reverse(eq("customer-1"),anyLong());
+    }
+    @Test void durableCompensationSurvivesRollbackAndRetriesAfterOutage() {
+        enableBenefits();
+        new org.springframework.transaction.support.TransactionTemplate(transactions).executeWithoutResult(tx->{recovery.begin(999999L,"customer-1");tx.setRollbackOnly();});
+        assertThat(checkouts.existsById(999999L)).isTrue();
+        doThrow(new IllegalStateException("offline")).when(engagement).reverse("customer-1",999999L);
+        recovery.recover(999999L);
+        var row=checkouts.findById(999999L).orElseThrow();assertThat(row.status).isEqualTo("Pending");assertThat(row.retryCount).isEqualTo(1);
+        doNothing().when(engagement).reverse("customer-1",999999L);recovery.recover(999999L);
+        assertThat(checkouts.findById(999999L).orElseThrow().status).isEqualTo("Reversed");
+    }
+    @Test void invalidRewardSelectionMakesNoRemoteMutation() throws Exception {
+        enableBenefits();long id=cart();
+        String body=orderBody(id,null).replace("}",",\"redeem_reward\":true,\"reward_item_index\":10}");
+        call(post("/api/v1/orders").header("Idempotency-Key","bad-reward"),customer,body).andExpect(status().isBadRequest());
+        verify(engagement,never()).redeem(anyString(),anyLong());assertThat(orders.count()).isZero();assertThat(checkouts.count()).isZero();
     }
     @Test void concurrentCheckoutConvertsCartExactlyOnce() throws Exception {
         long id=cart();String body=orderBody(id,null);var start=new CountDownLatch(1);var pool=Executors.newFixedThreadPool(2);

@@ -1,13 +1,14 @@
 # Engagement Service — API và tích hợp
 
 Service: `8087`; database: `smart_cafe_engagement_db`; tiền VND nguyên, thời gian UTC.
-Đã bổ sung 21 API theo SmartAPI và đặc tả Engagement. Luồng gửi OTP và
+Đã bổ sung 21 API theo SmartAPI/đặc tả Engagement và một API hoàn tác checkout nội bộ. Luồng gửi OTP và
 `GET /api/v1/internal/notifications/{eventId}` được giữ riêng, dùng hợp đồng cũ.
 
 ## Cấu hình và database
 
 1. Chạy lần lượt `database/engagement/001_baseline.sql` và
-   `database/engagement/002_preserve_otp_and_extend.sql` bằng MySQL Workbench.
+   `database/engagement/002_preserve_otp_and_extend.sql`, sau đó
+   `database/engagement/003_order_benefit_state.sql` bằng MySQL Workbench.
    Script không xóa bảng/dữ liệu; có thể chạy lại. Script 002 giữ dữ liệu OTP,
    bổ sung metadata và cho phép thông báo In_App không có địa chỉ email/hạn OTP.
    Trên MySQL phân biệt hoa/thường, tên bảng của module này là chữ thường.
@@ -24,7 +25,7 @@ Gateway đã có đủ 5 route public. `/internal/**` bị chặn tại Gateway,
 discovery; Order phải gọi trực tiếp `http://localhost:8087/api/v1/internal/...`
 với `X-Service-Key: <ENGAGEMENT_INTERNAL_API_KEY>`. JWT Customer không thay thế khóa này.
 
-## Danh mục 21 API
+## Danh mục 22 API
 
 Các path dưới đây có tiền tố `/api/v1`.
 
@@ -34,6 +35,7 @@ Các path dưới đây có tiền tố `/api/v1`.
 | GET | `/loyalty/me/transactions` | Customer |
 | POST | `/loyalty/adjustments` | Manager/Admin |
 | POST | `/internal/loyalty/redeem` | Service key |
+| POST | `/internal/benefits/reverse` | Service key; bù checkout thất bại |
 | GET | `/vouchers/available` | Customer |
 | POST | `/vouchers/validate` | Customer |
 | POST | `/internal/vouchers/apply` | Service key |
@@ -144,9 +146,9 @@ Read-all trả `{"updated_count":N}`. Response không lộ recipient, lỗi SMTP
   chỉ đảo toàn bộ loyalty/voucher của allocation khi `reverse_loyalty=true`;
   không tự tính tỷ lệ theo tiền hoàn. Producer phải đặt cờ theo chính sách hoàn tiền.
   Balance cho phép tới -100; đảo tiếp vượt giới hạn sẽ rollback/DLQ.
-- Giữ thứ tự sự kiện hoàn tất/hủy của từng order ở producer. Refund đến trước
-  order.completed cần được điều phối/phát lại sau dữ liệu hoàn tất; chưa có read-model
-  trạng thái Order đầy đủ để xử lý mọi trường hợp sự kiện đến sai thứ tự.
+- Order_Benefit_State serialize apply/redeem và complete/cancel/refund. Khi reversal
+  đã được ghi, request checkout hoặc completed đến muộn không được chi tiêu/tích tem lại.
+  Cùng request thành công có thể replay sau Completed; không cho thêm command mới.
 - Review: Pending→Approved/Hidden, Approved→Hidden; không mở lại Hidden.
   Phát `engagement.review.created` khi duyệt Approved lần đầu.
 - Thông báo mới dùng In_App. `payment.failed`/`invoice.issued` dùng user_id được
@@ -156,12 +158,14 @@ Read-all trả `{"updated_count":N}`. Response không lộ recipient, lỗi SMTP
 
 ## Phạm vi tích hợp Order
 
-Module này cung cấp API nội bộ để Order gọi và consumer để nhận sự kiện. Order hiện
-vẫn chặn `voucher_code`/`redeem_reward` bằng `ENGAGEMENT_INTEGRATION_NOT_CONFIGURED`.
-Chưa sửa checkout Order vì cần triển khai saga/compensation khi tạo đơn thất bại
-sau khi đã trừ tem/apply voucher. Order phải xác nhận đúng một reward item, gọi API
-bằng service key và phát event bù khi hủy. Vì vậy API Engagement có thể gọi/test
-độc lập; checkout có voucher/reward chưa hoạt động xuyên service.
+Order đã gọi REST thật để áp voucher và đổi tem khi checkout. Thêm API nội bộ
+`POST /api/v1/internal/benefits/reverse` nhận `{"user_id":"...","order_id":123}`,
+dùng cùng X-Service-Key, trả `{"order_id":123,"status":"Reversed"}` trong data.
+API idempotent này phục vụ bù checkout thất bại. Order lưu ledger độc lập và retry
+reversal khi mạng/service lỗi; Engagement lưu Order_Benefit_State để chặn request
+redeem/apply đến muộn sau hoàn tác. Checkout miễn giá gốc một ly; topping vẫn trả tiền.
+Xem [ORDER_ENGAGEMENT_INTEGRATION.md](../ORDER_ENGAGEMENT_INTEGRATION.md) về quy tắc
+chọn món thưởng, công thức tính giá, migration 003 của hai database và phạm vi kiểm chứng.
 
 ## Kiểm thử
 

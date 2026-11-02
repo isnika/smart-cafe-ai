@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smart_cafe_ai.order_service.dto.Requests.*;
 import com.smart_cafe_ai.order_service.exception.ApiException;
 import com.smart_cafe_ai.order_service.integration.OrderDependencies;
+import com.smart_cafe_ai.order_service.integration.EngagementClient;
 import com.smart_cafe_ai.order_service.model.*;
 import com.smart_cafe_ai.order_service.model.Types.*;
 import com.smart_cafe_ai.order_service.repository.*;
@@ -12,6 +13,8 @@ import com.smart_cafe_ai.order_service.security.Access.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import java.math.*;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -21,13 +24,14 @@ import static org.springframework.http.HttpStatus.*;
 
 @Service @Transactional
 public class OrderService {
-    public OrderService(OrderRepository orders, CartService carts, Access access, OrderDependencies dependencies, OrderEvents events, ObjectMapper json) {
+    public OrderService(OrderRepository orders, CartService carts, Access access, OrderDependencies dependencies, OrderEvents events, ObjectMapper json,EngagementClient engagement,EngagementCheckoutRecovery recovery) {
         this.orders=orders;
         this.carts=carts;
         this.access=access;
         this.dependencies=dependencies;
         this.events=events;
         this.json=json;
+        this.engagement=engagement;this.recovery=recovery;
     }
 
     private final OrderRepository orders;
@@ -36,9 +40,13 @@ public class OrderService {
     private final OrderDependencies dependencies;
     private final OrderEvents events;
     private final ObjectMapper json;
+    private final EngagementClient engagement;
+    private final EngagementCheckoutRecovery recovery;
+    private static final org.slf4j.Logger log=org.slf4j.LoggerFactory.getLogger(OrderService.class);
     @Value("${app.order.payment-timeout-minutes:15}") private int paymentTimeout;
     @Value("${app.order.vat-rate:0}") private BigDecimal vatRate;
     public record Created(Object order,boolean replay) {}
+    @Transactional(timeout=60)
     public Created create(CreateOrder r,String key,Context context){
         if(key==null||key.isBlank()||key.length()>64)throw ApiException.invalid("Idempotency-Key bắt buộc, dài 1–64 ký tự.");
         OrderPolicy.shape(r.orderSource(),r.fulfillmentType());
@@ -52,7 +60,12 @@ public class OrderService {
             }
         };
         String requestHash;
-        try{requestHash=hash(json.writeValueAsString(r));}catch(Exception ex){throw ApiException.invalid("Không thể đọc yêu cầu đặt hàng.");}
+        try{
+            com.fasterxml.jackson.databind.node.ObjectNode canonical=json.valueToTree(r);
+            // Preserve hashes of requests created before reward_item_index was introduced.
+            if(r.rewardItemIndex()==null)canonical.remove("reward_item_index");
+            requestHash=hash(json.writeValueAsString(canonical));
+        }catch(Exception ex){throw ApiException.invalid("Không thể đọc yêu cầu đặt hàng.");}
         var previous=orders.findByIdempotencyKey(key);
         if(previous.isPresent()){
             var old=previous.get();
@@ -60,7 +73,10 @@ public class OrderService {
             if(r.orderSource()==Source.POS)requireBranch(context,old.branchId);
             return new Created(events.snapshot(old),true);
         }
-        if(r.voucherCode()!=null||r.redeemReward())throw new ApiException(SERVICE_UNAVAILABLE,"ENGAGEMENT_INTEGRATION_NOT_CONFIGURED","Voucher/đổi tem cần nghiệp vụ Engagement (Backend 1) chưa được triển khai. Chưa tạo đơn hoặc trừ tem.");
+        boolean benefits=r.voucherCode()!=null||r.redeemReward();
+        if(r.voucherCode()!=null&&r.voucherCode().isBlank())throw ApiException.invalid("voucher_code không được rỗng.");
+        if(!r.redeemReward()&&r.rewardItemIndex()!=null)throw ApiException.invalid("reward_item_index chỉ dùng khi redeem_reward=true.");
+        if(benefits)engagement.requireConfigured();
         var branch=dependencies.branch(r.branchId());OrderPolicy.branch(branch,r.orderSource());
         Cart cart=null;List<Item> lines;Long sessionId=null;String userId=null,createdBy=null;
         if(r.orderSource()==Source.POS){
@@ -82,6 +98,7 @@ public class OrderService {
             if(r.tableSessionId()!=null&&!r.tableSessionId().equals(sessionId))throw ApiException.forbidden();
         }
         if(r.fulfillmentType()!=Fulfillment.Dine_In&&r.tableSessionId()!=null)throw ApiException.invalid("Chỉ Dine_In được gắn phiên bàn.");
+        if(benefits&&userId==null)throw ApiException.invalid("Cần gắn tài khoản khách hàng để dùng voucher hoặc đổi tem.");
         if(lines.isEmpty()||lines.size()>100)throw ApiException.invalid("Đơn cần 1–100 dòng.");lines.forEach(i->CartService.validateOptions(i.options()));
         var method=r.paymentMethod();
         if(method==PaymentMethod.COD&&r.fulfillmentType()!=Fulfillment.Delivery)throw ApiException.invalid("COD chỉ dành cho Delivery.");
@@ -96,6 +113,14 @@ public class OrderService {
             order.deliveryLatitude=r.deliveryLatitude();order.deliveryLongitude=r.deliveryLongitude();order.deliveryFee=OrderPolicy.delivery(branch,r.deliveryLatitude(),r.deliveryLongitude());
         }else if(r.deliveryName()!=null||r.deliveryPhone()!=null||r.deliveryAddress()!=null||r.deliveryLatitude()!=null||r.deliveryLongitude()!=null)throw ApiException.invalid("Chỉ Delivery nhận thông tin giao hàng.");
         var resolved=dependencies.resolve(r.branchId(),lines);
+        int reward=-1;
+        if(r.redeemReward()){
+            reward=r.rewardItemIndex()==null?-1:r.rewardItemIndex();
+            if(reward>=lines.size())throw ApiException.invalid("reward_item_index không thuộc danh sách món của đơn.");
+            if(r.rewardItemIndex()==null)for(int i=0;i<resolved.size();i++)if(resolved.get(i).price().signum()>0
+                    &&(reward<0||resolved.get(i).price().compareTo(resolved.get(reward).price())<0))reward=i;
+            if(reward<0||resolved.get(reward).price().signum()<=0)throw ApiException.invalid("Món đổi thưởng phải có giá gốc lớn hơn 0.");
+        }
         for(int i=0;i<lines.size();i++){
             var input=lines.get(i);var snapshot=resolved.get(i);var item=new OrderItem();item.order=order;
             item.variantId=snapshot.variantId();item.productId=snapshot.productId();item.productName=snapshot.productName();item.variantName=snapshot.variantName();
@@ -104,9 +129,38 @@ public class OrderService {
                 var option=new OrderOption();option.item=item;option.optionId=selected.optionId();option.optionName=selected.optionName();option.quantity=selected.quantity();option.unitPrice=selected.extraPrice();
                 item.options.add(option);item.optionsUnitTotal=item.optionsUnitTotal.add(option.unitPrice.multiply(BigDecimal.valueOf(option.quantity)));
             }
-            order.items.add(item);order.subTotal=order.subTotal.add(item.lineTotal());
+            order.subTotal=order.subTotal.add(item.lineTotal());
+            if(i==reward){
+                OrderItem free=item;
+                if(item.quantity>1){
+                    item.quantity--;order.items.add(item);
+                    free=rewardCopy(item);
+                }
+                free.quantity=1;free.isRewardItem=true;free.discountAmount=free.unitPrice;
+                order.itemDiscountAmount=free.unitPrice;
+                order.items.add(free);
+            }else order.items.add(item);
         }
-        order.finalAmount=order.subTotal.add(order.deliveryFee);
+        order.finalAmount=order.subTotal.subtract(order.itemDiscountAmount).add(order.deliveryFee);
+        if(benefits){
+            // Allocate an Order ID and check local constraints before the first remote mutation.
+            orders.saveAndFlush(order);
+            recovery.begin(order.id,userId);
+            Long checkoutId=order.id;
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization(){
+                @Override public void afterCompletion(int status){
+                    try{recovery.recover(checkoutId);}
+                    catch(Exception ex){log.warn("Checkout recovery will retry from ledger: orderId={}",checkoutId);}
+                }
+            });
+            if(r.redeemReward())engagement.redeem(userId,order.id);
+            if(r.voucherCode()!=null){
+                order.voucherCode=r.voucherCode().trim().toUpperCase(Locale.ROOT);
+                order.voucherDiscountAmount=engagement.apply(order.voucherCode,userId,order.id,order.branchId,
+                        order.fulfillmentType.name(),order.subTotal.subtract(order.itemDiscountAmount));
+            }
+            order.finalAmount=order.subTotal.subtract(order.itemDiscountAmount).subtract(order.voucherDiscountAmount).add(order.deliveryFee);
+        }
         if(order.finalAmount.precision()>15)throw ApiException.invalid("Tổng tiền vượt giới hạn DECIMAL(15,0).");
         // VAT is included in final_amount, per the SQL formula; never added a second time.
         if(vatRate.signum()<0||vatRate.compareTo(BigDecimal.ONE)>0)throw new IllegalStateException("Invalid VAT rate");
@@ -117,6 +171,14 @@ public class OrderService {
         orders.saveAndFlush(order);
         if(cart!=null){cart.status=CartStatus.Converted;cart.touch();}
         events.emit("order.created",order,null,history.changedBy,r.note());return new Created(events.snapshot(order),false);
+    }
+    private OrderItem rewardCopy(OrderItem source){
+        var item=new OrderItem();item.order=source.order;item.productId=source.productId;item.variantId=source.variantId;
+        item.productName=source.productName;item.variantName=source.variantName;item.unitPrice=source.unitPrice;
+        item.optionsUnitTotal=source.optionsUnitTotal;item.note=source.note;
+        for(var original:source.options){var option=new OrderOption();option.item=item;option.optionId=original.optionId;
+            option.optionName=original.optionName;option.quantity=original.quantity;option.unitPrice=original.unitPrice;item.options.add(option);}
+        return item;
     }
     public Integer requireBranch(Context context,Integer requested){
         var actor=access.staff(context);

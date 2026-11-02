@@ -63,11 +63,18 @@ eureka:
 jwt:
   secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
 app:
+  engagement:
+    internal-base-url: ${ENGAGEMENT_INTERNAL_BASE_URL:http://localhost:8087/api/v1/internal}
+    auth-value: ${ENGAGEMENT_INTERNAL_API_KEY:}
+    recovery-enabled: ${ENGAGEMENT_RECOVERY_ENABLED:true}
+    recovery-delay-ms: 30000
+  identity-events:
+    consumer-enabled: ${ORDER_IDENTITY_EVENTS_CONSUMER_ENABLED:true}
   internal-api-key: ${ORDER_INTERNAL_API_KEY:}
   store:
-    internal-base-url: ${STORE_INTERNAL_BASE_URL:}
+    internal-base-url: ${STORE_INTERNAL_BASE_URL:http://localhost:8083/internal}
     auth-header: ${STORE_INTERNAL_AUTH_HEADER:X-Service-Key}
-    auth-value: ${STORE_INTERNAL_AUTH_VALUE:}
+    auth-value: ${STORE_INTERNAL_API_KEY:${STORE_INTERNAL_AUTH_VALUE:}}
   catalog:
     internal-base-url: ${CATALOG_INTERNAL_BASE_URL:http://localhost:8082/internal/catalog}
     auth-header: X-Service-Key

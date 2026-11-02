@@ -27,7 +27,7 @@ class RegistrationOtpChannelTest {
         UserRepository users = mock(UserRepository.class);
         OtpService otp = mock(OtpService.class);
         AuthService auth = new AuthService(users, mock(RoleRepository.class), mock(RefreshTokenRepository.class),
-                mock(PasswordEncoder.class), mock(JwtService.class), otp, mock(GoogleTokenVerifierService.class));
+                mock(PasswordEncoder.class), mock(JwtService.class), otp, mock(GoogleTokenVerifierService.class), mock(UserStatusEvents.class));
         var response = auth.register(RegisterRequest.builder().fullName("Customer").phone("0901234567").password("Password123!").build());
         org.junit.jupiter.api.Assertions.assertFalse(response.isSuccess());
         verifyNoInteractions(users, otp);
@@ -47,7 +47,7 @@ class RegistrationOtpChannelTest {
             return user;
         });
         AuthService auth = new AuthService(users, roles, mock(RefreshTokenRepository.class),
-                encoder, mock(JwtService.class), otpService, mock(GoogleTokenVerifierService.class));
+                encoder, mock(JwtService.class), otpService, mock(GoogleTokenVerifierService.class), mock(UserStatusEvents.class));
         RegisterRequest request = RegisterRequest.builder().fullName("Customer")
                 .email(email).phone("0901234567").password("Password123!").build();
 

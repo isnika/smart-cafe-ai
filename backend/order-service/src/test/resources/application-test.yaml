@@ -19,6 +19,10 @@ eureka:
     enabled: false
 spring.cloud.discovery.enabled: false
 app:
+  engagement:
+    recovery-enabled: false
+  identity-events:
+    consumer-enabled: false
   internal-api-key: test-internal-key
   order:
     expiry-enabled: false

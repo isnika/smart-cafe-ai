@@ -29,15 +29,18 @@ public class AdminUserService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final UserStatusEvents statusEvents;
 
     public AdminUserService(
             UserRepository userRepository,
             RoleRepository roleRepository,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            UserStatusEvents statusEvents
     ) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
+        this.statusEvents = statusEvents;
     }
 
     @Transactional(readOnly = true)
@@ -138,11 +141,13 @@ public class AdminUserService {
 
     @Transactional
     public ApiResponse<UserResponse> updateUserStatus(String id, UserStatus status) {
-        User user = userRepository.findById(id)
+        User user = userRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy tài khoản"));
 
+        UserStatus previous = user.getStatus();
         user.setStatus(status);
         User updated = userRepository.save(user);
+        statusEvents.changed(updated, previous);
         return ApiResponse.success(UserResponse.fromEntity(updated));
     }
 

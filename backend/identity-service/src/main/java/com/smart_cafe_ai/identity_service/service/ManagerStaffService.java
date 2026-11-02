@@ -27,15 +27,18 @@ public class ManagerStaffService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final UserStatusEvents statusEvents;
 
     public ManagerStaffService(
             UserRepository userRepository,
             RoleRepository roleRepository,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            UserStatusEvents statusEvents
     ) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
+        this.statusEvents = statusEvents;
     }
 
     @Transactional(readOnly = true)
@@ -119,11 +122,13 @@ public class ManagerStaffService {
 
     @Transactional
     public ApiResponse<UserResponse> updateStaffStatus(String staffId, UserStatus status) {
-        User staff = userRepository.findById(staffId)
+        User staff = userRepository.findByIdForUpdate(staffId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy nhân viên"));
 
+        UserStatus previous = staff.getStatus();
         staff.setStatus(status);
         User updated = userRepository.save(staff);
+        statusEvents.changed(updated, previous);
         return ApiResponse.success(UserResponse.fromEntity(updated));
     }
 }

@@ -25,6 +25,8 @@ cloudinary:
   api-secret: test
 
 app:
+  identity-events:
+    publisher-enabled: false
   avatar:
     cleanup-enabled: false
   otp-email:

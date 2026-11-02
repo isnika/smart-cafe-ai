@@ -26,7 +26,8 @@ public final class Requests {
             @DecimalMin("-90") @DecimalMax("90") @Digits(integer=3,fraction=7) BigDecimal deliveryLatitude,
             @DecimalMin("-180") @DecimalMax("180") @Digits(integer=3,fraction=7) BigDecimal deliveryLongitude,
             @Size(max=50) String voucherCode,Boolean redeemReward,@Size(max=255) String note,
-            @Size(max=100) List<@NotNull @Valid Item> items, PaymentMethod paymentMethod) {
+            @Size(max=100) List<@NotNull @Valid Item> items, PaymentMethod paymentMethod,
+            @Min(0) @Max(99) Integer rewardItemIndex) {
         public CreateOrder { items=items==null?List.of():items;redeemReward=Boolean.TRUE.equals(redeemReward); }
     }
     public enum PaymentMethod { Cash, COD, VNPay, Momo }

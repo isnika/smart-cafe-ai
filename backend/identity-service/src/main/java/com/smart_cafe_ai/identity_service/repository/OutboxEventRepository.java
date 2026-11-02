@@ -14,6 +14,11 @@ import org.springframework.data.repository.query.Param;
 
 @Repository
 public interface OutboxEventRepository extends JpaRepository<OutboxEvent, Long> {
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select e from OutboxEvent e where e.eventType in :types and e.status = :status "
+            + "and (e.nextRetryAt is null or e.nextRetryAt <= :now) order by e.id")
+    List<OutboxEvent> findReadyUserStatusEvents(@Param("types") List<String> types,
+            @Param("status") OutboxEvent.OutboxStatus status, @Param("now") LocalDateTime now, Pageable pageable);
     List<OutboxEvent> findByStatusOrderByCreatedAtAsc(OutboxEvent.OutboxStatus status);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

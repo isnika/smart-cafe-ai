@@ -47,7 +47,7 @@ class GoogleLoginTest {
         ReflectionTestUtils.setField(jwt, "secretKey", "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970");
         ReflectionTestUtils.setField(jwt, "accessTokenExpirationMs", 900000L);
         ReflectionTestUtils.setField(jwt, "refreshTokenExpirationMs", 604800000L);
-        auth = new AuthService(users, roles, refreshTokens, passwords, jwt, mock(OtpService.class), google);
+        auth = new AuthService(users, roles, refreshTokens, passwords, jwt, mock(OtpService.class), google, mock(UserStatusEvents.class));
         customer = Role.builder().id(1).name("Customer").build();
         request = new GoogleLoginRequest();
         request.setIdToken("google-token");

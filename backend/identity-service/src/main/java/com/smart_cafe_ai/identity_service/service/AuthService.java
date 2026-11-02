@@ -46,8 +46,9 @@ public class AuthService {
     private final JwtService jwtService;
     private final OtpService otpService;
     private final GoogleTokenVerifierService googleTokenVerifier;
+    private final UserStatusEvents statusEvents;
 
-    public AuthService(UserRepository userRepository, RoleRepository roleRepository, RefreshTokenRepository refreshTokenRepository, PasswordEncoder passwordEncoder, JwtService jwtService, OtpService otpService, GoogleTokenVerifierService googleTokenVerifier) {
+    public AuthService(UserRepository userRepository, RoleRepository roleRepository, RefreshTokenRepository refreshTokenRepository, PasswordEncoder passwordEncoder, JwtService jwtService, OtpService otpService, GoogleTokenVerifierService googleTokenVerifier, UserStatusEvents statusEvents) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.refreshTokenRepository = refreshTokenRepository;
@@ -55,6 +56,7 @@ public class AuthService {
         this.jwtService = jwtService;
         this.otpService = otpService;
         this.googleTokenVerifier = googleTokenVerifier;
+        this.statusEvents = statusEvents;
     }
 
     @Transactional
@@ -82,19 +84,25 @@ public class AuthService {
 
     @Transactional
     public ApiResponse<AuthResponse> verifyOtp(VerifyOtpRequest request) {
-        User user = userRepository.findByIdentifier(normalizeIdentifier(request.getPhoneEmail()))
+        User user = userRepository.findByIdentifierForUpdate(normalizeIdentifier(request.getPhoneEmail()))
                 .orElseThrow(() -> new RuntimeException("Tài khoản không tồn tại"));
+        if (user.getStatus() == UserStatus.Banned || user.getStatus() == UserStatus.Deactivated) {
+            return ApiResponse.error(user.getStatus() == UserStatus.Banned ? "ACCOUNT_BANNED" : "ACCOUNT_DEACTIVATED",
+                    "Tài khoản đã bị khóa hoặc vô hiệu hóa");
+        }
         String target = normalizeEmail(user.getEmail());
         boolean isValid = otpService.verifyOtp(target, request.getOtpCode(), OtpPurpose.Register, user.getId());
         if (!isValid) {
             return ApiResponse.error("OTP_INVALID", "Mã OTP không hợp lệ hoặc đã hết hạn");
         }
+        UserStatus previous = user.getStatus();
         if (user.getStatus() == UserStatus.Unverified) {
             user.setStatus(UserStatus.Active);
         }
         user.setEmailVerifiedAt(LocalDateTime.now());
         user.setLastLoginAt(LocalDateTime.now());
         user = userRepository.save(user);
+        statusEvents.changed(user, previous);
         return ApiResponse.success(issueTokens(user, null));
     }
 

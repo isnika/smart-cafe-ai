@@ -11,7 +11,7 @@ import static org.mockito.Mockito.*;
 class StoreOwnershipBoundaryTest {
     @Test void identityDoesNotPretendToAssignOrFilterStoreBranches() {
         var users=mock(UserRepository.class);var roles=mock(RoleRepository.class);
-        var service=new AdminUserService(users,roles,mock(PasswordEncoder.class));
+        var service=new AdminUserService(users,roles,mock(PasswordEncoder.class),mock(UserStatusEvents.class));
         var create=new AdminUserCreateRequest();create.setBranchId(1);
         var role=new AdminUserRoleRequest();role.setBranchId(1);
         assertEquals(400,assertThrows(ApiException.class,()->service.createUser(create)).getStatus().value());

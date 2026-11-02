@@ -48,7 +48,7 @@ class EngagementApiTest {
     @MockBean JavaMailSender mailSender;
 
     @BeforeEach void clean() {
-        for(String table:List.of("product_reviews","verified_purchases","voucher_redemptions","vouchers","loyalty_transactions","loyalty_cards","device_tokens","notifications","outbox_events","processed_events")) jdbc.update("DELETE FROM "+table);
+        for(String table:List.of("order_benefit_state","product_reviews","verified_purchases","voucher_redemptions","vouchers","loyalty_transactions","loyalty_cards","device_tokens","notifications","outbox_events","processed_events")) jdbc.update("DELETE FROM "+table);
     }
     private String token(String user,String role) {
         return Jwts.builder().subject(user).claim("role",role).claim("branch_id",1).expiration(Date.from(Instant.now().plusSeconds(3600)))
@@ -73,6 +73,7 @@ class EngagementApiTest {
         return result(mvc.perform(body(auth(post("/api/v1/vouchers"),"admin","Admin"),voucher(code,total))).andExpect(status().isCreated())).get("data");
     }
     @Test void loyaltyApisSupportAdjustmentRedemptionReplayAndOwnership() throws Exception {
+        // Existing loyalty endpoints continue to work independently of Order checkout.
         mvc.perform(get("/api/v1/loyalty/me")).andExpect(status().isUnauthorized());
         mvc.perform(auth(get("/api/v1/loyalty/me"),"customer","Customer")).andExpect(status().isOk()).andExpect(jsonPath("$.data.current_stamps").value(0));
         var adjustment=Map.of("user_id","customer","stamps",20,"note","Bù tem");
@@ -88,6 +89,29 @@ class EngagementApiTest {
         mvc.perform(auth(get("/api/v1/loyalty/me/transactions"),"other","Customer")).andExpect(jsonPath("$.meta.total").value(0));
         assertEquals(10,cards.findByUserId("customer").orElseThrow().currentStamps);
         assertEquals(1,outbox.count());
+    }
+    @Test void checkoutCompensationRestoresBenefitsAndBlocksLateCommands() throws Exception {
+        loyalty.adjust(new Adjustment("customer",20,"Opening balance"),"admin","balance");
+        createVoucher("CHECKOUT",10);
+        loyalty.redeem(new Redeem("customer",501L,"order:501:reward"));
+        voucherService.apply(new ApplyVoucher("CHECKOUT","customer",501L,1,com.smart_cafe_ai.engagement_service.model.Types.Fulfillment.Pickup,new java.math.BigDecimal("50000")));
+        var reverse=Map.of("user_id","customer","order_id",501);
+        mvc.perform(body(post("/api/v1/internal/benefits/reverse"),reverse)).andExpect(status().isUnauthorized());
+        for(int i=0;i<2;i++)mvc.perform(body(post("/api/v1/internal/benefits/reverse"),reverse).header("X-Service-Key","test-service-key"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("Reversed"));
+        assertEquals(20,cards.findByUserId("customer").orElseThrow().currentStamps);
+        assertEquals(0,vouchers.findByCodeIgnoreCase("CHECKOUT").orElseThrow().usedCount);
+        assertThrows(ApiException.class,()->loyalty.redeem(new Redeem("customer",501L,"order:501:reward")));
+        assertThrows(ApiException.class,()->voucherService.apply(new ApplyVoucher("CHECKOUT","customer",501L,1,com.smart_cafe_ai.engagement_service.model.Types.Fulfillment.Pickup,new java.math.BigDecimal("50000"))));
+        events.consume(completed(501,5011,1),null);
+        assertTrue(purchases.findById(5011L).isEmpty());
+        assertEquals(20,cards.findByUserId("customer").orElseThrow().currentStamps);
+    }
+    @Test void compensationBeforeAnyCommandPreventsLateTimeoutRequestFromSpendingStamps() throws Exception {
+        loyalty.adjust(new Adjustment("customer",10,"Opening balance"),"admin","balance");
+        mvc.perform(body(post("/api/v1/internal/benefits/reverse"),Map.of("user_id","customer","order_id",777)).header("X-Service-Key","test-service-key")).andExpect(status().isOk());
+        assertThrows(ApiException.class,()->loyalty.redeem(new Redeem("customer",777L,"order:777:reward")));
+        assertEquals(10,cards.findByUserId("customer").orElseThrow().currentStamps);
     }
     @Test void concurrentRedemptionsCannotSpendTheSameStamps() throws Exception {
         loyalty.adjust(new Adjustment("customer",10,"Initial"),"admin",null);
@@ -148,15 +172,17 @@ class EngagementApiTest {
         mvc.perform(auth(get("/api/v1/notifications/me").param("is_read","false"),"customer","Customer")).andExpect(jsonPath("$.meta.total").value(0));
     }
     @Test void cancellationAndRefundReverseLoyaltyAndVoucherOnlyOnce() throws Exception {
-        events.consume(completed(20,200,12),null);
+        // Checkout spends stamps earned on an earlier order, before this order completes.
+        events.consume(completed(19,190,12),null);
         loyalty.redeem(new Redeem("customer",20L,"reward-20"));
         createVoucher("REVERSE",1);
         mvc.perform(body(post("/api/v1/internal/vouchers/apply"),Map.of("code","REVERSE","user_id","customer","order_id",20,"branch_id",1,"fulfillment_type","Pickup","order_amount",100000)).header("X-Service-Key","test-service-key")).andExpect(status().isCreated());
+        events.consume(completed(20,200,12),null);
         var cancel=event("order.cancelled"); cancel.put("order_id",20); events.consume(cancel,null);
         var refund=event("payment.refunded"); refund.putArray("allocations").addObject().put("order_id",20).put("reverse_loyalty",true); events.consume(refund,null);
-        assertEquals(0,cards.findByUserId("customer").orElseThrow().currentStamps);
+        assertEquals(12,cards.findByUserId("customer").orElseThrow().currentStamps);
         assertEquals(0,vouchers.findByCodeIgnoreCase("REVERSE").orElseThrow().usedCount);
-        assertEquals(4,transactions.count());
+        assertEquals(5,transactions.count());
     }
     @Test void invalidEventsRollBackAllEffectsAndGuestsDoNotEarn() {
         var invalid=completed(30,300,51);

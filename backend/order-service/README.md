@@ -4,8 +4,8 @@ Triển khai theo 20 endpoint trong sheet **4. Order** của `SmartAPI.xlsx` và
 
 ## Chạy và tạo database
 
-1. Database mới: chạy `database/order/schema.sql` bằng MySQL 8. Schema này đã bao gồm migration 001.
-2. Database đã tạo từ `SmartCoffeeDT.sql`: chỉ chạy `database/order/migrations/001-order-integration-metadata.sql` **một lần**. Không chạy lại schema trên database hiện có.
+1. Database mới: chạy `database/order/schema.sql` bằng MySQL 8. Schema này đã bao gồm migration 001, 002 và 003.
+2. Database đã tạo từ `SmartCoffeeDT.sql`: áp dụng các migration 001, 002, 003 trong `database/order/migrations/` còn thiếu theo thứ tự. Không chạy lại schema trên database hiện có.
 3. Cấu hình datasource, JWT và kết nối nội bộ dưới đây; sau đó chạy:
 
 ```powershell
@@ -19,8 +19,9 @@ Java target 17; module dùng constructor Java tường minh, không cần annota
 | `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` | MySQL Order; cấu hình credential thực tế trên máy |
 | `JWT_SECRET` | Cùng secret ký access token của Identity/Gateway |
 | `ORDER_INTERNAL_API_KEY` | Khóa bảo vệ API nội bộ Order; bắt buộc cấu hình |
-| `STORE_INTERNAL_BASE_URL` | URL **kết thúc tại `/internal`** của Store, ví dụ `http://localhost:8083/internal`; hiện chưa có implementation Backend 2 |
-| `STORE_INTERNAL_AUTH_HEADER`, `STORE_INTERNAL_AUTH_VALUE` | Header/credential Store; header mặc định `X-Service-Key` |
+| `STORE_INTERNAL_BASE_URL` | URL **kết thúc tại `/internal`** của Store, mặc định `http://localhost:8083/internal` |
+| `STORE_INTERNAL_API_KEY` | Khớp khóa API chi nhánh nội bộ Store; `STORE_INTERNAL_AUTH_VALUE` cũ được giữ làm fallback cấu hình |
+| `STORE_INTERNAL_AUTH_HEADER` | Header Store, mặc định `X-Service-Key` |
 | `CATALOG_INTERNAL_BASE_URL` | `http://localhost:8082/internal/catalog` |
 | `CATALOG_INTERNAL_API_KEY` | Khớp khóa nội bộ Catalog |
 | `IDENTITY_INTERNAL_BASE_URL` | `http://localhost:8081/api/v1/internal` |
@@ -31,6 +32,13 @@ Java target 17; module dùng constructor Java tường minh, không cần annota
 | `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USERNAME`, `RABBITMQ_PASSWORD`, `RABBITMQ_VHOST` | Giống cấu hình RabbitMQ các service hiện có |
 | `ORDER_EVENTS_PUBLISHER_ENABLED` | `true` |
 | `ORDER_EVENTS_CONSUMER_ENABLED` | `false` mặc định; bật sau khi chốt exchange/payload với Backend 2 |
+| `ORDER_IDENTITY_EVENTS_CONSUMER_ENABLED` | `true`; nhận trạng thái tài khoản từ Identity, độc lập với consumer Payment/Store |
+| `ENGAGEMENT_INTERNAL_BASE_URL`, `ENGAGEMENT_INTERNAL_API_KEY` | REST Engagement, mặc định URL `http://localhost:8087/api/v1/internal`; key phải khớp Engagement |
+| `ENGAGEMENT_RECOVERY_ENABLED` | `true`; phục hồi ưu đãi của checkout thất bại qua ledger |
+
+Luồng JWT và trạng thái tài khoản Identity–Order được mô tả tại [IDENTITY_ORDER_INTEGRATION.md](../IDENTITY_ORDER_INTEGRATION.md).
+
+Checkout voucher/đổi tem và cơ chế hoàn tác được mô tả tại [ORDER_ENGAGEMENT_INTEGRATION.md](../ORDER_ENGAGEMENT_INTEGRATION.md). `redeem_reward=true` miễn giá gốc một ly, topping vẫn tính tiền; `reward_item_index` tùy chọn để chọn dòng từ 0, mặc định chọn giá gốc dương thấp nhất.
 
 Gateway đã có route `/api/v1/carts/**`, `/api/v1/orders/**` tới `ORDER-SERVICE`. Các service REST nội bộ gọi trực tiếp qua URL cấu hình; `/internal/**` bị Gateway hiện có chặn, kể cả discovery aliases. Không gọi API nội bộ thông qua Gateway. Client Web/Mobile/POS dùng cổng Gateway 8080; Order tự kiểm tra JWT, không tin các header role/user/branch do client gửi.
 
@@ -93,7 +101,7 @@ Checkout khóa giỏ; tạo order/items/history/outbox và chuyển Converted tr
 
 ## NOTE bàn giao Backend 2
 
-Các URL Store sau là **contract đề xuất**, chưa tồn tại trong source hiện tại. Cần Backend 2 triển khai hoặc thống nhất đường dẫn rồi sửa adapter `HttpOrderDependencies`. Tất cả trả envelope `{"success":true,"data":...}` và dùng credential nội bộ; không trả dữ liệu giả khi service lỗi.
+Store đã có `GET /internal/branches/{id}` và kiểm tra `X-Service-Key`. Các URL phiên bàn/hồ sơ nhân viên dưới đây vẫn cần đối chiếu với Backend 2; BranchResponse hiện chưa có tọa độ để kiểm tra bán kính Delivery. Tất cả cần trả envelope `{"success":true,"data":...}` và dùng credential nội bộ; không trả dữ liệu giả khi service lỗi. Xem [COMMERCE_REAL_INTEGRATION.md](../COMMERCE_REAL_INTEGRATION.md) để chạy và kiểm tra bằng MySQL/REST thật.
 
 | Store endpoint (sau STORE_INTERNAL_BASE_URL) | data tối thiểu |
 |---|---|
@@ -137,7 +145,7 @@ Outbox dùng persistent messages, mandatory routing + publisher confirm; mất k
 
 ## Phần còn thiếu ngoài Order
 
-**Engagement thuộc Backend 1**, chưa có voucher validation/redemption/loyalty trong source hiện tại. Request có voucher_code hoặc redeem_reward=true trả 503 ENGAGEMENT_INTEGRATION_NOT_CONFIGURED trước khi tạo đơn. Không nhận discount hay reward item tùy ý, không trừ tem giả. Cần triển khai command idempotent giữ/áp voucher, redeem/reverse tem và chính sách bù trừ trước khi bật tính năng. Catalog resolve hiện có cũng cần cấu hình Store verifier của Catalog để nhận chi nhánh.
+**Engagement thuộc Backend 1**, đã nối REST áp voucher/đổi tem và bổ sung ledger hoàn tác checkout. Request có voucher_code/redeem_reward yêu cầu khách có tài khoản và khóa nội bộ hợp lệ; thiếu cấu hình trả 503 ENGAGEMENT_INTEGRATION_NOT_CONFIGURED. Không nhận discount do client tự nhập. Xem ORDER_ENGAGEMENT_INTEGRATION.md để áp dụng migration 003 của hai service và kiểm tra luồng thật. Catalog resolve vẫn cần Store có chi nhánh hợp lệ.
 
 Migration 001 bổ sung request_hash/request_owner để bảo vệ replay và bảng local Order_Payment_Entries để cộng dồn/dedupe allocations. Đơn có trước migration chưa có allocation ledger; cần backfill từ Payment trước khi replay refund/payment lịch sử. Hai cột request metadata null của đơn cũ không được replay như yêu cầu mới.
 

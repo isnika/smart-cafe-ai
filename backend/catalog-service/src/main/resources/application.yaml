@@ -62,10 +62,9 @@ jwt:
 
 app:
   store:
-    # Configure only after agreeing the Store internal URL/auth with backend 2. No mock fallback.
-    internal-base-url: ${STORE_INTERNAL_BASE_URL:}
-    auth-header: ${STORE_INTERNAL_AUTH_HEADER:}
-    auth-value: ${STORE_INTERNAL_AUTH_VALUE:}
+    internal-base-url: ${STORE_INTERNAL_BASE_URL:http://localhost:8083/internal}
+    auth-header: ${STORE_INTERNAL_AUTH_HEADER:X-Service-Key}
+    auth-value: ${STORE_INTERNAL_API_KEY:${STORE_INTERNAL_AUTH_VALUE:}}
   internal-api-key: ${CATALOG_INTERNAL_API_KEY:}
   catalog-events:
     publisher-enabled: ${CATALOG_EVENTS_PUBLISHER_ENABLED:true}

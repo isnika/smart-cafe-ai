@@ -15,8 +15,11 @@ public class EngagementEventService {
     private final LoyaltyService loyalty;
     private final VoucherService vouchers;
     private final CustomerNotificationService notifications;
-    public EngagementEventService(ProcessedEventRepository processed,VerifiedPurchaseRepository purchases,LoyaltyService loyalty,VoucherService vouchers,CustomerNotificationService notifications) {
+    private final OrderBenefitService benefits;
+    private final OrderBenefitGuard benefitGuard;
+    public EngagementEventService(ProcessedEventRepository processed,VerifiedPurchaseRepository purchases,LoyaltyService loyalty,VoucherService vouchers,CustomerNotificationService notifications,OrderBenefitService benefits,OrderBenefitGuard benefitGuard) {
         this.processed=processed; this.purchases=purchases; this.loyalty=loyalty; this.vouchers=vouchers; this.notifications=notifications;
+        this.benefits=benefits;this.benefitGuard=benefitGuard;
     }
     @Transactional
     public void consume(JsonNode envelope,String headerType) {
@@ -38,7 +41,7 @@ public class EngagementEventService {
         try(var ignored=MDC.putCloseable("trace_id",correlation)) {
             switch(type) {
                 case "order.completed" -> completed(body,envelope);
-                case "order.cancelled" -> { Long order=number(body,"order_id"); loyalty.reverse(order); vouchers.reverse(order); }
+                case "order.cancelled" -> benefits.reverse(number(body,"order_id"),user(body));
                 case "order.status_changed" -> {
                     String user=user(body); Long order=number(body,"order_id"); String status=requiredText(body,"status",50);
                     notifications.inApp(user,"order_status","Cập nhật đơn hàng","Đơn hàng #"+order+": "+status,Map.of("order_id",order,"status",status));
@@ -53,6 +56,7 @@ public class EngagementEventService {
     private void completed(JsonNode body,JsonNode envelope) {
         String user=user(body); if(user==null) return;
         Long order=number(body,"order_id"); int branch=integer(body,"branch_id"); Instant purchasedAt=timestamp(body,envelope);
+        if(!benefitGuard.completed(order,user)) return;
         JsonNode items=array(body,"items"); if(items.isEmpty()) throw ApiException.invalid("order.completed cần items.");
         Set<Long> seen=new HashSet<>(); int stamps=0;
         for(var item:items) {
@@ -75,7 +79,7 @@ public class EngagementEventService {
     }
     private void refunded(JsonNode body) {
         for(var allocation:array(body,"allocations")) {
-            Long order=number(allocation,"order_id"); if(bool(allocation,"reverse_loyalty")) { loyalty.reverse(order); vouchers.reverse(order); }
+            Long order=number(allocation,"order_id"); if(bool(allocation,"reverse_loyalty")) benefits.reverse(order,user(allocation));
         }
     }
     private void paymentFailed(JsonNode body) {

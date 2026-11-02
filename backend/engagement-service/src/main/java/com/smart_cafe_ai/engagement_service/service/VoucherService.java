@@ -25,7 +25,8 @@ public class VoucherService {
     }
     private final VoucherRepository vouchers;
     private final VoucherRedemptionRepository redemptions;
-    public VoucherService(VoucherRepository vouchers,VoucherRedemptionRepository redemptions) { this.vouchers=vouchers; this.redemptions=redemptions; }
+    private final OrderBenefitGuard benefitGuard;
+    public VoucherService(VoucherRepository vouchers,VoucherRedemptionRepository redemptions,OrderBenefitGuard benefitGuard) { this.vouchers=vouchers; this.redemptions=redemptions;this.benefitGuard=benefitGuard; }
     @Transactional(readOnly=true)
     public ApiResponse list(VoucherStatus status,Integer branch,int page,int size,Actor actor) {
         Integer scope=managerBranch(actor,branch,false);
@@ -54,6 +55,7 @@ public class VoucherService {
     }
     @Transactional
     public Applied apply(ApplyVoucher request) {
+        benefitGuard.requireNotReversed(request.orderId(),request.userId());
         checkContext(request.branchId(),request.fulfillmentType(),request.orderAmount(),true);
         var v=vouchers.lockByCode(request.code().trim()).orElseThrow(()->ApiException.business("Voucher không tồn tại."));
         String hash=hash(request);
@@ -64,6 +66,7 @@ public class VoucherService {
             if(r.status==RedemptionStatus.Reversed) throw ApiException.conflict("Voucher của đơn hàng đã được hoàn tác.");
             return new Applied(r,true);
         }
+        benefitGuard.requireActive(request.orderId(),request.userId());
         String reason=reason(v,request.userId(),request.branchId(),request.fulfillmentType(),request.orderAmount());
         if(reason!=null) throw ApiException.business(reason);
         var r=new VoucherRedemption(); r.voucherId=v.id; r.userId=request.userId(); r.orderId=request.orderId(); r.discountAmount=discount(v,request.orderAmount()); r.requestHash=hash;

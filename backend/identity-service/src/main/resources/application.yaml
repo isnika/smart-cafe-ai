@@ -64,6 +64,9 @@ cloudinary:
   api-secret: ${CLOUDINARY_API_SECRET:}
 
 app:
+  identity-events:
+    publisher-enabled: ${IDENTITY_EVENTS_PUBLISHER_ENABLED:true}
+    publish-delay-ms: ${IDENTITY_EVENTS_PUBLISH_DELAY_MS:1000}
   internal-api-key: ${IDENTITY_INTERNAL_API_KEY:}
   contact-change:
     resend-cooldown-seconds: ${CONTACT_OTP_RESEND_COOLDOWN_SECONDS:60}

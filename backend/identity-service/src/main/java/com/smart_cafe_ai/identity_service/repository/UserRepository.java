@@ -32,6 +32,10 @@ public interface UserRepository extends JpaRepository<User, String>, JpaSpecific
     @Query("SELECT u FROM User u WHERE LOWER(u.email) = LOWER(:identifier) OR u.phone = :identifier")
     Optional<User> findByIdentifier(@Param("identifier") String identifier);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT u FROM User u WHERE LOWER(u.email) = LOWER(:identifier) OR u.phone = :identifier")
+    Optional<User> findByIdentifierForUpdate(@Param("identifier") String identifier);
+
     boolean existsByEmail(String email);
     boolean existsByPhone(String phone);
     boolean existsByEmailIgnoreCase(String email);
