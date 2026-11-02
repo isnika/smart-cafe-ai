@@ -1,12 +1,13 @@
 import type {
   AIForecast, AIRecommendation, ChatMessage, ChatSession, Ingredient, Inventory, InventoryLog, Invoice, InvoiceItem, InvoiceRequestInput, MenuProduct, OrderDetail, Payment, PaymentOrderAllocation,
-  ProductReviewView, ProductVariant, Table, TableSession,
+  ProductReviewView, ProductVariant, Schedule, Shift, StaffProfile, Table, TableSession, Timekeeping,
 } from '@/shared/types';
 import { BRANCH_ID, seedProducts, seedTables, type SeedProduct } from './fixtures';
 import { buildForecastSeed } from './forecast-seed';
 import { buildInventorySeed } from './inventory-seed';
 import { buildRecommendationSeed } from './recommendation-seed';
 import { seedReviews } from './review-seed';
+import { buildWorkforceSeed } from './workforce-seed';
 
 export { BRANCH_ID };
 
@@ -43,10 +44,15 @@ export interface MockDb {
   /** Chat AI cho khách (Intelligence service): phiên + tin nhắn, giữ trong RAM nên F5 là mất (reset cùng resetDb). */
   chatSessions: ChatSession[];
   chatMessages: ChatMessage[];
+  /** Workforce (Store service): ca, hồ sơ nhân viên, lịch làm và bản ghi chấm công. Nằm trong RAM, reset cùng resetDb. */
+  shifts: Shift[];
+  staffProfiles: StaffProfile[];
+  schedules: Schedule[];
+  timekeepings: Timekeeping[];
   seq: {
     order: number; item: number; option: number; history: number; session: number;
     payment: number; allocation: number; invoice: number; invoiceItem: number; inventoryLog: number;
-    chatSession: number; chatMessage: number;
+    chatSession: number; chatMessage: number; timekeeping: number;
   };
 }
 
@@ -54,6 +60,7 @@ export const availKey = (branchId: number, variantId: number) => `${branchId}:${
 
 const createDb = (): MockDb => {
   const inv = buildInventorySeed();
+  const wf = buildWorkforceSeed();
   return {
     products: seedProducts(),
     tables: seedTables(),
@@ -72,9 +79,13 @@ const createDb = (): MockDb => {
     reviews: seedReviews(),
     chatSessions: [],
     chatMessages: [],
+    shifts: wf.shifts,
+    staffProfiles: wf.staffProfiles,
+    schedules: wf.schedules,
+    timekeepings: [],
     seq: {
       order: 0, item: 0, option: 0, history: 0, session: 0, payment: 0, allocation: 0, invoice: 0, invoiceItem: 0,
-      inventoryLog: inv.logs.length, chatSession: 0, chatMessage: 0,
+      inventoryLog: inv.logs.length, chatSession: 0, chatMessage: 0, timekeeping: 0,
     },
   };
 };

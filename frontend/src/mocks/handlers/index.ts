@@ -12,5 +12,6 @@ import { inventoryHandlers } from './inventory';
 import { reviewHandlers } from './review';
 import { intelligenceHandlers } from './intelligence';
 import { chatHandlers } from './chat';
+import { workforceHandlers } from './workforce';
 
-export const handlers = [...cashierHandlers, ...catalogHandlers, ...storeHandlers, ...orderHandlers, ...identityHandlers, ...orderReadHandlers, ...authFlowHandlers, ...branchHandlers, ...voucherHandlers, ...paymentHandlers, ...inventoryHandlers, ...reviewHandlers, ...intelligenceHandlers, ...chatHandlers];
+export const handlers = [...cashierHandlers, ...catalogHandlers, ...storeHandlers, ...orderHandlers, ...identityHandlers, ...orderReadHandlers, ...authFlowHandlers, ...branchHandlers, ...voucherHandlers, ...paymentHandlers, ...inventoryHandlers, ...reviewHandlers, ...intelligenceHandlers, ...chatHandlers, ...workforceHandlers];

@@ -5,6 +5,7 @@ import { MOCK_OTP, authFlowConfig, resetAuthFlowMock } from './handlers/auth-flo
 import { bumpVersion, db, resetDb } from './db';
 import { seedDemoOrders } from './seed';
 import { mockConfig } from './utils';
+import { workforceConfig } from './handlers/workforce';
 
 export const worker = setupWorker(...handlers);
 
@@ -39,6 +40,7 @@ export async function enableMocking(): Promise<void> {
       seedDemoOrders,
       bumpVersion,
       config: mockConfig,
+      workforce: workforceConfig, // vd: __mock.workforce.enforceWindow = true
       auth: {
         accounts: MOCK_ACCOUNTS, // xem/sửa tài khoản (đổi status = 'Banned' để test...)
         otp: MOCK_OTP,

@@ -29,6 +29,7 @@ import ManagerDashboardPage from "@/features/manager-dashboard/pages/ManagerDash
 import InventoryPage from "@/features/manager-inventory/pages/InventoryPage";
 import ManagerForecastPage from "@/features/manager-forecast/pages/ManagerForecastPage";
 import StaffDashboardPage from "@/features/staff-dashboard/pages/StaffDashboardPage";
+import StaffCheckinPage from "@/features/staff-checkin/pages/StaffCheckinPage";
 import PlaceholderPage from "@/pages/PlaceholderPage";
 
 const P = PlaceholderPage;
@@ -124,7 +125,7 @@ export const routes: RouteObject[] = [
           },
           { path: PATHS.staffQueue, element: <OrderQueuePage /> },
           { path: PATHS.staffOrder, element: <OrderDetailPage /> },
-          { path: PATHS.staffCheckin, element: <P title="Check-in QR" /> },
+          { path: PATHS.staffCheckin, element: <StaffCheckinPage /> },
         ],
       },
     ],
