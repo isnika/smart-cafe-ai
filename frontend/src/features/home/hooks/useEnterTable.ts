@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { to } from "@/app/routes";
-import { isApiError, storeApi } from "@/shared/api";
+import { openDineInSession, describeSessionError } from "@/features/dine-in/session";
 
 /**
  * Vào bàn bằng mã (nhập tay hoặc quét QR): chỉ điều hướng khi server mở được phiên cho mã đó.
@@ -15,12 +15,12 @@ export function useEnterTable() {
   return useCallback(
     async (code: string): Promise<string | null> => {
       try {
-        const session = await storeApi.openTableSession({ qrCode: code });
+        const session = await openDineInSession(code);
         qc.setQueryData(["dine-in", "session", code], session);
         navigate(to.dineInTable(code));
         return null;
       } catch (err) {
-        return isApiError(err) ? err.message : "Không kiểm tra được mã bàn. Vui lòng thử lại.";
+        return describeSessionError(err).message;
       }
     },
     [qc, navigate],

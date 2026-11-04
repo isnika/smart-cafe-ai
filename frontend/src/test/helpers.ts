@@ -1,10 +1,11 @@
 import { useAuthStore } from '@/features/auth/store';
 import { usePlacedOrders } from '@/features/dine-in/placed-orders';
-import { useDineInCartStore } from '@/features/dine-in/store';
+import { resetCartInternals, useDineInCartStore } from '@/features/dine-in/store';
+import { openDineInSession } from '@/features/dine-in/session';
 import { resetSubmitState } from '@/features/dine-in/submit';
 import { resetDb } from '@/mocks/db';
 import { mockConfig } from '@/mocks/utils';
-import { storeApi } from '@/shared/api';
+import { resetGuestMemory } from '@/shared/api/guest';
 import type { NewCartLine } from '@/features/dine-in/cart';
 import type { User } from '@/shared/types';
 
@@ -24,7 +25,13 @@ export function resetWorld(): void {
   mockConfig.latencyMs = 0;
   mockConfig.enforceAuth = false;
   resetSubmitState();
-  useDineInCartStore.setState({ tableSessionId: null, tableCode: null, sessionCode: null, lines: [] });
+  resetCartInternals();
+  resetGuestMemory();
+  useDineInCartStore.setState({
+    tableSessionId: null, tableCode: null, sessionCode: null, branchId: null,
+    cartId: null, lines: [], serverSubTotal: null, pending: 0, error: null,
+  });
+  if (typeof localStorage !== 'undefined') localStorage.clear();
   usePlacedOrders.setState({ orders: [] });
   if (typeof sessionStorage !== 'undefined') sessionStorage.clear();
   useAuthStore.setState({ status: 'anonymous', accessToken: null, user: null, roleName: null });
@@ -32,8 +39,9 @@ export function resetWorld(): void {
 
 /** Mở phiên bàn thật qua MSW rồi gắn vào giỏ — giống DineInTablePage làm khi vào /dine-in/table/:code. */
 export async function startTableSession(code = TABLE_CODE): Promise<number> {
-  const session = await storeApi.openTableSession({ qrCode: code });
-  useDineInCartStore.getState().bindSession(session.id, code, session.sessionCode);
+  const session = await openDineInSession(code);
+  useDineInCartStore.getState().bindSession(session.id, code, session.sessionCode, session.branchId);
+  await useDineInCartStore.getState().loadCart(); // chờ nạp giỏ server (rỗng) xong để test không race
   return session.id;
 }
 

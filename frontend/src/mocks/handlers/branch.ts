@@ -3,7 +3,7 @@ import type { Branch } from '@/shared/types';
 import { BRANCH_ID, DELIVERY_FEE } from '../fixtures';
 import { fail, guarded, url } from '../utils';
 
-const BRANCH: Branch = {
+export const MOCK_BRANCH: Branch = {
   id: BRANCH_ID,
   code: 'B1',
   name: 'Chi nhánh 1 (mock)',
@@ -20,8 +20,8 @@ export const branchHandlers = [
   http.get(
     url('/store/branches/:id'),
     guarded(({ params }) => {
-      if (Number(params.id) !== BRANCH.id) fail(404, 'BRANCH_NOT_FOUND', `Không có chi nhánh ${String(params.id)}`);
-      return HttpResponse.json(BRANCH);
+      if (Number(params.id) !== MOCK_BRANCH.id) fail(404, 'BRANCH_NOT_FOUND', `Không có chi nhánh ${String(params.id)}`);
+      return HttpResponse.json(MOCK_BRANCH);
     }),
   ),
 ];

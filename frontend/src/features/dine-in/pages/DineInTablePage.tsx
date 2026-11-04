@@ -5,7 +5,7 @@ import { PATHS } from "@/app/routes";
 import { formatVnd } from "@/shared/lib";
 import type { MenuProduct } from "@/shared/types";
 import { Badge, Button, Skeleton } from "@/shared/ui";
-import { calcSubTotal, countItems } from "../cart";
+import { countItems } from "../cart";
 import { CartDrawer } from "../components/CartDrawer";
 import { CategoryTabs } from "../components/CategoryTabs";
 import { ProductCard } from "../components/ProductCard";
@@ -15,7 +15,9 @@ import { DINE_IN_BRANCH_ID } from "../config";
 import { useCategories, useMenuProducts } from "../hooks/useMenu";
 import { useTableSession } from "../hooks/useTableSession";
 import { useOnlineCartStore } from "@/features/online-order/store";
-import { useDineInCartStore } from "../store";
+import { selectSubTotal, useDineInCartStore } from "../store";
+import { CartErrorAlert } from "../components/CartErrorAlert";
+import { describeSessionError } from "../session";
 import { isValidTableCode } from "../validators";
 
 const BackToStart = () => (
@@ -33,13 +35,14 @@ export default function DineInTablePage() {
 
   const sessionId = session.data?.id;
   const sessionCode = session.data?.sessionCode;
+  const branchId = session.data?.branchId;
   useEffect(() => {
     if (sessionId !== undefined) {
-      bindSession(sessionId, tableCode, sessionCode);
+      bindSession(sessionId, tableCode, sessionCode, branchId);
       // Đã ngồi vào bàn thì giỏ hiện hành là giỏ Dine-in (giỏ Online giữ nguyên nhưng không còn là chế độ đang dùng).
       useOnlineCartStore.getState().setFulfillment(null);
     }
-  }, [sessionId, sessionCode, tableCode, bindSession]);
+  }, [sessionId, sessionCode, tableCode, branchId, bindSession]);
 
   if (!isValidTableCode(tableCode)) {
     return (
@@ -67,14 +70,13 @@ export default function DineInTablePage() {
   }
 
   if (session.isError) {
-    const err = session.error;
-    const retryable = !isApiError(err) || err.status === 0 || err.status >= 500;
+    const info = describeSessionError(session.error);
     return (
       <Shell>
         <StateMessage
-          title={isApiError(err) && err.is("TABLE_NOT_FOUND") ? "Không nhận diện được mã bàn" : "Không thể mở bàn"}
+          title={info.title}
           action={
-            retryable ? (
+            info.retryable ? (
               <Button variant="outline" onClick={() => void session.refetch()}>
                 Thử lại
               </Button>
@@ -83,7 +85,17 @@ export default function DineInTablePage() {
             )
           }
         >
-          {isApiError(err) ? err.message : "Đã có lỗi xảy ra. Vui lòng thử lại."}
+          {info.message}
+        </StateMessage>
+      </Shell>
+    );
+  }
+
+  if (session.data.status === "Payment_Pending") {
+    return (
+      <Shell>
+        <StateMessage title="Bàn đang chờ thanh toán" action={<BackToStart />}>
+          Bàn đã yêu cầu tính tiền nên không thể gọi thêm món. Vui lòng liên hệ nhân viên nếu cần hỗ trợ.
         </StateMessage>
       </Shell>
     );
@@ -121,7 +133,8 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 function MenuView() {
   const categories = useCategories();
-  const products = useMenuProducts(DINE_IN_BRANCH_ID);
+  const branchId = useDineInCartStore((s) => s.branchId) ?? DINE_IN_BRANCH_ID;
+  const products = useMenuProducts(branchId);
   const lines = useDineInCartStore((s) => s.lines);
   const addLine = useDineInCartStore((s) => s.addLine);
 
@@ -130,6 +143,7 @@ function MenuView() {
   const [cartOpen, setCartOpen] = useState(false);
   const navigate = useNavigate();
 
+  const subTotal = useDineInCartStore(selectSubTotal); // pricing◇ từ server
   const itemCount = countItems(lines);
   const visible = (products.data ?? []).filter(
     (p) => p.price !== null && (categoryId === null || p.categoryId === categoryId),
@@ -144,6 +158,7 @@ function MenuView() {
         </div>
       </header>
 
+      <CartErrorAlert className="m-4 mb-0" />
       {categories.data && <CategoryTabs categories={categories.data} activeId={categoryId} onChange={setCategoryId} />}
       {categories.isError && (
         <p className="px-4 py-3 text-caption text-gray-500">Không tải được danh mục, đang hiển thị tất cả món.</p>
@@ -188,7 +203,7 @@ function MenuView() {
         >
           <div>
             <div className="text-caption text-gray-500">{itemCount} sản phẩm đã chọn</div>
-            <div className="text-h4 text-primary-600">{formatVnd(calcSubTotal(lines))}</div>
+            <div className="text-h4 text-primary-600">{formatVnd(subTotal)}</div>
           </div>
           <Button size="lg" onClick={() => setCartOpen(true)}>
             Xem giỏ hàng
@@ -200,7 +215,7 @@ function MenuView() {
         product={picking}
         onClose={() => setPicking(null)}
         onAdd={(line, quantity) => {
-          addLine(line, quantity);
+          void addLine(line, quantity);
           setPicking(null);
         }}
       />

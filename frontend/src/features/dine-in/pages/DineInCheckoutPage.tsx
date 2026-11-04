@@ -5,11 +5,11 @@ import { PATHS, to } from "@/app/routes";
 import { cn } from "@/shared/lib/cn";
 import { formatVnd } from "@/shared/lib";
 import { Button } from "@/shared/ui";
-import { calcSubTotal, countItems, describeLine, lineTotal, lineUnitTotal } from "../cart";
+import { countItems, describeLine, lineTotal, lineUnitTotal } from "../cart";
 import { PageHeader } from "../components/PageHeader";
 import { StickyActionBar } from "../components/StickyActionBar";
 import { useSubmitDineInOrder } from "../hooks/useSubmitOrder";
-import { useDineInCartStore } from "../store";
+import { selectSubTotal, useDineInCartStore } from "../store";
 import { MAX_NOTE_LENGTH } from "../submit";
 import { useStartOnlinePayment } from "@/features/payment/hooks/useStartOnlinePayment";
 
@@ -33,7 +33,7 @@ export default function DineInCheckoutPage() {
   // Sau khi đặt thành công giỏ bị xoá → giữ trang trống thay vì nháy "giỏ trống" trước khi chuyển trang.
   const [done, setDone] = useState(false);
 
-  const subTotal = calcSubTotal(lines);
+  const subTotal = useDineInCartStore(selectSubTotal); // pricing◇ từ server
 
   async function onConfirm() {
     const order = await submit(note);

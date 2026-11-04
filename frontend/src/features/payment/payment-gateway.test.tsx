@@ -35,7 +35,9 @@ async function arrive() {
   const r = renderApp(`/dine-in/table/${TABLE_CODE}`);
   await screen.findByText('Smart Cafe QR Ordering');
   await waitFor(() => expect(useDineInCartStore.getState().sessionCode).not.toBeNull());
-  act(() => useDineInCartStore.getState().addLine(latte, 2));
+  await act(async () => {
+    await useDineInCartStore.getState().addLine(latte, 2);
+  });
   await act(() => r.router.navigate('/dine-in/checkout'));
   return r;
 }

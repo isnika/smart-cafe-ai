@@ -3,11 +3,12 @@ import { Link, useNavigate } from "react-router-dom";
 import { PATHS, to } from "@/app/routes";
 import { formatVnd } from "@/shared/lib";
 import { Button } from "@/shared/ui";
-import { calcSubTotal, countItems } from "../cart";
+import { countItems } from "../cart";
 import { CartLineCard } from "../components/CartLineCard";
 import { PageHeader } from "../components/PageHeader";
 import { StickyActionBar } from "../components/StickyActionBar";
-import { useDineInCartStore } from "../store";
+import { selectSubTotal, useDineInCartStore } from "../store";
+import { CartErrorAlert } from "../components/CartErrorAlert";
 
 /** Giỏ hàng tại bàn. Giỏ gắn với phiên bàn nên khi chưa quét QR thì chỉ hiện hướng dẫn. */
 export default function DineInCartPage() {
@@ -16,7 +17,8 @@ export default function DineInCartPage() {
   const sessionId = useDineInCartStore((s) => s.tableSessionId);
   const navigate = useNavigate();
 
-  const subTotal = calcSubTotal(lines);
+  const subTotal = useDineInCartStore(selectSubTotal); // pricing◇ từ server
+  const busy = useDineInCartStore((s) => s.pending > 0);
   const hasTable = sessionId !== null && tableCode;
 
   return (
@@ -46,6 +48,7 @@ export default function DineInCartPage() {
             Tại quán{tableCode ? ` · ${tableCode}` : ""}
           </div>
 
+          <CartErrorAlert />
           <ul className="space-y-3" aria-label="Món đã chọn">
             {lines.map((l) => (
               <CartLineCard key={l.key} line={l} />
@@ -69,7 +72,7 @@ export default function DineInCartPage() {
           </section>
 
           <StickyActionBar total={formatVnd(subTotal)}>
-            <Button size="lg" onClick={() => navigate(PATHS.dineInCheckout)}>
+            <Button size="lg" disabled={busy} onClick={() => navigate(PATHS.dineInCheckout)}>
               Tiến hành đặt hàng
             </Button>
           </StickyActionBar>

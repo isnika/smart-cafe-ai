@@ -1,8 +1,9 @@
 import { Coffee, ShoppingBag, Trash2 } from "lucide-react";
 import { formatVnd } from "@/shared/lib";
 import { Button, Modal } from "@/shared/ui";
-import { calcSubTotal, countItems, lineTotal, type DineInCartLine } from "../cart";
-import { useDineInCartStore } from "../store";
+import { countItems, lineTotal, type DineInCartLine } from "../cart";
+import { selectSubTotal, useDineInCartStore } from "../store";
+import { CartErrorAlert } from "./CartErrorAlert";
 import { QuantityStepper } from "./QuantityStepper";
 
 interface Props {
@@ -23,8 +24,9 @@ export function CartDrawer({ open, onClose, onCheckout }: Props) {
   const decrement = useDineInCartStore((s) => s.decrement);
   const removeLine = useDineInCartStore((s) => s.removeLine);
 
+  const busy = useDineInCartStore((s) => s.pending > 0);
   const itemCount = countItems(lines);
-  const subTotal = calcSubTotal(lines);
+  const subTotal = useDineInCartStore(selectSubTotal); // pricing◇ từ server
 
   return (
     <Modal
@@ -46,12 +48,17 @@ export function CartDrawer({ open, onClose, onCheckout }: Props) {
               <Button variant="outline" onClick={onClose}>
                 Chọn thêm
               </Button>
-              {onCheckout && <Button onClick={onCheckout}>Tiến hành đặt hàng</Button>}
+              {onCheckout && (
+                <Button onClick={onCheckout} disabled={busy}>
+                  Tiến hành đặt hàng
+                </Button>
+              )}
             </div>
           </div>
         )
       }
     >
+      <CartErrorAlert className="mb-3" />
       {lines.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-8 text-center text-gray-500">
           <ShoppingBag className="size-10" aria-hidden />

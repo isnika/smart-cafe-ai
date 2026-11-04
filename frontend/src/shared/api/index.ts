@@ -1,4 +1,5 @@
 export { http, configureHttp, ApiError, isApiError, API_ERROR_CODES, buildQuery } from './http';
+export { getClientKey, guestHeaders, loadSessionCode, saveSessionCode, clearSessionCode } from './guest';
 export type { RequestOptions } from './http';
 
 export * as identityApi from './identity';

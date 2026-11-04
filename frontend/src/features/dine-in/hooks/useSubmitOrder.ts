@@ -1,16 +1,13 @@
 import { useCallback, useRef, useState } from 'react';
-import { isApiError } from '@/shared/api';
 import type { OrderDetail } from '@/shared/types';
+import { describeApiError } from '../errors';
 import { placeDineInOrder, SubmitOrderError } from '../submit';
 
-/** Thông báo cho khách; lỗi mạng / 5xx cho phép thử lại, lỗi nghiệp vụ (hết món...) thì cần quay lại giỏ. */
+/** Thông báo cho khách; lỗi mạng / 5xx cho phép thử lại, lỗi nghiệp vụ (409/422: hết món, phiên đóng…) thì cần quay lại giỏ. */
 export function describeSubmitError(err: unknown): { message: string; retryable: boolean } {
-  if (err instanceof SubmitOrderError) return { message: err.message, retryable: false };
-  if (isApiError(err)) {
-    const retryable = err.status === 0 || err.status >= 500 || err.is('NETWORK_ERROR');
-    return { message: err.message, retryable };
-  }
-  return { message: 'Đã có lỗi xảy ra. Vui lòng thử lại.', retryable: true };
+  if (err instanceof SubmitOrderError) return { message: err.message, retryable: err.code === 'NO_CART' };
+  const { message, retryable } = describeApiError(err);
+  return { message, retryable };
 }
 
 export function useSubmitDineInOrder() {

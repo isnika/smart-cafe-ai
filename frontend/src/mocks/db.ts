@@ -19,10 +19,30 @@ export interface MockInvoiceRecord {
   items: InvoiceItem[];
 }
 
+/** Giỏ QR server-side (spec "4. Order / Giỏ hàng"): một giỏ Active cho mỗi (phiên bàn, client key). */
+export interface MockCartItem {
+  id: number;
+  variantId: number;
+  quantity: number;
+  note: string | null;
+  options: { optionId: number; quantity: number }[];
+}
+export interface MockCart {
+  id: number;
+  branchId: number;
+  tableSessionId: number;
+  clientKey: string;
+  status: 'Active' | 'Converted' | 'Abandoned';
+  items: MockCartItem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface MockDb {
   products: SeedProduct[];
   tables: Table[];
   sessions: TableSession[];
+  carts: MockCart[];
   orders: OrderDetail[];
   payments: Payment[];
   allocations: PaymentOrderAllocation[];
@@ -52,7 +72,7 @@ export interface MockDb {
   seq: {
     order: number; item: number; option: number; history: number; session: number;
     payment: number; allocation: number; invoice: number; invoiceItem: number; inventoryLog: number;
-    chatSession: number; chatMessage: number; timekeeping: number;
+    chatSession: number; chatMessage: number; timekeeping: number; cart: number; cartItem: number;
   };
 }
 
@@ -65,6 +85,7 @@ const createDb = (): MockDb => {
     products: seedProducts(),
     tables: seedTables(),
     sessions: [],
+    carts: [],
     orders: [],
     payments: [],
     allocations: [],
@@ -85,7 +106,7 @@ const createDb = (): MockDb => {
     timekeepings: [],
     seq: {
       order: 0, item: 0, option: 0, history: 0, session: 0, payment: 0, allocation: 0, invoice: 0, invoiceItem: 0,
-      inventoryLog: inv.logs.length, chatSession: 0, chatMessage: 0, timekeeping: 0,
+      inventoryLog: inv.logs.length, chatSession: 0, chatMessage: 0, timekeeping: 0, cart: 0, cartItem: 0,
     },
   };
 };

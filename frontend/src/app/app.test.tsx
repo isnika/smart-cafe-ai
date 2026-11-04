@@ -6,7 +6,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { useDineInCartStore } from '@/features/dine-in/store';
 import { db } from '@/mocks/db';
 import { handlers } from '@/mocks/handlers';
-import { mockConfig, url } from '@/mocks/utils';
+import { envelopeError, mockConfig, url } from '@/mocks/utils';
 import { catalogApi } from '@/shared/api';
 import { latte, loginAs, resetWorld, TABLE_CODE } from '@/test/helpers';
 import { polyfillDialog, renderApp } from '@/test/renderApp';
@@ -127,7 +127,7 @@ describe('Checkout → xác nhận (Dine-in)', () => {
     const r = renderApp(`/dine-in/table/${TABLE_CODE}`);
     await screen.findByText('Smart Cafe QR Ordering');
     await waitFor(() => expect(useDineInCartStore.getState().tableSessionId).not.toBeNull());
-    act(() => useDineInCartStore.getState().addLine(latte, 2));
+    await act(async () => { await useDineInCartStore.getState().addLine(latte, 2); });
     await act(() => r.router.navigate('/dine-in/checkout'));
     return r;
   }
@@ -158,7 +158,7 @@ describe('Checkout → xác nhận (Dine-in)', () => {
   });
 
   it('API lỗi: hiện lỗi + thử lại, giỏ không bị xoá, không có đơn', async () => {
-    server.use(http.post(url('/orders-svc/orders'), () => HttpResponse.json({ message: 'Máy chủ đang bận' }, { status: 503 }), { once: true }));
+    server.use(http.post(url('/orders'), () => envelopeError(503, 'SERVICE_UNAVAILABLE', 'Máy chủ đang bận'), { once: true }));
     const { router } = await arrive();
     fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận đặt món' }));
     expect((await screen.findByRole('alert')).textContent).toContain('Máy chủ đang bận');
@@ -189,7 +189,7 @@ describe('Luồng đầy đủ: Home → bàn → đặt món → xác nhận �
     fireEvent.click(screen.getByRole('button', { name: 'Vào bàn' }));
     await screen.findByText('Smart Cafe QR Ordering');
     await waitFor(() => expect(useDineInCartStore.getState().tableSessionId).not.toBeNull());
-    act(() => useDineInCartStore.getState().addLine(latte, 1));
+    await act(async () => { await useDineInCartStore.getState().addLine(latte, 1); });
     await act(() => router.navigate('/cart'));
     fireEvent.click(await screen.findByRole('button', { name: 'Tiến hành đặt hàng' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận đặt món' }));
