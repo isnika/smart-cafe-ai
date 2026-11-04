@@ -75,6 +75,7 @@ export default function LoginPage() {
       if (isApiError(err) && err.code === "ACCOUNT_UNVERIFIED") {
         const id = normalizeIdentifier(identifier);
         try {
+          authFlowApi.holdCredentials(id, password); // /auth/otp/verify không trả token → cần để auto-login
           await authFlowApi.resendRegistrationOtp(id);
           startVerification(id, "register");
           navigate("/verify-otp");

@@ -1,5 +1,6 @@
 import { HttpResponse, delay, type HttpResponseResolver } from 'msw';
 import type { ApiErrorBody } from '@/shared/types';
+import { toSnakeKeys } from '@/shared/lib';
 
 /** Phải khớp BASE_URL trong shared/api/http.ts. */
 const API = (import.meta.env.VITE_API_BASE_URL ?? '/api').replace(/\/+$/, '');
@@ -31,18 +32,44 @@ export function fail(status: number, code: string, message: string): never {
 export const errorResponse = (status: number, code: string, message: string) =>
   HttpResponse.json<ApiErrorBody>({ message, code }, { status });
 
-/** Thêm latency giả + chuyển MockHttpError thành body lỗi đúng dạng ApiErrorBody. */
+// ── Contract spec v1 (SmartAPI): envelope + JSON snake_case ───────────
+// Dùng cho handler thuộc lát Identity/Catalog. Các service khác vẫn trả payload trần (camelCase).
+const traceId = () => `mock-${crypto.randomUUID()}`;
+
+/** { success:true, data, meta, trace_id } — key của data/meta đổi sang snake_case như server thật. */
+export const ok = (data: unknown, meta: object | null = null, init?: ResponseInit) =>
+  HttpResponse.json(
+    { success: true, data: toSnakeKeys(data), meta: meta ? toSnakeKeys(meta) : null, trace_id: traceId() },
+    init,
+  );
+
+/** { success:false, error:{code,message,details}, trace_id } */
+export const envelopeError = (status: number, code: string, message: string, details: unknown = null) =>
+  HttpResponse.json({ success: false, error: { code, message, details }, trace_id: traceId() }, { status });
+
+/** 204 No Content (logout, resend OTP, reset password…). */
+export const noContent = () => new HttpResponse(null, { status: 204 });
+
+/**
+ * Thêm latency giả + chuyển MockHttpError thành body lỗi.
+ * envelope=true → lỗi đúng dạng spec; mặc định giữ dạng cũ { message, code } cho các service chưa chuyển.
+ */
 export const guarded =
-  (resolver: HttpResponseResolver): HttpResponseResolver =>
+  (resolver: HttpResponseResolver, opts: { envelope?: boolean } = {}): HttpResponseResolver =>
   async (info) => {
     if (mockConfig.latencyMs > 0) await delay(mockConfig.latencyMs);
     try {
       return await resolver(info);
     } catch (e) {
-      if (e instanceof MockHttpError) return errorResponse(e.status, e.code, e.message);
+      if (e instanceof MockHttpError) {
+        return opts.envelope ? envelopeError(e.status, e.code, e.message) : errorResponse(e.status, e.code, e.message);
+      }
       throw e;
     }
   };
+
+/** Phiên bản dùng cho endpoint theo spec v1. */
+export const guardedV1 = (resolver: HttpResponseResolver) => guarded(resolver, { envelope: true });
 
 export async function readJson<T>(request: Request): Promise<T> {
   try {

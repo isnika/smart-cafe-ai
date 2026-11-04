@@ -5,7 +5,7 @@ import "@fontsource-variable/inter";
 import "./index.css";
 import "./styles/tokens.css";
 import App from "./App";
-import { configureHttp } from "@/shared/api/http";
+import { USE_MOCK, configureHttp } from "@/shared/api/http";
 import { useAuthStore } from "@/features/auth/store";
 import { queryClient } from "@/app/providers";
 
@@ -14,6 +14,7 @@ async function bootstrap() {
   configureHttp({
     getToken: () => useAuthStore.getState().accessToken,
     onUnauthorized: () => useAuthStore.getState().clear(),
+    refresh: () => useAuthStore.getState().refresh(),
   });
 
   useAuthStore.subscribe((s, prev) => {
@@ -25,7 +26,8 @@ async function bootstrap() {
 
   // 2) MSW phải sẵn sàng TRƯỚC khi hydrate, nếu không /me sẽ đi thẳng ra mạng thật.
   //    enableMocking() cũng seed đơn demo và gắn window.__mock (db, auth helpers).
-  if (import.meta.env.DEV && import.meta.env.VITE_USE_MOCK === "true") {
+  //    VITE_USE_MOCK=true → mock; false/không đặt → gọi API thật (VITE_API_BASE_URL).
+  if (USE_MOCK) {
     const { enableMocking } = await import("./mocks/browser");
     await enableMocking();
   }

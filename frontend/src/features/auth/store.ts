@@ -62,6 +62,11 @@ interface AuthState {
   applySession: (session: AuthSession) => void;
   /** Gọi API logout (best-effort) rồi xoá phiên local. */
   logout: () => Promise<void>;
+  /**
+   * Đổi refresh token lấy cặp token mới (refresh token bị xoay → lưu cặp mới).
+   * http.ts gọi qua configureHttp({ refresh }) và đã gộp single-flight. true = thành công.
+   */
+  refresh: () => Promise<boolean>;
   /** Gọi 1 lần ở entry sau khi MSW sẵn sàng. */
   hydrate: () => Promise<void>;
   /** Xoá phiên local, không gọi API. Dùng cho 401. */
@@ -100,6 +105,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       roleName: session.roleName,
       branchId: session.branchId ?? null,
     });
+  },
+
+  refresh: async () => {
+    const rt = get().refreshToken;
+    if (!rt) return false;
+    try {
+      const t = await identityApi.refresh(rt);
+      // Phiên đã bị clear / đổi tài khoản trong lúc chờ → bỏ kết quả cũ
+      if (get().refreshToken !== rt) return false;
+      const next = { accessToken: t.accessToken, refreshToken: t.refreshToken ?? rt };
+      const { roleName, branchId } = get();
+      if (roleName) save({ ...next, roleName, branchId });
+      set(next);
+      return true;
+    } catch {
+      return false; // refresh hỏng/hết hạn → http.ts gọi onUnauthorized
+    }
   },
 
   logout: async () => {
