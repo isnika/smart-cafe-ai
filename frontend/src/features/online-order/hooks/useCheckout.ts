@@ -1,13 +1,13 @@
 import { useCallback, useRef, useState } from 'react';
-import { describeSubmitError } from '@/features/dine-in/hooks/useSubmitOrder';
 import type { OrderDetail } from '@/shared/types';
+import { describeOnlineError } from '../errors';
 import { confirmPayment, type PaymentChoice } from '../payment';
 import { placeOnlineOrder } from '../submit';
 
 /**
  * Hai bước TÁCH BẠCH:
  *  1) tạo đơn (nghiệp vụ đơn hàng – API/mock đơn hàng hiện có)
- *  2) xác nhận thanh toán (payment.ts – DEMO tầng giao diện, điểm thay thế khi có API sandbox)
+ *  2) xác nhận thanh toán (payment.ts – DEMO tầng giao diện; Workload 2 thay bằng POST /payments cho VNPay/Momo, COD không gọi)
  * Chỉ trả đơn về (để điều hướng sang màn thành công) khi CẢ HAI xong.
  */
 export function useOnlineCheckout() {
@@ -24,13 +24,14 @@ export function useOnlineCheckout() {
       setError(null);
       try {
         const order = await placeOnlineOrder({
+          method: args.method,
           ...(args.note ? { note: args.note } : {}),
           ...(args.voucherCode ? { voucherCode: args.voucherCode } : {}),
         });
         await confirmPayment(order, args.method);
         return order;
       } catch (e) {
-        setError(describeSubmitError(e));
+        setError(describeOnlineError(e));
         return null;
       } finally {
         busy.current = false;

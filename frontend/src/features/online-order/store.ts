@@ -13,7 +13,11 @@ export type OnlineFulfillment = 'Delivery' | 'Pickup';
 export interface DeliveryDetails {
   receiverName: string;
   phone: string;
+  /** Địa chỉ đầy đủ MỘT chuỗi (đã ghép từ địa chỉ đã lưu nếu có) → delivery_address. */
   addressLine: string;
+  /** Toạ độ của địa chỉ đã lưu (nếu có) → delivery_latitude/delivery_longitude. */
+  latitude?: number;
+  longitude?: number;
 }
 
 interface OnlineCartState {

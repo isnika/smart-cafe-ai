@@ -38,11 +38,43 @@ export interface MockCart {
   updatedAt: string;
 }
 
+/** Giỏ Online server-side (spec "4. Order / Giỏ hàng"): MỘT giỏ Active/user, tách hẳn giỏ QR (định danh bằng user_id từ Bearer). */
+export interface MockOnlineCart {
+  id: number;
+  userId: string;
+  branchId: number;
+  fulfillmentType: 'Delivery' | 'Pickup';
+  status: 'Active' | 'Converted' | 'Abandoned';
+  items: MockCartItem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Địa chỉ giao hàng của khách (spec "1. Identity / Địa chỉ giao hàng"). */
+export interface MockAddress {
+  id: number;
+  userId: string;
+  label: string | null;
+  receiverName: string;
+  phone: string;
+  province: string;
+  district: string | null;
+  ward: string;
+  addressLine: string;
+  latitude: number | null;
+  longitude: number | null;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface MockDb {
   products: SeedProduct[];
   tables: Table[];
   sessions: TableSession[];
   carts: MockCart[];
+  onlineCarts: MockOnlineCart[];
+  addresses: MockAddress[];
   orders: OrderDetail[];
   payments: Payment[];
   allocations: PaymentOrderAllocation[];
@@ -72,7 +104,7 @@ export interface MockDb {
   seq: {
     order: number; item: number; option: number; history: number; session: number;
     payment: number; allocation: number; invoice: number; invoiceItem: number; inventoryLog: number;
-    chatSession: number; chatMessage: number; timekeeping: number; cart: number; cartItem: number;
+    chatSession: number; chatMessage: number; timekeeping: number; cart: number; cartItem: number; onlineCart: number; address: number;
   };
 }
 
@@ -86,6 +118,8 @@ const createDb = (): MockDb => {
     tables: seedTables(),
     sessions: [],
     carts: [],
+    onlineCarts: [],
+    addresses: [],
     orders: [],
     payments: [],
     allocations: [],
@@ -106,7 +140,7 @@ const createDb = (): MockDb => {
     timekeepings: [],
     seq: {
       order: 0, item: 0, option: 0, history: 0, session: 0, payment: 0, allocation: 0, invoice: 0, invoiceItem: 0,
-      inventoryLog: inv.logs.length, chatSession: 0, chatMessage: 0, timekeeping: 0, cart: 0, cartItem: 0,
+      inventoryLog: inv.logs.length, chatSession: 0, chatMessage: 0, timekeeping: 0, cart: 0, cartItem: 0, onlineCart: 0, address: 0,
     },
   };
 };

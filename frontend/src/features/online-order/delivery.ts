@@ -17,6 +17,8 @@ export const normalizeDelivery = (d: DeliveryDetails): DeliveryDetails => ({
   receiverName: d.receiverName.trim(),
   phone: normalizePhone(d.phone),
   addressLine: d.addressLine.trim(),
+  // Sửa địa chỉ bằng tay thì toạ độ cũ không còn đúng → chỉ giữ khi chuỗi địa chỉ không đổi (xử lý ở DeliveryModal).
+  ...(typeof d.latitude === 'number' && typeof d.longitude === 'number' ? { latitude: d.latitude, longitude: d.longitude } : {}),
 });
 
 export interface InvoiceDraft {

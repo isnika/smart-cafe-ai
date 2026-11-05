@@ -4,8 +4,13 @@ import { resetCartInternals, useDineInCartStore } from '@/features/dine-in/store
 import { openDineInSession } from '@/features/dine-in/session';
 import { resetSubmitState } from '@/features/dine-in/submit';
 import { resetDb } from '@/mocks/db';
+import { MOCK_ACCOUNTS, mockAccessToken } from '@/mocks/handlers/identity';
 import { mockConfig } from '@/mocks/utils';
+import { configureHttp } from '@/shared/api';
 import { resetGuestMemory } from '@/shared/api/guest';
+import { resetOnlineCartSync } from '@/features/online-order/cart-sync';
+import { resetOnlineSubmitState } from '@/features/online-order/submit';
+import { useOnlineCartStore } from '@/features/online-order/store';
 import type { NewCartLine } from '@/features/dine-in/cart';
 import type { User } from '@/shared/types';
 
@@ -21,7 +26,12 @@ export const latte: NewCartLine = {
 
 /** Đưa mọi store/mock về trạng thái ban đầu giữa các test. */
 export function resetWorld(): void {
+  // main.tsx cấu hình getToken ở entry; test không qua entry nên nối Bearer từ auth store tại đây.
+  configureHttp({ getToken: () => useAuthStore.getState().accessToken });
   resetDb();
+  resetOnlineSubmitState();
+  resetOnlineCartSync();
+  useOnlineCartStore.setState({ fulfillmentType: null, lines: [], voucherCode: null, delivery: null });
   mockConfig.latencyMs = 0;
   mockConfig.enforceAuth = false;
   resetSubmitState();
@@ -51,5 +61,8 @@ export const fakeUser = (over: Partial<User> = {}): User => ({
 });
 
 export function loginAs(roleName: 'Customer' | 'Staff', over: Partial<User> = {}): void {
-  useAuthStore.setState({ status: 'authenticated', accessToken: 't', user: fakeUser(over), roleName });
+  // id là tài khoản mock (vd 'u-customer') → token hợp lệ của mock, dùng được với endpoint cần Bearer thật (giỏ/đơn Online, địa chỉ).
+  // id khác → token giả 't' như trước (các test cũ không phụ thuộc Bearer).
+  const accessToken = over.id && MOCK_ACCOUNTS.some((a) => a.id === over.id) ? mockAccessToken(over.id) : 't';
+  useAuthStore.setState({ status: 'authenticated', accessToken, user: fakeUser(over), roleName });
 }

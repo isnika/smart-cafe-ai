@@ -1,7 +1,7 @@
 import type { Address, AuthSession, LoginInput, Role, RoleName, User } from '@/shared/types';
 import { http } from './http';
 
-/** Các endpoint NGOÀI lát này (roles, địa chỉ) vẫn dùng tiền tố cũ cho tới khi được chuyển sang spec. */
+/** Endpoint NGOÀI lát này (roles) vẫn dùng tiền tố cũ cho tới khi được chuyển sang spec. */
 const P = '/identity';
 
 export type AddressInput = Omit<Address, 'id' | 'userId' | 'createdAt' | 'updatedAt'>;
@@ -57,9 +57,30 @@ export const refresh = async (refreshToken: string): Promise<RefreshedTokens> =>
 export const getMe = () => http.get<User>('/users/me');
 export const listRoles = () => http.get<Role[]>(`${P}/roles`);
 
-export const listAddresses = () => http.get<Address[]>(`${P}/users/me/addresses`);
-export const createAddress = (input: AddressInput) => http.post<Address>(`${P}/users/me/addresses`, input);
-export const updateAddress = (id: number, input: Partial<AddressInput>) =>
-  http.patch<Address>(`${P}/users/me/addresses/${id}`, input);
-export const deleteAddress = (id: number) => http.delete(`${P}/users/me/addresses/${id}`);
-export const setDefaultAddress = (id: number) => http.post<Address>(`${P}/users/me/addresses/${id}/default`);
+// ── Địa chỉ giao hàng (spec "1. Identity / Địa chỉ giao hàng", Customer, Bearer) ──
+const numOrNull = (v: unknown): number | null => {
+  if (v === null || v === undefined || v === '') return null;
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
+/** Mapper: latitude/longitude DECIMAL(10,7) có thể về dạng chuỗi → number. */
+export const toAddress = (a: Address): Address => ({
+  ...a,
+  latitude: numOrNull(a.latitude),
+  longitude: numOrNull(a.longitude),
+  isDefault: Boolean(a.isDefault),
+});
+
+const ADDRESSES = '/users/me/addresses';
+/** GET /users/me/addresses */
+export const listAddresses = async () => (await http.get<Address[]>(ADDRESSES)).map(toAddress);
+/** POST /users/me/addresses → 201. Bắt buộc receiver_name, phone, province, ward, address_line. */
+export const createAddress = async (input: AddressInput) => toAddress(await http.post<Address>(ADDRESSES, input, { snake: true }));
+/** PUT /users/me/addresses/{id} (thay toàn bộ). */
+export const updateAddress = async (id: number, input: AddressInput) =>
+  toAddress(await http.put<Address>(`${ADDRESSES}/${id}`, input, { snake: true }));
+/** DELETE /users/me/addresses/{id} → 204. */
+export const deleteAddress = (id: number) => http.delete(`${ADDRESSES}/${id}`);
+/** PATCH /users/me/addresses/{id}/default (spec dùng PATCH, không phải POST). */
+export const setDefaultAddress = async (id: number) => toAddress(await http.patch<Address>(`${ADDRESSES}/${id}/default`));

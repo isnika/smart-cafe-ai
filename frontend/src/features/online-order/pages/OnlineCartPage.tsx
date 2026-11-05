@@ -54,6 +54,11 @@ export default function OnlineCartPage() {
               Tóm tắt đơn hàng
             </h2>
             <PriceSummary totals={totals} showDeliveryFee={fulfillmentType === 'Delivery'} />
+            {(pricing.branchBlock ?? pricing.cartError) && (
+              <p role="alert" className="mt-2 text-caption text-error-strong">
+                {pricing.branchBlock ?? pricing.cartError}
+              </p>
+            )}
             {pricing.feeError && (
               <p role="alert" className="mt-2 text-caption text-error-strong">
                 Không tải được phí giao hàng.{' '}

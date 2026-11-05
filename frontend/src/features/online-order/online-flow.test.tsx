@@ -2,13 +2,13 @@
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildLineKey } from '@/features/dine-in/cart';
 import { placeDineInOrder } from '@/features/dine-in/submit';
 import { db } from '@/mocks/db';
 import { handlers } from '@/mocks/handlers';
 import { url } from '@/mocks/utils';
-import { engagementApi } from '@/shared/api';
+import { engagementApi, identityApi } from '@/shared/api';
 import { latte, loginAs, resetWorld, startTableSession } from '@/test/helpers';
 import { polyfillDialog, renderApp } from '@/test/renderApp';
 import { useDineInCartStore } from '@/features/dine-in/store';
@@ -36,7 +36,7 @@ beforeEach(() => {
 });
 
 const ADDRESS = '123 Đường Lê Lợi, Phường Bến Thành, Quận 1';
-const customer = () => loginAs('Customer', { id: 'u-1', fullName: 'Nguyễn Văn A', phone: '0901234567' });
+const customer = () => loginAs('Customer', { id: 'u-customer', fullName: 'Nguyễn Văn A', phone: '0901234567' });
 
 /** Giỏ Online: 2 ly latte (mỗi ly 35.000 + trân châu 10.000 = 45.000đ) → tạm tính 90.000đ. */
 function seedCart(type: OnlineFulfillment, quantity = 2, extra: Partial<{ voucherCode: string }> = {}) {
@@ -46,7 +46,14 @@ function seedCart(type: OnlineFulfillment, quantity = 2, extra: Partial<{ vouche
     voucherCode: extra.voucherCode ?? null,
   });
 }
-const posts = () => requests.filter((r) => r.startsWith('POST ') && r.endsWith('/orders-svc/orders'));
+const posts = () => requests.filter((r) => r === 'POST /api/orders');
+
+/** Nút đặt hàng chỉ bật khi giỏ server đã đồng bộ + chi nhánh đã tải → chờ bật rồi mới bấm. */
+async function placeOrder() {
+  const button = await screen.findByRole('button', { name: /^(Đặt hàng|Thử lại)$/ });
+  await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
+  fireEvent.click(button);
+}
 
 async function fillAddress() {
   fireEvent.change(await screen.findByLabelText('Địa chỉ'), { target: { value: ADDRESS } });
@@ -76,13 +83,14 @@ describe('giỏ Online (store)', () => {
   });
 });
 
-describe('API tạo đơn Online (hợp đồng đơn hàng hiện có)', () => {
+describe('API tạo đơn Online (POST /orders theo spec)', () => {
   it('buildOnlineOrderInput: không có payAt, Delivery bắt buộc thông tin giao hàng', () => {
-    const base = { lines: [{ ...latte, key: 'k', quantity: 1 }], userId: 'u-1', idempotencyKey: 'x' };
-    const pickup = buildOnlineOrderInput({ ...base, fulfillmentType: 'Pickup' });
-    expect(pickup).toMatchObject({ orderSource: 'Online', fulfillmentType: 'Pickup', userId: 'u-1' });
+    const pickup = buildOnlineOrderInput({ cartId: 7, fulfillmentType: 'Pickup' });
+    expect(pickup).toMatchObject({ cartId: 7, fulfillmentType: 'Pickup' });
     expect('payAt' in pickup).toBe(false);
-    expect(() => buildOnlineOrderInput({ ...base, fulfillmentType: 'Delivery' })).toThrow();
+    expect('userId' in pickup).toBe(false);
+    expect('lines' in pickup).toBe(false); // giỏ nằm ở server, đơn chỉ tham chiếu cart_id
+    expect(() => buildOnlineOrderInput({ cartId: 7, fulfillmentType: 'Delivery' })).toThrow();
   });
 
   it('POST /engagement/vouchers/validate dùng cùng quy tắc với tạo đơn', async () => {
@@ -117,6 +125,10 @@ describe('điểm bắt đầu & menu', () => {
 });
 
 describe('giỏ hàng → checkout: tiền nhất quán', () => {
+  // Voucher thuộc Engagement: chỉ hoạt động ở chế độ mock (VITE_USE_MOCK=true).
+  beforeEach(() => vi.stubEnv('VITE_USE_MOCK', 'true'));
+  afterEach(() => vi.unstubAllEnvs());
+
   it('áp mã GIAM10: giỏ và checkout cho cùng tổng (có phí giao hàng của chi nhánh)', async () => {
     customer();
     seedCart('Delivery');
@@ -130,7 +142,9 @@ describe('giỏ hàng → checkout: tiền nhất quán', () => {
     await waitFor(() => expect(within(cartSummary).getByText('Phí giao hàng').parentElement!.textContent).toContain('15.000đ'));
     expect(within(cartSummary).getByText('Tổng cộng').parentElement!.textContent).toContain('96.000đ'); // 90.000 − 9.000 + 15.000
 
-    fireEvent.click(screen.getByRole('button', { name: 'Tiến hành đặt hàng' }));
+    const proceed = screen.getByRole('button', { name: 'Tiến hành đặt hàng' });
+    await waitFor(() => expect((proceed as HTMLButtonElement).disabled).toBe(false)); // chờ giỏ server đồng bộ
+    fireEvent.click(proceed);
     await screen.findByRole('heading', { name: 'Xác nhận đơn hàng' });
     expect(router.state.location.pathname).toBe('/checkout');
     await waitFor(() => expect(screen.getAllByText('96.000đ').length).toBeGreaterThanOrEqual(2)); // tổng ở thẻ tóm tắt + thanh dưới
@@ -200,7 +214,7 @@ describe('checkout → đặt hàng → màn thành công (thanh toán demo ở 
     await fillAddress();
     await waitFor(() => expect(screen.getByText(ADDRESS)).toBeTruthy());
     fireEvent.change(screen.getByLabelText('Ghi chú đơn hàng'), { target: { value: 'Ít ngọt' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Đặt hàng' }));
+    await placeOrder();
 
     expect(await screen.findByText('Đặt hàng thành công!')).toBeTruthy();
     expect(router.state.location.pathname).toMatch(/^\/payment\/\d+\/success$/);
@@ -209,7 +223,7 @@ describe('checkout → đặt hàng → màn thành công (thanh toán demo ở 
     expect(db.orders).toHaveLength(1);
     const order = db.orders[0]!;
     expect(order).toMatchObject({
-      orderSource: 'Online', fulfillmentType: 'Delivery', userId: 'u-1', status: 'Pending', paymentStatus: 'Unpaid',
+      orderSource: 'Online', fulfillmentType: 'Delivery', userId: 'u-customer', status: 'Pending', paymentStatus: 'Unpaid',
       deliveryName: 'Nguyễn Văn A', deliveryPhone: '0901234567', deliveryAddress: ADDRESS, note: 'Ít ngọt',
       subTotal: 90_000, deliveryFee: 15_000, finalAmount: 105_000,
     });
@@ -235,6 +249,28 @@ describe('checkout → đặt hàng → màn thành công (thanh toán demo ở 
     expect(screen.getByRole('link', { name: 'Theo dõi đơn hàng' }).getAttribute('href')).toBe(`/orders/${order.id}`);
   });
 
+  it('có địa chỉ mặc định đã lưu → checkout tự dùng; đơn gửi delivery_address MỘT chuỗi + toạ độ, không address_id', async () => {
+    customer();
+    await identityApi.createAddress({
+      label: 'Nhà', receiverName: 'Trần Thị B', phone: '0912345678', province: 'TP. Hồ Chí Minh', ward: 'Phường Bến Thành',
+      addressLine: '12 Lê Lợi', latitude: 10.7769, longitude: 106.6951, isDefault: true,
+    });
+    seedCart('Delivery');
+    useOnlineCartStore.setState({ delivery: null });
+    renderApp('/checkout');
+    const joined = '12 Lê Lợi, Phường Bến Thành, TP. Hồ Chí Minh';
+    expect(await screen.findByText(joined)).toBeTruthy();
+    expect(screen.getByText('Trần Thị B')).toBeTruthy();
+    fireEvent.click(await screen.findByRole('radio', { name: /Tiền mặt khi nhận hàng/ }));
+    await placeOrder();
+    await screen.findByText('Đặt hàng thành công!');
+    expect(db.orders[0]).toMatchObject({
+      deliveryName: 'Trần Thị B', deliveryPhone: '0912345678', deliveryAddress: joined, deliveryLatitude: 10.7769, deliveryLongitude: 106.6951,
+    });
+    const post = requests.filter((r) => r === 'POST /api/orders');
+    expect(post).toHaveLength(1);
+  });
+
   it('bấm đặt hàng liên tục → chỉ một đơn', async () => {
     customer();
     seedCart('Pickup');
@@ -256,7 +292,7 @@ describe('checkout → đặt hàng → màn thành công (thanh toán demo ở 
     renderApp('/checkout');
     fireEvent.click(await screen.findByRole('radio', { name: /Ví MoMo/ }));
     fireEvent.click(screen.getByRole('switch', { name: 'Xuất hóa đơn điện tử' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Đặt hàng' }));
+    await placeOrder();
     expect((await screen.findByText(/mã số thuế và thông tin công ty/i)).textContent).toBeTruthy();
     expect(posts()).toHaveLength(0);
   });
@@ -264,17 +300,17 @@ describe('checkout → đặt hàng → màn thành công (thanh toán demo ở 
   it('server lỗi 503 → báo lỗi, giữ giỏ, KHÔNG sang màn thành công; thử lại được', async () => {
     customer();
     seedCart('Pickup');
-    server.use(http.post(url('/orders-svc/orders'), () => HttpResponse.json({ message: 'Máy chủ đang bận' }, { status: 503 }), { once: true }));
+    server.use(http.post(url('/orders'), () => HttpResponse.json({ message: 'Máy chủ đang bận' }, { status: 503 }), { once: true }));
     const { router } = renderApp('/checkout');
     fireEvent.click(await screen.findByRole('radio', { name: /Ví MoMo/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Đặt hàng' }));
+    await placeOrder();
     expect((await screen.findByRole('alert')).textContent).toContain('Chưa thể đặt hàng');
     expect(router.state.location.pathname).toBe('/checkout');
     expect(screen.queryByText('Đặt hàng thành công!')).toBeNull();
     expect(useOnlineCartStore.getState().lines).toHaveLength(1);
     expect(db.orders).toHaveLength(0);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+    await placeOrder(); // nút "Thử lại"
     await screen.findByText('Đặt hàng thành công!');
     expect(db.orders).toHaveLength(1);
   });
@@ -284,7 +320,7 @@ describe('checkout → đặt hàng → màn thành công (thanh toán demo ở 
     seedCart('Pickup');
     const first = renderApp('/checkout');
     fireEvent.click(await screen.findByRole('radio', { name: /Ví MoMo/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Đặt hàng' }));
+    await placeOrder();
     await screen.findByText('Đặt hàng thành công!');
     const path = first.router.state.location.pathname;
     first.unmount();
@@ -314,7 +350,7 @@ describe('theo dõi đơn & hàng đợi nhân viên', () => {
     const first = renderApp('/checkout');
     fireEvent.click(await screen.findByRole('radio', { name: /Ví MoMo/ }));
     await waitFor(() => expect((screen.getByRole('button', { name: 'Đặt hàng' }) as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(screen.getByRole('button', { name: 'Đặt hàng' }));
+    await placeOrder();
     await screen.findByText('Đặt hàng thành công!');
     fireEvent.click(screen.getByRole('link', { name: 'Theo dõi đơn hàng' }));
     expect(await screen.findByRole('heading', { name: 'Theo dõi đơn hàng' })).toBeTruthy();
@@ -336,12 +372,12 @@ describe('theo dõi đơn & hàng đợi nhân viên', () => {
     const cust = renderApp('/checkout');
     fireEvent.click(await screen.findByRole('radio', { name: /Ví MoMo/ }));
     await waitFor(() => expect((screen.getByRole('button', { name: 'Đặt hàng' }) as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(screen.getByRole('button', { name: 'Đặt hàng' }));
+    await placeOrder();
     await screen.findByText('Đặt hàng thành công!');
     cust.unmount();
     cleanup();
 
-    loginAs('Staff');
+    loginAs('Staff', { id: 'u-staff' });
     renderApp('/staff/queue');
     const column = await screen.findByRole('region', { name: 'Mới nhận' });
     expect(await within(column).findByText(`#${dine.orderCode}`)).toBeTruthy();

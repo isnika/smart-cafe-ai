@@ -56,7 +56,7 @@ function requireOpenForOrdering(session: TableSession): void {
   }
 }
 
-interface LineBody {
+export interface LineBody {
   variant_id?: unknown;
   quantity?: unknown;
   note?: unknown;
@@ -64,7 +64,7 @@ interface LineBody {
 }
 
 /** Validate như server: variant tồn tại, còn hàng (422 OUT_OF_STOCK), option đúng ràng buộc nhóm. */
-function parseLine(body: LineBody, branchId: number): Omit<MockCartItem, 'id'> {
+export function parseLine(body: LineBody, branchId: number): Omit<MockCartItem, 'id'> {
   const variantId = Number(body.variant_id);
   const quantity = Number(body.quantity);
   if (!Number.isInteger(variantId)) fail(400, 'VALIDATION_ERROR', 'variant_id không hợp lệ');
@@ -87,7 +87,7 @@ function parseLine(body: LineBody, branchId: number): Omit<MockCartItem, 'id'> {
   return { variantId, quantity, note, options };
 }
 
-class OutOfStock extends Error {
+export class OutOfStock extends Error {
   readonly variantId: number;
   constructor(variantId: number, message: string) {
     super(message);
@@ -96,10 +96,10 @@ class OutOfStock extends Error {
 }
 
 /** 422 OUT_OF_STOCK kèm details[{variant_id}] như spec. */
-const outOfStockResponse = (e: OutOfStock) =>
+export const outOfStockResponse = (e: OutOfStock) =>
   envelopeError(422, 'OUT_OF_STOCK', e.message, [{ variant_id: e.variantId }]);
 
-function itemView(cart: MockCart, it: MockCartItem) {
+export function itemView(cart: Pick<MockCart, 'branchId'>, it: MockCartItem) {
   const { seed, variant } = findVariant(it.variantId)!;
   const allOptions = seed.groups.flatMap((g) => g.options);
   const options = it.options.map((o) => {
@@ -143,12 +143,12 @@ function cartView(cart: MockCart) {
   };
 }
 
-const touch = (cart: MockCart) => {
+export const touch = (cart: Pick<MockCart, 'updatedAt'>) => {
   cart.updatedAt = nowNaive();
 };
 
 /** guardedV1 + chuyển OutOfStock thành 422 có details. */
-const withStock = (resolver: Parameters<typeof guardedV1>[0]): ReturnType<typeof guardedV1> =>
+export const withStock = (resolver: Parameters<typeof guardedV1>[0]): ReturnType<typeof guardedV1> =>
   guardedV1(async (info) => {
     try {
       return await resolver(info);

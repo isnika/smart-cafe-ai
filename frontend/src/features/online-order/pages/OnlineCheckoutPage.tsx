@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AlertCircle, MapPin, Store } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { PATHS, to } from '@/app/routes';
@@ -13,7 +13,9 @@ import { DeliveryModal } from '../components/DeliveryModal';
 import { FulfillmentBadge } from '../components/FulfillmentBadge';
 import { PriceSummary } from '../components/PriceSummary';
 import { validateDelivery, validateInvoice } from '../delivery';
+import { addressToDelivery } from '../address';
 import { useOnlineCheckout } from '../hooks/useCheckout';
+import { useDefaultAddress } from '../hooks/useDefaultAddress';
 import { useOnlinePricing } from '../hooks/usePricing';
 import { PAYMENT_OPTIONS, type PaymentChoice } from '../payment';
 import { useOnlineCartStore, type DeliveryDetails } from '../store';
@@ -29,6 +31,11 @@ export default function OnlineCheckoutPage() {
   const saved = useOnlineCartStore((s) => s.delivery);
   const setDelivery = useOnlineCartStore((s) => s.setDelivery);
   const { submit, isSubmitting, error } = useOnlineCheckout();
+  // Sổ địa chỉ (GET /users/me/addresses): chưa chọn địa chỉ nào thì dùng địa chỉ mặc định. Không đổi giao diện.
+  const defaultAddress = useDefaultAddress(fulfillmentType === 'Delivery').address;
+  useEffect(() => {
+    if (defaultAddress && !useOnlineCartStore.getState().delivery) setDelivery(addressToDelivery(defaultAddress));
+  }, [defaultAddress, setDelivery]);
 
   const [method, setMethod] = useState<PaymentChoice | null>(null);
   const [invoiceOn, setInvoiceOn] = useState(false);
@@ -199,6 +206,12 @@ export default function OnlineCheckoutPage() {
         </div>
 
         <PriceSummary totals={totals} showDeliveryFee={isDelivery} />
+
+        {(pricing.branchBlock ?? pricing.cartError) && (
+          <p role="alert" className="text-caption text-error-strong">
+            {pricing.branchBlock ?? pricing.cartError}
+          </p>
+        )}
 
         {error && (
           <div role="alert" className="flex gap-2 rounded-lg border border-error/30 bg-error-soft p-3 text-body text-error-strong">

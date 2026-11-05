@@ -117,6 +117,9 @@ export const revokeAllTokens = (): void => {
   tokenEpoch += 1;
 };
 
+/** Token hợp lệ của mock cho user id (dùng trong test để gọi endpoint cần Bearer thật). */
+export const mockAccessToken = (userId: string): string => `${ACCESS_PREFIX}${userId}:${tokenEpoch}`;
+
 /** Header mang token do mock cấp (kể cả khi token đã bị thu hồi / sai epoch) → phân biệt với "không có / token lạ". */
 export function hasMockToken(request: Request): boolean {
   return request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '').startsWith(ACCESS_PREFIX) ?? false;

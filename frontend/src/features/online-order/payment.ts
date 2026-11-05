@@ -1,10 +1,10 @@
 import { Banknote, CreditCard, Wallet } from 'lucide-react';
 import type { ComponentType } from 'react';
-import type { OrderDetail } from '@/shared/types';
+import type { OrderDetail, PaymentMethod } from '@/shared/types';
 
 /**
  * Lựa chọn của khách trên UI checkout. CỐ Ý không phải `PaymentMethod` của Payment service
- * (không có "card" ở đó) và không được gửi lên API tạo đơn: giai đoạn này chưa có hợp đồng thanh toán.
+ * (không có "card" ở đó) và không được gửi lên API tạo đơn (spec POST /orders không có trường phương thức thanh toán).
  */
 export type PaymentChoice = 'cod' | 'card' | 'momo';
 
@@ -13,6 +13,19 @@ export const PAYMENT_OPTIONS: ReadonlyArray<{ id: PaymentChoice; label: string; 
   { id: 'card', label: 'Thẻ ngân hàng (Visa/Master)', icon: CreditCard },
   { id: 'momo', label: 'Ví MoMo', icon: Wallet },
 ];
+
+/**
+ * Lựa chọn UI → Payment_Method của spec (Cash|COD|VNPay|Momo). Visa/Master đi qua cổng VNPay.
+ * Workload 2 dùng map này cho POST /payments; COD KHÔNG gọi POST /payments (đơn tạo Pending/Unpaid).
+ */
+export const PAYMENT_METHOD_OF: Readonly<Record<PaymentChoice, Extract<PaymentMethod, 'COD' | 'VNPay' | 'Momo'>>> = {
+  cod: 'COD',
+  card: 'VNPay',
+  momo: 'Momo',
+};
+export const toPaymentMethod = (choice: PaymentChoice): PaymentMethod => PAYMENT_METHOD_OF[choice];
+/** Chỉ VNPay/Momo cần cổng thanh toán (đơn có thể ở Pending_Payment); COD thu tiền khi nhận hàng. */
+export const needsGateway = (choice: PaymentChoice): boolean => PAYMENT_METHOD_OF[choice] !== 'COD';
 
 export const paymentLabel = (id: PaymentChoice): string => PAYMENT_OPTIONS.find((o) => o.id === id)?.label ?? id;
 

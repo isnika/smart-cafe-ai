@@ -26,7 +26,16 @@ export function DeliveryModal({
 function DeliveryForm({ initial, onClose, onSave }: { initial: DeliveryDetails; onClose: () => void; onSave: (d: DeliveryDetails) => void }) {
   const [draft, setDraft] = useState(initial);
   const [errors, setErrors] = useState<DeliveryErrors>({});
-  const set = (k: keyof DeliveryDetails) => (e: { target: { value: string } }) => setDraft((d) => ({ ...d, [k]: e.target.value }));
+  const set = (k: 'receiverName' | 'phone' | 'addressLine') => (e: { target: { value: string } }) =>
+    setDraft((d) => {
+      const next = { ...d, [k]: e.target.value };
+      // Sửa chuỗi địa chỉ → toạ độ đã lưu không còn đúng.
+      if (k === 'addressLine') {
+        delete next.latitude;
+        delete next.longitude;
+      }
+      return next;
+    });
 
   function submit(e: FormEvent) {
     e.preventDefault();

@@ -34,6 +34,9 @@ export interface QrCartItem {
 export interface QrCartPricing {
   subTotal: number | null;
   itemCount?: number | null;
+  /** Spec chỉ cố định sub_total; nếu server trả thêm phí/tổng trong pricing◇ thì dùng, không tự tính. */
+  deliveryFee?: number | null;
+  finalAmount?: number | null;
 }
 
 export interface QrCart {
@@ -43,6 +46,7 @@ export interface QrCart {
   fulfillmentType: string;
   tableSessionId: number | null;
   clientKey: string | null;
+  userId?: string | null;
   status: 'Active' | 'Converted' | 'Abandoned';
   items: QrCartItem[];
   pricing: QrCartPricing | null;
@@ -68,6 +72,7 @@ export function toQrCart(raw: unknown): QrCart {
     fulfillmentType: String(r.fulfillmentType ?? 'Dine_In'),
     tableSessionId: num(r.tableSessionId),
     clientKey: (r.clientKey as string | null | undefined) ?? null,
+    userId: (r.userId as string | null | undefined) ?? null,
     status: (r.status as QrCart['status']) ?? 'Active',
     items: rawItems.map((it) => ({
       id: Number(it.id),
@@ -91,7 +96,12 @@ export function toQrCart(raw: unknown): QrCart {
       ...(it.isAvailable === undefined ? {} : { isAvailable: Boolean(it.isAvailable) }),
     })),
     pricing: pricing
-      ? { subTotal: num(pricing.subTotal ?? pricing.total), itemCount: num(pricing.itemCount) }
+      ? {
+          subTotal: num(pricing.subTotal ?? pricing.total),
+          itemCount: num(pricing.itemCount),
+          deliveryFee: num(pricing.deliveryFee),
+          finalAmount: num(pricing.finalAmount),
+        }
       : null,
   };
 }
@@ -99,6 +109,13 @@ export function toQrCart(raw: unknown): QrCart {
 export interface QrCartCtx {
   sessionCode: string;
 }
+/** Giỏ Online: định danh bằng Bearer (user_id lấy từ JWT) + ?source=Online. KHÔNG có header guest. */
+export interface OnlineCartCtx {
+  source: 'Online';
+  fulfillmentType: 'Delivery' | 'Pickup';
+}
+export type CartCtx = QrCartCtx | OnlineCartCtx;
+export const isOnlineCtx = (ctx: CartCtx): ctx is OnlineCartCtx => 'source' in ctx && ctx.source === 'Online';
 export interface QrCartItemInput {
   variantId: number;
   quantity: number;
@@ -107,8 +124,15 @@ export interface QrCartItemInput {
 }
 
 const QR_QUERY = { source: 'QR' } as const;
-/** auth:false → guest bị 401/403 không kích hoạt refresh/logout của lát 1. */
-const guestOpts = (ctx: QrCartCtx) => ({ auth: false, query: QR_QUERY, headers: guestHeaders(ctx.sessionCode, { clientKey: true }) });
+const ONLINE_QUERY = { source: 'Online' } as const;
+/**
+ * QR: auth:false → guest bị 401/403 không kích hoạt refresh/logout của lát 1; định danh bằng header guest.
+ * Online: dùng Bearer mặc định của http.ts (401 → refresh single-flight), TUYỆT ĐỐI không gắn X-Client-Key/X-Table-Session-Code.
+ */
+const cartOpts = (ctx: CartCtx) =>
+  isOnlineCtx(ctx)
+    ? { query: ONLINE_QUERY }
+    : { auth: false, query: QR_QUERY, headers: guestHeaders(ctx.sessionCode, { clientKey: true }) };
 
 const cleanItem = (input: QrCartItemInput) => ({
   variantId: input.variantId,
@@ -118,26 +142,29 @@ const cleanItem = (input: QrCartItemInput) => ({
 });
 
 /** POST /carts — tạo hoặc lấy giỏ Active (200 = đã có, 201 = mới). Idempotent theo (phiên bàn, client key). */
-export const ensureCart = async (ctx: QrCartCtx, branchId: number) =>
+export const ensureCart = async (ctx: CartCtx, branchId: number) =>
   toQrCart(
     await http.post<unknown>(
       '/carts',
-      { cartSource: 'QR', branchId, fulfillmentType: 'Dine_In' },
-      { ...guestOpts(ctx), snake: true },
+      isOnlineCtx(ctx)
+        ? { cartSource: 'Online', branchId, fulfillmentType: ctx.fulfillmentType }
+        : { cartSource: 'QR', branchId, fulfillmentType: 'Dine_In' },
+      // Spec: POST /carts nhận cart_source ở body; query source chỉ dùng cho các call còn lại.
+      { ...(isOnlineCtx(ctx) ? {} : cartOpts(ctx)), snake: true },
     ),
   );
 /** GET /carts/current — 404 nếu chưa có giỏ Active. */
-export const getCurrentCart = async (ctx: QrCartCtx, signal?: AbortSignal) =>
-  toQrCart(await http.get<unknown>('/carts/current', { ...guestOpts(ctx), signal }));
-export const addCartItem = async (ctx: QrCartCtx, input: QrCartItemInput) =>
-  toQrCart(await http.post<unknown>('/carts/current/items', cleanItem(input), { ...guestOpts(ctx), snake: true }));
+export const getCurrentCart = async (ctx: CartCtx, signal?: AbortSignal) =>
+  toQrCart(await http.get<unknown>('/carts/current', { ...cartOpts(ctx), signal }));
+export const addCartItem = async (ctx: CartCtx, input: QrCartItemInput) =>
+  toQrCart(await http.post<unknown>('/carts/current/items', cleanItem(input), { ...cartOpts(ctx), snake: true }));
 /** PUT thay TOÀN BỘ quantity/note/options của một dòng. */
-export const updateCartItem = async (ctx: QrCartCtx, itemId: number, input: QrCartItemInput) =>
-  toQrCart(await http.put<unknown>(`/carts/current/items/${itemId}`, cleanItem(input), { ...guestOpts(ctx), snake: true }));
+export const updateCartItem = async (ctx: CartCtx, itemId: number, input: QrCartItemInput) =>
+  toQrCart(await http.put<unknown>(`/carts/current/items/${itemId}`, cleanItem(input), { ...cartOpts(ctx), snake: true }));
 /** DELETE → 204, không có body: caller tự GET lại giỏ. */
-export const removeCartItem = (ctx: QrCartCtx, itemId: number) => http.delete(`/carts/current/items/${itemId}`, guestOpts(ctx));
+export const removeCartItem = (ctx: CartCtx, itemId: number) => http.delete(`/carts/current/items/${itemId}`, cartOpts(ctx));
 /** DELETE /carts/current — chuyển giỏ sang Abandoned. */
-export const clearCart = (ctx: QrCartCtx) => http.delete('/carts/current', guestOpts(ctx));
+export const clearCart = (ctx: CartCtx) => http.delete('/carts/current', cartOpts(ctx));
 
 // Order
 /** @deprecated Legacy (mock /orders-svc, body `lines`) – Online/POS. Dine-in QR dùng createQrOrder. */
@@ -210,6 +237,49 @@ export const createQrOrder = async (
           ...guestHeaders(ctx.sessionCode),
           [HEADER_IDEMPOTENCY_KEY]: ctx.idempotencyKey,
           ...(ctx.accessToken ? { Authorization: `Bearer ${ctx.accessToken}` } : {}),
+        },
+      },
+    ),
+  );
+
+// ── Đặt hàng Online (spec: POST /orders, Bearer) ──────────────────────
+export interface CreateOnlineOrderInput {
+  cartId: number;
+  fulfillmentType: 'Delivery' | 'Pickup';
+  branchId: number;
+  /** Delivery: một chuỗi địa chỉ (snapshot) + toạ độ; KHÔNG gửi address_id. */
+  deliveryName?: string;
+  deliveryPhone?: string;
+  deliveryAddress?: string;
+  deliveryLatitude?: number;
+  deliveryLongitude?: number;
+  note?: string;
+  /** Chỉ chế độ mock (spec tạo đơn thuộc Engagement ngoài phạm vi). Chế độ thật KHÔNG gửi. */
+  voucherCode?: string;
+}
+
+/** Header CHỈ gửi khi chạy mock: spec POST /orders không có trường phương thức thanh toán nên mock cần gợi ý để tạo Pending_Payment. */
+export const HEADER_MOCK_PAYMENT_METHOD = 'X-Mock-Payment-Method';
+
+/**
+ * Body {cart_id, order_source:'Online', fulfillment_type, branch_id, delivery_*, note?}.
+ * KHÔNG gửi user_id (server lấy từ JWT), giá/tổng tiền (server snapshot + tính), voucher_code (thật), header guest.
+ * Idempotency-Key BẮT BUỘC: caller giữ nguyên key khi retry, sinh key mới cho lần đặt mới.
+ * Bearer mặc định của http.ts (auth bật) → 401 được refresh single-flight.
+ */
+export const createOnlineOrder = async (
+  input: CreateOnlineOrderInput,
+  ctx: { idempotencyKey: string; mockPaymentMethod?: string },
+) =>
+  toOrderDetail(
+    await http.post<unknown>(
+      '/orders',
+      { ...input, orderSource: 'Online' },
+      {
+        snake: true,
+        headers: {
+          [HEADER_IDEMPOTENCY_KEY]: ctx.idempotencyKey,
+          ...(ctx.mockPaymentMethod ? { [HEADER_MOCK_PAYMENT_METHOD]: ctx.mockPaymentMethod } : {}),
         },
       },
     ),
