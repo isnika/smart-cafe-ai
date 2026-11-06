@@ -18,7 +18,9 @@ function validateInvoiceInput(inv: InvoiceRequestInput | undefined): void {
 
 /** Header khách guest gửi để chứng minh đang ngồi ở bàn của đơn (xem shared/api/payment.ts). */
 const SESSION_HEADER = 'X-Table-Session-Code';
-const SIMULATED_RESULTS: SimulatedPaymentResult[] = ['success', 'failed', 'expired'];
+/** IPN giả của mock. 'cancelled' (khách hủy ở cổng) chỉ có ở mock: kiểu `SimulatedPaymentResult` của API client thật không đổi. */
+type MockIpnResult = SimulatedPaymentResult | 'cancelled';
+const SIMULATED_RESULTS: MockIpnResult[] = ['success', 'failed', 'expired', 'cancelled'];
 
 /**
  * Quyền truy cập một đơn qua cổng thanh toán:
@@ -158,14 +160,14 @@ export const paymentHandlers = [
   http.post(
     url('/payment/payments/:id/simulate'),
     guarded(async ({ request, params }) => {
-      const input = await readJson<{ result?: SimulatedPaymentResult }>(request);
+      const input = await readJson<{ result?: MockIpnResult }>(request);
       const result = input.result;
-      if (!result || !SIMULATED_RESULTS.includes(result)) fail(400, 'VALIDATION_ERROR', 'result phải là success | failed | expired');
+      if (!result || !SIMULATED_RESULTS.includes(result)) fail(400, 'VALIDATION_ERROR', 'result phải là success | failed | expired | cancelled');
       const payment = loadPaymentFor(request, params.id);
 
       if (payment.status === 'Pending') return HttpResponse.json(settleGatewayPayment(payment, result));
 
-      const settledAs: Record<string, SimulatedPaymentResult | undefined> = { Success: 'success', Failed: 'failed', Expired: 'expired' };
+      const settledAs: Record<string, MockIpnResult | undefined> = { Success: 'success', Failed: 'failed', Expired: 'expired', Cancelled: 'cancelled' };
       if (settledAs[payment.status] === result) return HttpResponse.json(resultOfPayment(payment));
       fail(409, 'PAYMENT_ALREADY_SETTLED', `Giao dịch #${payment.id} đã chốt ở trạng thái ${payment.status}`);
     }),

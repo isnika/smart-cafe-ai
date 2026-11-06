@@ -221,6 +221,18 @@ export function assertGatewayPayable(o: OrderDetail): void {
   }
 }
 
+/**
+ * Đơn Online trả qua POST /payments (spec v1): phải còn chờ thanh toán (Pending_Payment), chưa trả, chưa hết hạn.
+ * Tách khỏi `assertGatewayPayable` (luồng Dine-in, từ chối đơn Online) để hai luồng không ảnh hưởng nhau.
+ */
+export function assertOnlinePayable(o: OrderDetail): void {
+  if (PAID_STATUSES.has(o.paymentStatus)) fail(409, 'ORDER_ALREADY_PAID', `Đơn ${o.orderCode} đã được thanh toán`);
+  if (o.orderSource !== 'Online') fail(409, 'ORDER_NOT_PAYABLE', `Đơn ${o.orderCode} không phải đơn Online`);
+  if (o.status !== 'Pending_Payment' || isExpired(o.expiresAt)) {
+    fail(409, 'ORDER_NOT_PAYABLE', `Đơn ${o.orderCode} đang ở trạng thái ${o.status}${isExpired(o.expiresAt) ? ' (đã hết hạn thanh toán)' : ''}, không thể thanh toán`);
+  }
+}
+
 export interface CreateGatewayPaymentArgs {
   orders: OrderDetail[];
   method: PaymentMethod;
@@ -260,16 +272,31 @@ export function createGatewayPayment(args: CreateGatewayPaymentArgs): PayResult 
   return resultOfPayment(payment);
 }
 
+/** IPN thật phía server đưa đơn Online đang chờ thanh toán vào hàng đợi (Pending). Đơn không phải Online/không chờ thanh toán: giữ nguyên. */
+function advancePaidOnlineOrders(orders: OrderDetail[], at: string): void {
+  for (const o of orders) {
+    if (o.orderSource !== 'Online' || o.status !== 'Pending_Payment') continue;
+    o.statusHistory.push({
+      id: ++db.seq.history, orderId: o.id, fromStatus: 'Pending_Payment', status: 'Pending', changedBy: null, note: 'Thanh toán online thành công', createdAt: at,
+    });
+    o.status = 'Pending';
+    o.expiresAt = null;
+  }
+}
+
 /**
  * IPN giả: chốt một giao dịch đang Pending. Đồng bộ (không await) nên hai IPN đến cùng lúc xử lý lần lượt.
- * success → Success + đơn Paid (đánh dấu paidOnline) + hóa đơn như nhánh Cash; failed/expired → đơn vẫn Unpaid.
+ * success → Success + đơn Paid (đánh dấu paidOnline) + hóa đơn như nhánh Cash (đơn Online: Pending_Payment → Pending);
+ * failed/expired/cancelled → đơn vẫn Unpaid.
  */
-export function settleGatewayPayment(payment: Payment, result: 'success' | 'failed' | 'expired'): PayResult {
+export function settleGatewayPayment(payment: Payment, result: 'success' | 'failed' | 'expired' | 'cancelled'): PayResult {
   const at = nowNaive();
   if (result === 'failed') {
     payment.status = 'Failed';
   } else if (result === 'expired') {
     payment.status = 'Expired';
+  } else if (result === 'cancelled') {
+    payment.status = 'Cancelled'; // khách bấm hủy ở cổng: đơn vẫn Unpaid/Pending_Payment để còn thử lại
   } else {
     const orders = ordersOfPayment(payment);
     const paid = orders.find((o) => PAID_STATUSES.has(o.paymentStatus));
@@ -282,6 +309,7 @@ export function settleGatewayPayment(payment: Payment, result: 'success' | 'fail
     payment.paidAt = at;
     payment.transactionId = `MOCK-${payment.paymentMethod.toUpperCase()}-${pad(payment.id, 6)}`;
     markOrdersPaid(orders, at, { online: true });
+    advancePaidOnlineOrders(orders, at);
     issueInvoice(payment, orders, db.invoiceRequests[payment.id], at);
   }
   payment.updatedAt = at;

@@ -23,6 +23,7 @@ import ProductDetailPage from "@/features/product-detail/pages/ProductDetailPage
 import CartPage from "@/features/online-order/pages/CartPage";
 import OnlineCheckoutPage from "@/features/online-order/pages/OnlineCheckoutPage";
 import OrderSuccessPage from "@/features/online-order/pages/OrderSuccessPage";
+import PaymentReturnPage from "@/features/online-order/pages/PaymentReturnPage";
 import OrderHistoryPage from '@/features/orders/pages/OrderHistoryPage';
 import OrderTrackingPage from "@/features/online-order/pages/OrderTrackingPage";
 import ManagerDashboardPage from "@/features/manager-dashboard/pages/ManagerDashboardPage";
@@ -101,6 +102,8 @@ export const routes: RouteObject[] = [
               { path: PATHS.checkout, element: <OnlineCheckoutPage /> },
               // Màn thành công của đơn Online (đọc đơn đã tạo, không bao giờ POST)
               { path: PATHS.paymentSuccess, element: <OrderSuccessPage /> },
+              // Khách quay về từ cổng VNPay/Momo: chỉ hiển thị kết quả server chốt (polling), không tạo gì
+              { path: PATHS.paymentReturn, element: <PaymentReturnPage /> },
               { path: PATHS.orders, element: <OrderHistoryPage /> },
               { path: PATHS.order, element: <OrderTrackingPage /> },
               { path: PATHS.profile, element: <P title="Hồ sơ & địa chỉ" /> },

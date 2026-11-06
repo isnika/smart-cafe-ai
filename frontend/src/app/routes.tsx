@@ -18,6 +18,7 @@ export const PATHS = {
   profile: "/profile",
   payment: "/payment/:orderId", // Payment Gateway (dùng chung dine-in & online)
   paymentSuccess: "/payment/:orderId/success",
+  paymentReturn: "/payment/:orderId/return", // Khách quay về từ cổng VNPay/Momo (polling GET /payments/{id})
 
   // Customer - Dine-in
   dineInTable: "/dine-in/table/:tableCode", // QR Ordering Page
@@ -46,6 +47,7 @@ export const to = {
   order: (orderId: string) => `/orders/${orderId}`,
   payment: (orderId: string) => `/payment/${orderId}`,
   paymentSuccess: (orderId: string) => `/payment/${orderId}/success`,
+  paymentReturn: (orderId: string) => `/payment/${orderId}/return`,
   dineInTable: (tableCode: string) => `/dine-in/table/${tableCode}`,
   counterPayment: (orderId: string) => `/dine-in/pay/counter/${orderId}`,
   staffOrder: (orderId: string) => `/staff/orders/${orderId}`,

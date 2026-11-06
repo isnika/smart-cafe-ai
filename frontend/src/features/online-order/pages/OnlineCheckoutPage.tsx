@@ -17,7 +17,7 @@ import { addressToDelivery } from '../address';
 import { useOnlineCheckout } from '../hooks/useCheckout';
 import { useDefaultAddress } from '../hooks/useDefaultAddress';
 import { useOnlinePricing } from '../hooks/usePricing';
-import { PAYMENT_OPTIONS, type PaymentChoice } from '../payment';
+import { browserRedirect, PAYMENT_OPTIONS, type PaymentChoice } from '../payment';
 import { useOnlineCartStore, type DeliveryDetails } from '../store';
 
 const field = 'w-full rounded-lg border border-primary-100 bg-white px-4 py-3 text-body placeholder:text-gray-400 focus:border-primary-600 focus:outline-none';
@@ -30,7 +30,7 @@ export default function OnlineCheckoutPage() {
   const user = useAuthStore((s) => s.user);
   const saved = useOnlineCartStore((s) => s.delivery);
   const setDelivery = useOnlineCartStore((s) => s.setDelivery);
-  const { submit, isSubmitting, error } = useOnlineCheckout();
+  const { submit, isSubmitting, error, pendingOrder } = useOnlineCheckout();
   // Sổ địa chỉ (GET /users/me/addresses): chưa chọn địa chỉ nào thì dùng địa chỉ mặc định. Không đổi giao diện.
   const defaultAddress = useDefaultAddress(fulfillmentType === 'Delivery').address;
   useEffect(() => {
@@ -62,20 +62,23 @@ export default function OnlineCheckoutPage() {
     setInvoiceError(invoiceMsg);
     if (invoiceMsg) return;
 
-    const order = await submit({
+    const result = await submit({
       method,
       ...(note.trim() ? { note } : {}),
       ...(pricing.appliedCode ? { voucherCode: pricing.appliedCode } : {}),
     });
-    if (order) {
-      setDone(true);
-      navigate(to.paymentSuccess(String(order.id)), { replace: true, state: { paymentMethod: method } });
-    }
+    if (!result) return;
+    const { order, next } = result;
+    setDone(true);
+    if (next.kind === 'external') browserRedirect.assign(next.url); // chế độ thật: sang cổng VNPay/Momo
+    else if (next.kind === 'gateway') navigate(next.path, { replace: true }); // mock: PaymentGatewayPage hiện có
+    else navigate(to.paymentSuccess(String(order.id)), { replace: true, state: { paymentMethod: method } }); // COD
   }
 
   if (done) return null;
 
-  if (lines.length === 0 || fulfillmentType === null) {
+  // Đơn đã tạo nhưng chưa khởi tạo được thanh toán: giỏ cục bộ đã dọn, vẫn giữ trang để khách bấm "Thử lại".
+  if ((lines.length === 0 || fulfillmentType === null) && !pendingOrder) {
     return (
       <div className="min-h-screen bg-primary-50">
         <PageHeader title="Xác nhận đơn hàng" back={PATHS.cart} />
@@ -93,7 +96,7 @@ export default function OnlineCheckoutPage() {
   return (
     <div className="min-h-screen bg-primary-50">
       <PageHeader title="Xác nhận đơn hàng" back>
-        <FulfillmentBadge type={fulfillmentType} />
+        {fulfillmentType && <FulfillmentBadge type={fulfillmentType} />}
       </PageHeader>
 
       <div className="space-y-5 px-4 pb-44 pt-4">
@@ -205,7 +208,7 @@ export default function OnlineCheckoutPage() {
           />
         </div>
 
-        <PriceSummary totals={totals} showDeliveryFee={isDelivery} />
+        {!pendingOrder && <PriceSummary totals={totals} showDeliveryFee={isDelivery} />}
 
         {(pricing.branchBlock ?? pricing.cartError) && (
           <p role="alert" className="text-caption text-error-strong">
@@ -233,11 +236,11 @@ export default function OnlineCheckoutPage() {
         )}
       </div>
 
-      <StickyActionBar total={formatVnd(totals.total)} label="Tổng cộng">
+      <StickyActionBar total={formatVnd(pendingOrder ? pendingOrder.finalAmount : totals.total)} label="Tổng cộng">
         <Button
           size="lg"
           loading={isSubmitting}
-          disabled={!method || !pricing.ready}
+          disabled={!method || (!pendingOrder && !pricing.ready)}
           className="rounded-full bg-accent-500 !text-white hover:bg-accent-600 active:bg-accent-700"
           onClick={() => void onConfirm()}
         >

@@ -8,6 +8,7 @@ import { authFlowHandlers } from './auth-flow';
 import { branchHandlers } from './branch';
 import { voucherHandlers } from './voucher';
 import { paymentHandlers } from './payment';
+import { paymentV1Handlers } from './payment-v1';
 import { inventoryHandlers } from './inventory';
 import { reviewHandlers } from './review';
 import { intelligenceHandlers } from './intelligence';
@@ -17,4 +18,4 @@ import { dineInV1Handlers } from './dine-in-v1';
 import { onlineV1Handlers } from './online-v1';
 
 // onlineV1Handlers đứng TRƯỚC: request không phải Online được nhả xuống handler Dine-in.
-export const handlers = [...onlineV1Handlers, ...dineInV1Handlers, ...cashierHandlers, ...catalogHandlers, ...storeHandlers, ...orderHandlers, ...identityHandlers, ...orderReadHandlers, ...authFlowHandlers, ...branchHandlers, ...voucherHandlers, ...paymentHandlers, ...inventoryHandlers, ...reviewHandlers, ...intelligenceHandlers, ...chatHandlers, ...workforceHandlers];
+export const handlers = [...onlineV1Handlers, ...dineInV1Handlers, ...cashierHandlers, ...catalogHandlers, ...storeHandlers, ...orderHandlers, ...identityHandlers, ...orderReadHandlers, ...authFlowHandlers, ...branchHandlers, ...voucherHandlers, ...paymentV1Handlers, ...paymentHandlers, ...inventoryHandlers, ...reviewHandlers, ...intelligenceHandlers, ...chatHandlers, ...workforceHandlers];

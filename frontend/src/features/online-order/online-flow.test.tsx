@@ -203,7 +203,7 @@ describe('checkout → đặt hàng → màn thành công (thanh toán demo ở 
     customer();
     seedCart('Delivery');
     const { router } = renderApp('/checkout');
-    fireEvent.click(await screen.findByRole('radio', { name: /Ví MoMo/ }));
+    fireEvent.click(await screen.findByRole('radio', { name: /Tiền mặt khi nhận hàng/ })); // COD: không qua cổng thanh toán
     const button = screen.getByRole('button', { name: 'Đặt hàng' });
     await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
 
@@ -231,7 +231,7 @@ describe('checkout → đặt hàng → màn thành công (thanh toán demo ở 
     expect(screen.getByText(`#${order.orderCode}`)).toBeTruthy();
     expect(screen.getByText('2x Cà phê sữa đá (M)')).toBeTruthy();
     expect(screen.getByText('105.000đ')).toBeTruthy();
-    expect(screen.getByText('Ví MoMo')).toBeTruthy();
+    expect(screen.getByText('Tiền mặt khi nhận hàng')).toBeTruthy();
     // Giỏ đã dọn, giữ lại hình thức & địa chỉ
     expect(useOnlineCartStore.getState().lines).toHaveLength(0);
     expect(useOnlineCartStore.getState().delivery?.addressLine).toBe(ADDRESS);
@@ -302,7 +302,7 @@ describe('checkout → đặt hàng → màn thành công (thanh toán demo ở 
     seedCart('Pickup');
     server.use(http.post(url('/orders'), () => HttpResponse.json({ message: 'Máy chủ đang bận' }, { status: 503 }), { once: true }));
     const { router } = renderApp('/checkout');
-    fireEvent.click(await screen.findByRole('radio', { name: /Ví MoMo/ }));
+    fireEvent.click(await screen.findByRole('radio', { name: /Tiền mặt khi nhận hàng/ }));
     await placeOrder();
     expect((await screen.findByRole('alert')).textContent).toContain('Chưa thể đặt hàng');
     expect(router.state.location.pathname).toBe('/checkout');
@@ -319,7 +319,7 @@ describe('checkout → đặt hàng → màn thành công (thanh toán demo ở 
     customer();
     seedCart('Pickup');
     const first = renderApp('/checkout');
-    fireEvent.click(await screen.findByRole('radio', { name: /Ví MoMo/ }));
+    fireEvent.click(await screen.findByRole('radio', { name: /Tiền mặt khi nhận hàng/ }));
     await placeOrder();
     await screen.findByText('Đặt hàng thành công!');
     const path = first.router.state.location.pathname;
@@ -348,7 +348,7 @@ describe('theo dõi đơn & hàng đợi nhân viên', () => {
     seedCart('Delivery');
     useOnlineCartStore.setState({ delivery: { receiverName: 'Nguyễn Văn A', phone: '0901234567', addressLine: ADDRESS } });
     const first = renderApp('/checkout');
-    fireEvent.click(await screen.findByRole('radio', { name: /Ví MoMo/ }));
+    fireEvent.click(await screen.findByRole('radio', { name: /Tiền mặt khi nhận hàng/ }));
     await waitFor(() => expect((screen.getByRole('button', { name: 'Đặt hàng' }) as HTMLButtonElement).disabled).toBe(false));
     await placeOrder();
     await screen.findByText('Đặt hàng thành công!');
@@ -370,7 +370,7 @@ describe('theo dõi đơn & hàng đợi nhân viên', () => {
     seedCart('Delivery');
     useOnlineCartStore.setState({ delivery: { receiverName: 'Nguyễn Văn A', phone: '0901234567', addressLine: ADDRESS } });
     const cust = renderApp('/checkout');
-    fireEvent.click(await screen.findByRole('radio', { name: /Ví MoMo/ }));
+    fireEvent.click(await screen.findByRole('radio', { name: /Tiền mặt khi nhận hàng/ }));
     await waitFor(() => expect((screen.getByRole('button', { name: 'Đặt hàng' }) as HTMLButtonElement).disabled).toBe(false));
     await placeOrder();
     await screen.findByText('Đặt hàng thành công!');
