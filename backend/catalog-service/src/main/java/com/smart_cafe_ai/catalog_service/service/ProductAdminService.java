@@ -11,18 +11,23 @@ import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+
 import java.sql.SQLException;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
 import static org.springframework.http.HttpStatus.*;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ProductAdminService {
+    private static final String PRODUCT_IMAGE_FOLDER = "smart-cafe/products";
+
     private final ProductRepository products;
     private final CategoryRepository categories;
     private final ProductVariantRepository variants;
@@ -31,6 +36,7 @@ public class ProductAdminService {
     private final AuditLogRepository audits;
     private final OutboxEventRepository outbox;
     private final EntityManager entityManager;
+    private final CloudinaryService cloudinaryService;
 
     public ApiResponse<List<ProductAdminResponse>> list(ProductAdminFilter filter) {
         var page = products.findAll(ProductAdminSpecifications.list(filter), filter.pageable());
@@ -103,6 +109,7 @@ public class ProductAdminService {
         Category category = categoryLocked(fields.categoryId());
         Product product = locked(id);
         var before = snapshot(product);
+        String oldPublicId = cloudinaryService.ownedPublicId(product.getImage(), PRODUCT_IMAGE_FOLDER);
         MenuStatus oldStatus = product.getStatus();
         product.replace(category, fields.name(), fields.image(), fields.description(), fields.temperature(),
                 fields.caffeineLevel(), fields.flavorTags(), fields.sortOrder(), fields.status());
@@ -112,10 +119,69 @@ public class ProductAdminService {
             products.flush();
             audit(actor, "PRODUCT_UPDATED", id, before, after);
             if (oldStatus != product.getStatus()) outbox.save(OutboxEvent.productStatusChanged(product));
+            String newPublicId = cloudinaryService.ownedPublicId(product.getImage(), PRODUCT_IMAGE_FOLDER);
+            if (oldPublicId != null && !oldPublicId.equals(newPublicId)) {
+                cloudinaryService.deleteImageOnCommit(oldPublicId);
+            }
         }
         var response = responses(List.of(product)).get(0);
         return ApiResponse.success(response, changed ? availabilityMessage("Cập nhật sản phẩm thành công.", response)
                 : "Thông tin sản phẩm không thay đổi.");
+    }
+
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public ApiResponse<ProductAdminResponse> uploadProductImage(Integer id, MultipartFile file, CatalogActor actor) {
+        Product product = locked(id);
+        CloudinaryService.UploadedImage uploaded = cloudinaryService.uploadImage(file, PRODUCT_IMAGE_FOLDER);
+        cloudinaryService.deleteImageOnRollback(uploaded.publicId());
+
+        var before = snapshot(product);
+        String oldPublicId = cloudinaryService.ownedPublicId(product.getImage(), PRODUCT_IMAGE_FOLDER);
+        product.updateImage(uploaded.url());
+        products.flush();
+
+        var after = snapshot(product);
+        audit(actor, "PRODUCT_UPDATED", id, before, after);
+
+        if (oldPublicId != null && !oldPublicId.equals(uploaded.publicId())) {
+            cloudinaryService.deleteImageOnCommit(oldPublicId);
+        }
+
+        var response = responses(List.of(product)).get(0);
+        return ApiResponse.success(response, availabilityMessage("Cập nhật ảnh sản phẩm thành công.", response));
+    }
+
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public ApiResponse<ProductAdminResponse> deleteProductImage(Integer id, CatalogActor actor) {
+        Product product = locked(id);
+        if (product.getImage() == null) {
+            var response = responses(List.of(product)).get(0);
+            return ApiResponse.success(response, "Sản phẩm hiện chưa có ảnh.");
+        }
+        var before = snapshot(product);
+        String oldPublicId = cloudinaryService.ownedPublicId(product.getImage(), PRODUCT_IMAGE_FOLDER);
+        product.updateImage(null);
+        products.flush();
+
+        var after = snapshot(product);
+        audit(actor, "PRODUCT_UPDATED", id, before, after);
+
+        if (oldPublicId != null) {
+            cloudinaryService.deleteImageOnCommit(oldPublicId);
+        }
+
+        var response = responses(List.of(product)).get(0);
+        return ApiResponse.success(response, availabilityMessage("Xóa ảnh sản phẩm thành công.", response));
+    }
+
+    public ApiResponse<Map<String, String>> uploadStandaloneImage(MultipartFile file) {
+        CloudinaryService.UploadedImage uploaded = cloudinaryService.uploadImage(file, PRODUCT_IMAGE_FOLDER);
+        Map<String, String> data = new LinkedHashMap<>();
+        data.put("image_url", uploaded.url());
+        data.put("url", uploaded.url());
+        data.put("image", uploaded.url());
+        data.put("public_id", uploaded.publicId());
+        return ApiResponse.success(data, "Tải ảnh lên kho lưu trữ thành công.");
     }
 
     @Transactional
@@ -143,6 +209,7 @@ public class ProductAdminService {
         // A variant can be referenced by Orders/Inventory across services. Never cascade-delete it.
         if (variants.existsByProductId(id) || groups.existsByProductId(id)) throw inUse();
         var before = snapshot(product);
+        String oldPublicId = cloudinaryService.ownedPublicId(product.getImage(), PRODUCT_IMAGE_FOLDER);
         try {
             products.delete(product);
             products.flush();
@@ -154,6 +221,9 @@ public class ProductAdminService {
             throw ex;
         }
         audit(actor, "PRODUCT_DELETED", id, before, null);
+        if (oldPublicId != null) {
+            cloudinaryService.deleteImageOnCommit(oldPublicId);
+        }
         return ApiResponse.success(new ProductAdminResponse.Deleted(id), "Xóa sản phẩm thành công.");
     }
 

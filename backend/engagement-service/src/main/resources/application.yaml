@@ -53,6 +53,8 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
@@ -70,7 +72,7 @@ eureka:
 
 app:
   engagement:
-    internal-api-key: ${ENGAGEMENT_INTERNAL_API_KEY:}
+    internal-api-key: ${ENGAGEMENT_INTERNAL_API_KEY:smart-cafe-internal-engagement-key}
     consumer-enabled: ${ENGAGEMENT_CONSUMER_ENABLED:true}
     publisher-enabled: ${ENGAGEMENT_PUBLISHER_ENABLED:true}
     publish-delay-ms: 1000
@@ -81,4 +83,4 @@ app:
 
 jwt:
   # Existing OTP delivery can start without JWT; authenticated APIs then fail closed.
-  secret: ${JWT_SECRET:}
+  secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}

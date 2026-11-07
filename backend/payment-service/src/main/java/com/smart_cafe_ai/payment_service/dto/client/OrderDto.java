@@ -1,5 +1,7 @@
 package com.smart_cafe_ai.payment_service.dto.client;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -14,8 +16,15 @@ import java.util.List;
 @Builder
 public class OrderDto {
     private Long id;
+
+    @JsonProperty("branch_id")
+    @JsonAlias({"branchId", "branch_id"})
     private Integer branchId;
+
+    @JsonProperty("final_amount")
+    @JsonAlias({"total_amount", "totalAmount", "final_amount", "finalAmount"})
     private BigDecimal totalAmount;
+
     private String status;
     private List<OrderItemDto> items;
 

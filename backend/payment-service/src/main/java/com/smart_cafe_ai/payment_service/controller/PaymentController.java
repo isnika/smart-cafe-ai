@@ -122,6 +122,12 @@ public class PaymentController {
         return ResponseEntity.ok(result);
     }
 
+    @GetMapping("/momo/return")
+    public ResponseEntity<ApiResponse<PaymentResponse>> momoReturn(@RequestParam Map<String, String> params) {
+        PaymentResponse response = paymentService.processMomoReturn(params);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
     @PostMapping("/momo/ipn")
     public ResponseEntity<Map<String, Object>> momoIpn(@RequestBody Map<String, Object> payload) {
         Map<String, Object> result = paymentService.processMomoIpn(payload);

@@ -2,7 +2,7 @@ server:
   port: 8083
 
 app:
-  internal-api-key: ${STORE_INTERNAL_API_KEY:}
+  internal-api-key: ${STORE_INTERNAL_API_KEY:smart-cafe-internal-store-key}
 
 spring:
   application:
@@ -17,6 +17,8 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
     show-sql: true
     properties:
       hibernate:

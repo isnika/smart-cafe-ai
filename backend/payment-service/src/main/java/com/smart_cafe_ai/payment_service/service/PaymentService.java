@@ -25,4 +25,6 @@ public interface PaymentService {
     Map<String, Object> processMomoIpn(Map<String, Object> payload);
 
     PaymentResponse processVnPayReturn(Map<String, String> params);
+
+    PaymentResponse processMomoReturn(Map<String, String> params);
 }

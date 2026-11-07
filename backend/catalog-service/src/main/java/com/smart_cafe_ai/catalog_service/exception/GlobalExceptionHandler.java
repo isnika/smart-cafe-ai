@@ -31,6 +31,12 @@ public class GlobalExceptionHandler {
         log.error("Catalog integrity failure",ex);
         return ResponseEntity.status(409).body(ApiResponse.error("DATA_CONFLICT","Dữ liệu liên kết đã thay đổi hoặc chưa hợp lệ. Vui lòng tải lại và kiểm tra thông tin."));
     }
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUploadTooLarge(org.springframework.web.multipart.MaxUploadSizeExceededException ex) {
+        return ResponseEntity.status(org.springframework.http.HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(ApiResponse.error("FILE_TOO_LARGE", "Ảnh sản phẩm không được vượt quá 5 MB."));
+    }
+
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ApiResponse<Void>> handleApi(ApiException ex) {
         return ResponseEntity.status(ex.getStatus()).body(ApiResponse.error(ex.getCode(), ex.getMessage()));

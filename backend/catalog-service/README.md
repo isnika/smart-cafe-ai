@@ -37,6 +37,9 @@ Phân chia backend 1/backend 2 và các phần cần tích hợp được ghi t�
 | PUT | `/api/v1/catalog/products/{id}` | Manager/Admin thay thế thông tin chung, giữ nguyên variants/options. |
 | PATCH | `/api/v1/catalog/products/{id}/status` | Manager/Admin đổi trạng thái, ghi audit và sự kiện Outbox khi thực sự thay đổi. |
 | DELETE | `/api/v1/catalog/products/{id}` | Manager/Admin xóa sản phẩm tạo nhầm chưa có biến thể/nhóm tùy chọn; có liên kết trả 409. |
+| POST/PUT | `/api/v1/catalog/products/{id}/image` | Manager/Admin upload ảnh sản phẩm lên Cloudinary (`smart-cafe/products`), cập nhật URL và dọn ảnh cũ. |
+| DELETE | `/api/v1/catalog/products/{id}/image` | Manager/Admin gỡ ảnh sản phẩm và dọn file ảnh trên Cloudinary. |
+| POST | `/api/v1/catalog/images` | Manager/Admin upload ảnh độc lập lên Cloudinary, trả URL (`image_url`) để dùng cho sản phẩm hoặc danh mục. |
 | POST | `/api/v1/catalog/products/{productId}/variants` | Thêm biến thể cho sản phẩm đã tồn tại, 201. |
 | PUT | `/api/v1/catalog/variants/{id}` | Thay tên/thứ tự/trạng thái; không nhận giá. |
 | PATCH | `/api/v1/catalog/variants/{id}/price` | Đổi giá, ghi lịch sử, audit và outbox trong cùng transaction. |
@@ -411,3 +414,23 @@ python -X utf8 backend/catalog-service/tools/check-category-admin-mysql.py --wit
 ```
 
 Tùy chọn này cần chạy mvn test của cả Catalog và Gateway trước để có classpath. Nó kiểm tra JWT public/quản trị, ghi variant qua Gateway, trace xuyên hai service, chặn internal và 503 khi Store vắng mặt. Test dùng route HTTP local được cấu hình riêng, không cần Eureka và không thay thế Store bằng service giả. Chưa kiểm thử broker thật hoặc code backend 2.
+
+
+### Quản lý hình ảnh sản phẩm với Cloudinary
+
+Tích hợp Cloudinary lưu trữ và tối ưu hình ảnh sản phẩm theo cấu hình `.env` (`CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`).
+
+1. **Upload ảnh trực tiếp cho sản phẩm (`POST` hoặc `PUT /catalog/products/{id}/image`):**
+   - Header: `Authorization: Bearer <manager/admin_token>`, `Content-Type: multipart/form-data`.
+   - Body form-data: param `file` (hoặc `image`) dạng File.
+   - Hỗ trợ định dạng: JPEG, PNG. Dung lượng tối đa: 5 MB. Kích thước tối đa: 4096 × 4096 px.
+   - Thao tác: Kiểm tra nội dung ảnh hợp lệ, upload lên Cloudinary với thư mục `smart-cafe/products`, cập nhật trường `image` của sản phẩm vào DB và tự động dọn ảnh cũ thuộc hệ thống quản lý. Ghi `PRODUCT_UPDATED` vào `Audit_Logs`.
+   - Trả về `200 OK` kèm `ProductAdminResponse` đã cập nhật link ảnh HTTPS.
+
+2. **Gỡ ảnh sản phẩm (`DELETE /catalog/products/{id}/image`):**
+   - Xóa link ảnh của sản phẩm trên DB (về `null`) và dọn file ảnh trên Cloudinary.
+
+3. **Upload ảnh độc lập (`POST /catalog/images`):**
+   - Nhận file multipart `file`, upload lên Cloudinary và trả về JSON:
+     `{"success": true, "data": {"image_url": "https://res.cloudinary.com/...", "public_id": "smart-cafe/products/..."}}`.
+   - URL này có thể dùng làm trường `image` khi tạo mới hoặc cập nhật thông tin sản phẩm/danh mục qua JSON thông thường.

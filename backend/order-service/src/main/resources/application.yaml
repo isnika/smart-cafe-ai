@@ -65,24 +65,24 @@ jwt:
 app:
   engagement:
     internal-base-url: ${ENGAGEMENT_INTERNAL_BASE_URL:http://localhost:8087/api/v1/internal}
-    auth-value: ${ENGAGEMENT_INTERNAL_API_KEY:}
+    auth-value: ${ENGAGEMENT_INTERNAL_API_KEY:smart-cafe-internal-engagement-key}
     recovery-enabled: ${ENGAGEMENT_RECOVERY_ENABLED:true}
     recovery-delay-ms: 30000
   identity-events:
     consumer-enabled: ${ORDER_IDENTITY_EVENTS_CONSUMER_ENABLED:true}
-  internal-api-key: ${ORDER_INTERNAL_API_KEY:}
+  internal-api-key: ${ORDER_INTERNAL_API_KEY:smart-cafe-internal-order-key}
   store:
     internal-base-url: ${STORE_INTERNAL_BASE_URL:http://localhost:8083/internal}
     auth-header: ${STORE_INTERNAL_AUTH_HEADER:X-Service-Key}
-    auth-value: ${STORE_INTERNAL_API_KEY:${STORE_INTERNAL_AUTH_VALUE:}}
+    auth-value: ${STORE_INTERNAL_API_KEY:${STORE_INTERNAL_AUTH_VALUE:smart-cafe-internal-store-key}}
   catalog:
     internal-base-url: ${CATALOG_INTERNAL_BASE_URL:http://localhost:8082/internal/catalog}
     auth-header: X-Service-Key
-    auth-value: ${CATALOG_INTERNAL_API_KEY:}
+    auth-value: ${CATALOG_INTERNAL_API_KEY:smart-cafe-internal-catalog-key}
   identity:
     internal-base-url: ${IDENTITY_INTERNAL_BASE_URL:http://localhost:8081/api/v1/internal}
     auth-header: X-Service-Key
-    auth-value: ${IDENTITY_INTERNAL_API_KEY:}
+    auth-value: ${IDENTITY_INTERNAL_API_KEY:smart-cafe-internal-identity-key}
   order:
     payment-timeout-minutes: ${ORDER_PAYMENT_TIMEOUT_MINUTES:15}
     vat-rate: ${ORDER_VAT_RATE:0}

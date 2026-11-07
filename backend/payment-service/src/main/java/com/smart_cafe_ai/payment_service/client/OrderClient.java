@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 @FeignClient(name = "order-service", path = "/api/v1")
 public interface OrderClient {
 
-    @GetMapping("/internal/orders/{id}")
+    @GetMapping(value = "/internal/orders/{id}", headers = {"X-Service-Key=${app.internal-api-key:smart-cafe-internal-order-key}"})
     ApiResponse<OrderDto> getOrderById(@PathVariable("id") Long id);
 }
+

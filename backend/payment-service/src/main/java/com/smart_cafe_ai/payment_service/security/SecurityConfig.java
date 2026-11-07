@@ -38,6 +38,7 @@ public class SecurityConfig {
                 // Public Callbacks & Webhook IPN từ VNPay & Momo
                 .requestMatchers(HttpMethod.GET, "/payments/vnpay/return", "/api/v1/payments/vnpay/return").permitAll()
                 .requestMatchers(HttpMethod.GET, "/payments/vnpay/ipn", "/api/v1/payments/vnpay/ipn").permitAll()
+                .requestMatchers(HttpMethod.GET, "/payments/momo/return", "/api/v1/payments/momo/return").permitAll()
                 .requestMatchers(HttpMethod.POST, "/payments/momo/ipn", "/api/v1/payments/momo/ipn").permitAll()
 
                 // Public PDF hóa đơn

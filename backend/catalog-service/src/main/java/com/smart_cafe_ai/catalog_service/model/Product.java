@@ -66,6 +66,8 @@ public class Product {
 
     public void changeStatus(MenuStatus status) { this.status = status; }
 
+    public void updateImage(String image) { this.image = image; }
+
     @PrePersist
     void created() { createdAt = updatedAt = LocalDateTime.now(ZoneOffset.UTC).withNano(0); }
 

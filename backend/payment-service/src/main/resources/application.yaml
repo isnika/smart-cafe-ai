@@ -14,6 +14,8 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
     show-sql: false
     properties:
       hibernate:
@@ -48,8 +50,8 @@ jwt:
 payment:
   vnpay:
     url: ${VNPAY_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
-    tmn-code: ${VNPAY_TMN_CODE:SMARTCAFE}
-    hash-secret: ${VNPAY_HASH_SECRET:SECRETKEYVNPAYSMARTCAFE12345678}
+    tmn-code: ${VNPAY_TMN_CODE:LWBBGBH4}
+    hash-secret: ${VNPAY_HASH_SECRET:YILRBVCGESHZNWWBIQJZUMVQASWQSKMO}
     return-url: ${VNPAY_RETURN_URL:http://localhost:3000/payment/vnpay-return}
     version: "2.1.0"
     command: "pay"
@@ -57,9 +59,9 @@ payment:
     locale: "vn"
   momo:
     endpoint: ${MOMO_ENDPOINT:https://test-payment.momo.vn/v2/gateway/api/create}
-    partner-code: ${MOMO_PARTNER_CODE:MOMO}
-    access-key: ${MOMO_ACCESS_KEY:MOMO_ACCESS_KEY}
-    secret-key: ${MOMO_SECRET_KEY:MOMO_SECRET_KEY}
+    partner-code: ${MOMO_PARTNER_CODE:MOMOBKUN20180529}
+    access-key: ${MOMO_ACCESS_KEY:klm05TvNBzhg7h7j}
+    secret-key: ${MOMO_SECRET_KEY:at67qH6mk8w5Y1nAyMoYKMWACiEi2bsa}
     return-url: ${MOMO_RETURN_URL:http://localhost:3000/payment/momo-return}
     notify-url: ${MOMO_NOTIFY_URL:http://localhost:8085/payments/momo/ipn}
 
