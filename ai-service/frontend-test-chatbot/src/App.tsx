@@ -10,11 +10,15 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [debugOpen, setDebugOpen] = useState(true)
 
-  const activeTestLabel = useMemo(() => {
+  const activeTestInfo = useMemo(() => {
     if (!chat.activeTestRun) return undefined
     const testCase = TEST_CASES.find((item) => item.id === chat.activeTestRun?.testCaseId)
     if (!testCase) return undefined
-    return `Test ${testCase.number} · Bước ${chat.activeTestRun.stepIndex + 1}/${testCase.steps.length}`
+    return {
+      label: `Test ${testCase.number} · Bước ${chat.activeTestRun.stepIndex + 1}/${testCase.steps.length}`,
+      expectedIntent: testCase.expectedIntent,
+      checks: testCase.checks,
+    }
   }, [chat.activeTestRun])
 
   if (!chat.currentConversation) return null
@@ -74,7 +78,7 @@ function App() {
         draft={chat.draft}
         sending={chat.sending}
         lastDebug={chat.lastDebug}
-        activeTestLabel={activeTestLabel}
+        activeTestInfo={activeTestInfo}
         onDraftChange={chat.setDraft}
         onSend={chat.sendMessage}
         onRetry={chat.retryMessage}

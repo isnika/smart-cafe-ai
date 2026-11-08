@@ -9,7 +9,11 @@ interface ChatWindowProps {
   draft: string
   sending: boolean
   lastDebug: DebugExchange | null
-  activeTestLabel?: string
+  activeTestInfo?: {
+    label: string
+    expectedIntent: string
+    checks: string[]
+  }
   onDraftChange: (value: string) => void
   onSend: () => void
   onRetry: (messageId: string) => void
@@ -28,7 +32,7 @@ export function ChatWindow({
   draft,
   sending,
   lastDebug,
-  activeTestLabel,
+  activeTestInfo,
   onDraftChange,
   onSend,
   onRetry,
@@ -53,7 +57,7 @@ export function ChatWindow({
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-sm font-bold text-cafe-950">{conversation.title}</h1>
           <div className="mt-0.5 flex items-center gap-2 text-[10px] text-cafe-400">
-            <span>Smart Café RAG</span>
+            <span>Smart Café Intent-aware RAG</span>
             {lastDebug?.statusCode && (
               <>
                 <span>•</span>
@@ -64,9 +68,9 @@ export function ChatWindow({
             )}
           </div>
         </div>
-        {activeTestLabel && (
+        {activeTestInfo && (
           <div className="hidden rounded-full border border-sage-200 bg-sage-50 px-3 py-1.5 text-[10px] font-bold text-sage-700 sm:block">
-            {activeTestLabel}
+            {activeTestInfo.label} · {activeTestInfo.expectedIntent}
           </div>
         )}
         <button
@@ -78,6 +82,17 @@ export function ChatWindow({
           <span className="hidden sm:inline">Debug</span>
         </button>
       </header>
+
+      {activeTestInfo && (
+        <div className="border-b border-sage-100 bg-sage-50/80 px-4 py-2.5 sm:px-6">
+          <div className="mx-auto flex max-w-4xl flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-sage-800">
+            <span className="font-mono font-bold">EXPECTED {activeTestInfo.expectedIntent}</span>
+            {activeTestInfo.checks.map((check) => (
+              <span key={check} className="before:mr-1 before:content-['•']">{check}</span>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
         {conversation.messages.length === 0 ? (
@@ -129,9 +144,9 @@ export function ChatWindow({
         )}
       </div>
 
-      {activeTestLabel && (
+      {activeTestInfo && (
         <div className="border-t border-sage-100 bg-sage-50 px-4 py-2 text-center text-[10px] font-semibold text-sage-700 sm:hidden">
-          {activeTestLabel}
+          {activeTestInfo.label} · {activeTestInfo.expectedIntent}
         </div>
       )}
       <ChatInput value={draft} onChange={onDraftChange} onSend={onSend} sending={sending} />

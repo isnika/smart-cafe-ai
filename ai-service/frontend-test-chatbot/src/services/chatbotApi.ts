@@ -87,6 +87,7 @@ function isChatResponse(value: unknown): value is ChatResponse {
   const response = value as Record<string, unknown>
   return (
     typeof response.answer === 'string' &&
+    response.answer.trim().length > 0 &&
     Array.isArray(response.sources) &&
     response.sources.every(isSourceChunk)
   )
@@ -200,7 +201,7 @@ export async function sendChatMessage(
     }
     if (!isChatResponse(payload)) {
       throw new ChatbotApiError(
-        'Response JSON thiếu answer hoặc sources đúng schema.',
+        'Response JSON thiếu answer, answer rỗng hoặc sources không đúng schema.',
         'invalid-response',
         metrics,
         { statusCode: response.status, response: payload },

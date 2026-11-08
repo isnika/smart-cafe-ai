@@ -1,4 +1,4 @@
-import { Check, Clipboard, Code2, Copy, Database, X } from 'lucide-react'
+import { Check, Clipboard, Code2, Copy, Database, Layers3, X } from 'lucide-react'
 import { useState } from 'react'
 import type { ApiConfig, ConnectionState, DebugExchange } from '../types/chat'
 
@@ -20,6 +20,26 @@ function formatBytes(bytes?: number): string {
   if (bytes === undefined) return '—'
   if (bytes < 1024) return `${bytes} B`
   return `${(bytes / 1024).toFixed(1)} KB`
+}
+
+function retrievalSummary(exchange: DebugExchange | null) {
+  if (!exchange?.response || typeof exchange.response !== 'object') return undefined
+  const sources = (exchange.response as Record<string, unknown>).sources
+  if (!Array.isArray(sources)) return undefined
+  const records = sources.filter(
+    (source): source is Record<string, unknown> => Boolean(source) && typeof source === 'object',
+  )
+  const categories = [...new Set(
+    records.map((source) => source.category).filter((value): value is string => typeof value === 'string'),
+  )]
+  const scores = records
+    .map((source) => source.score)
+    .filter((value): value is number => typeof value === 'number')
+  return {
+    count: records.length,
+    categories,
+    topScore: scores.length ? Math.max(...scores) : undefined,
+  }
 }
 
 function CopyButton({ value, label }: { value: string; label: string }) {
@@ -48,6 +68,7 @@ export function DebugPanel({
   onTestConnection,
   onClose,
 }: DebugPanelProps) {
+  const retrieval = retrievalSummary(exchange)
   return (
     <aside className="flex h-full w-[370px] shrink-0 flex-col border-l border-cafe-100 bg-white shadow-[-18px_0_45px_rgba(77,48,40,0.06)]">
       <header className="flex items-center gap-3 border-b border-cafe-100 px-4 py-4">
@@ -133,6 +154,21 @@ export function DebugPanel({
               <Metric label="History sent" value={exchange?.historyCount.toString() ?? '—'} />
             </section>
 
+            {retrieval && (
+              <section className="rounded-2xl border border-sage-100 bg-sage-50 p-3">
+                <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-sage-700">
+                  <Layers3 className="h-3.5 w-3.5" /> Retrieval summary
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-sage-900">
+                  <span>Nguồn: <strong>{retrieval.count}</strong></span>
+                  <span>Top score: <strong>{retrieval.topScore?.toFixed(3) ?? '—'}</strong></span>
+                  <span className="col-span-2 break-words">
+                    Category: <strong>{retrieval.categories.join(', ') || '—'}</strong>
+                  </span>
+                </div>
+              </section>
+            )}
+
             {exchange?.tokenUsage && (
               <section className="rounded-2xl border border-sage-100 bg-sage-50 p-3">
                 <p className="text-[10px] font-bold uppercase tracking-wide text-sage-700">Token usage từ Backend</p>
@@ -142,6 +178,12 @@ export function DebugPanel({
                   <span>Total: {exchange.tokenUsage.totalTokens ?? '—'}</span>
                 </div>
               </section>
+            )}
+
+            {exchange && !exchange.tokenUsage && (
+              <p className="rounded-xl border border-cafe-100 bg-cafe-50 px-3 py-2 text-[10px] text-cafe-500">
+                Backend không trả token usage; giao diện không tự ước lượng.
+              </p>
             )}
 
             {exchange?.errorMessage && (

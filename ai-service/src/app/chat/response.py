@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 
 from .intent import Intent
-from .normalize import search_tokens
+from .normalize import fold_text, search_tokens
 
 
 _INTERNAL_LINE = re.compile(
@@ -97,6 +97,25 @@ def _clean_business_answer(answer: str) -> str:
     return answer[:1].upper() + answer[1:] if answer else answer
 
 
+def _opening_hours_answer(answer: str, question: str) -> str:
+    """Trả lời đúng điểm mở/đóng cửa bằng giá trị parse từ context."""
+    times = re.findall(r"(?<!\d)(\d{1,2})(?::(\d{2}))?\s*h?\b", answer, re.I)
+    if len(times) < 2:
+        return _clean_business_answer(answer)
+
+    def display(value: tuple[str, str]) -> str:
+        hour, minute = value
+        return f"{int(hour):02d}:{minute}" if minute else f"{int(hour)}h"
+
+    folded_question = fold_text(question)
+    opening, closing = display(times[0]), display(times[-1])
+    if "dong cua" in folded_question:
+        return f"Smart Café đóng cửa lúc {closing} nhé!"
+    if "mo cua" in folded_question:
+        return f"Smart Café mở cửa lúc {opening} nhé!"
+    return f"Smart Café mở cửa từ {opening} đến {closing} nhé!"
+
+
 def _product_headings(blocks: list[tuple[str, str]]) -> list[str]:
     excluded = ("tổng quan", "quy tắc", "câu hỏi", "danh sách", "knowledge base")
     names: list[str] = []
@@ -163,6 +182,8 @@ def build_extractive_answer(prompt_content: str) -> str:
     }:
         answer = _best_qa(blocks, question)
         if answer:
+            if intent is Intent.OPENING_HOURS:
+                return _opening_hours_answer(answer, question)
             return _clean_business_answer(answer)
 
     if intent in {

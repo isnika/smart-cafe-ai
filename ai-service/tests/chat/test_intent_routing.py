@@ -178,8 +178,18 @@ def test_new_opening_hours_topic_does_not_reuse_old_menu_entity():
 
     answer, sources = asyncio.run(_offline_pipeline().answer("Quán mấy giờ đóng cửa?", history))
 
-    assert "22h" in answer
+    assert answer == "Smart Café đóng cửa lúc 22h nhé!"
     assert sources and {source.source for source in sources} == {"faq/faq.md"}
+
+
+def test_opening_hours_typo_answers_the_requested_boundary():
+    pipeline = _offline_pipeline()
+
+    opening, _ = asyncio.run(pipeline.answer("quán mấy giờ mở cừa"))
+    closing, _ = asyncio.run(pipeline.answer("quán mấy giờ đóng cửa"))
+
+    assert opening == "Smart Café mở cửa lúc 7h nhé!"
+    assert closing == "Smart Café đóng cửa lúc 22h nhé!"
 
 
 def test_unknown_product_and_low_similarity_do_not_return_another_product():

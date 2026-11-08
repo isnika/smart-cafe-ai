@@ -97,6 +97,8 @@ export interface ChatTestCase {
   title: string
   category: string
   description: string
+  expectedIntent: string
+  checks: string[]
   steps: string[]
 }
 

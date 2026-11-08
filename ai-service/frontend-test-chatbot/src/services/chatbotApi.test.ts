@@ -68,6 +68,9 @@ describe('sendChatMessage', () => {
 
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ sources: [] }), { status: 200 })))
     await expect(sendChatMessage(config, request)).rejects.toMatchObject({ kind: 'invalid-response' })
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ answer: '   ', sources: [] }), { status: 200 })))
+    await expect(sendChatMessage(config, request)).rejects.toMatchObject({ kind: 'invalid-response' })
   })
 
   it('aborts requests that exceed the configured timeout', async () => {
