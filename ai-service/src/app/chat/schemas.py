@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class ChatMessage(BaseModel):
@@ -11,7 +11,8 @@ class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: str = Field(..., min_length=1, max_length=2000)
 
-    @validator("content")
+    @field_validator("content")
+    @classmethod
     def clean_content(cls, value: str) -> str:
         value = value.strip()
         if not value:
@@ -22,9 +23,10 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=2000, description="Câu hỏi hiện tại")
     # Chặn payload quá lớn; RAGPipeline cũng chỉ dùng số lượt gần nhất.
-    history: list[ChatMessage] = Field(default_factory=list, max_items=30)
+    history: list[ChatMessage] = Field(default_factory=list, max_length=30)
 
-    @validator("message")
+    @field_validator("message")
+    @classmethod
     def clean_message(cls, value: str) -> str:
         value = value.strip()
         if not value:

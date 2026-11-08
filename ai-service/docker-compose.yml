@@ -9,4 +9,21 @@ services:
     ports:
       - "8000:8000"
 
+    environment:
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai_compatible}
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://host.docker.internal:11434/v1}
+      LLM_API_KEY: ${LLM_API_KEY:-ollama}
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5:3b}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-45}
+      LLM_MAX_RETRIES: ${LLM_MAX_RETRIES:-2}
+      LLM_RETRY_BASE_SECONDS: ${LLM_RETRY_BASE_SECONDS:-0.4}
+      LLM_RETRY_MAX_SECONDS: ${LLM_RETRY_MAX_SECONDS:-4}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.1}
+      RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-intfloat/multilingual-e5-small}
+      RAG_TOP_K: ${RAG_TOP_K:-4}
+      RAG_MIN_SCORE: ${RAG_MIN_SCORE:-0.68}
+      RAG_LEXICAL_WEIGHT: ${RAG_LEXICAL_WEIGHT:-0.30}
+      RAG_ALLOW_MODEL_DOWNLOAD: ${RAG_ALLOW_MODEL_DOWNLOAD:-true}
+      RAG_DISABLE_EMBEDDINGS: ${RAG_DISABLE_EMBEDDINGS:-false}
+
     restart: unless-stopped

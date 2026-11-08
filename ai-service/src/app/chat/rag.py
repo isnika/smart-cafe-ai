@@ -6,25 +6,42 @@ import logging
 import os
 from typing import Protocol
 
-from .llm import get_llm
+from .intent import Intent, classify_intent, fallback_for_intent
+from .llm import ExtractiveLLM, get_llm
+from .normalize import contextualize_followup, needs_llm_rewrite, search_tokens
 from .prompts import (
     CONDENSE_SYSTEM,
     CONDENSE_USER,
     FALLBACK_ANSWER,
+    GREETING_ANSWER,
     SYSTEM_PROMPT,
     USER_TEMPLATE,
 )
 from .retriever import Retriever, SearchHit, get_retriever
+from .response import answer_prices_are_grounded, sanitize_generated_answer
 from .schemas import ChatMessage, SourceChunk
 
 logger = logging.getLogger(__name__)
 
 TOP_K = max(1, min(int(os.getenv("RAG_TOP_K", "4")), 8))
 MIN_SCORE = float(os.getenv("RAG_MIN_SCORE", "0.68"))
-MAX_HISTORY_MESSAGES = 10
-MAX_HISTORY_CHARS = 6000
+MAX_HISTORY_MESSAGES = 8
+MAX_HISTORY_CHARS = 3200
 MAX_STANDALONE_QUERY_CHARS = 500
-MAX_CONTEXT_CHARS = 9000
+MAX_CONTEXT_CHARS = 4800
+
+# Các intent fact lookup có thể format trực tiếp từ context. Việc không gọi
+# model sinh cho nhóm này giảm latency/token và giữ nguyên các điều kiện như
+# "nếu quán hỗ trợ" thay vì để LLM vô tình khẳng định quá mức.
+DIRECT_ANSWER_INTENTS = frozenset({
+    Intent.PRODUCT_PRICE,
+    Intent.PRODUCT_DETAIL,
+    Intent.OPENING_HOURS,
+    Intent.WIFI_QUERY,
+    Intent.LOCATION_QUERY,
+    Intent.SERVICE_QUERY,
+    Intent.POLICY_QUERY,
+})
 
 
 class LLMClient(Protocol):
@@ -38,7 +55,7 @@ def _format_context(hits: list[SearchHit], max_chars: int = MAX_CONTEXT_CHARS) -
     blocks: list[str] = []
     used = 0
     for hit in hits:
-        block = f"(Nguồn: {hit.chunk.source}; mục: {hit.chunk.heading})\n{hit.chunk.text}"
+        block = hit.chunk.text
         remaining = max_chars - used
         if remaining <= 0:
             break
@@ -51,26 +68,47 @@ def _format_context(hits: list[SearchHit], max_chars: int = MAX_CONTEXT_CHARS) -
     return "\n\n---\n\n".join(blocks)
 
 
-def _clean_history(history: list[ChatMessage]) -> list[dict]:
-    """Chuẩn hóa lịch sử cũ; giữ cả tin user gần nhất vì message hiện tại tách riêng."""
-    msgs: list[dict] = []
-    total_chars = 0
+def _deduplicate_hits(hits: list[SearchHit]) -> list[SearchHit]:
+    """Loại chunk gần trùng để giảm context và token mà không cần reranker."""
+    selected: list[SearchHit] = []
+    selected_tokens: list[set[str]] = []
+    for hit in hits:
+        tokens = set(search_tokens(hit.chunk.text))
+        duplicated = False
+        for previous in selected_tokens:
+            union = tokens | previous
+            similarity = len(tokens & previous) / len(union) if union else 1.0
+            if similarity >= 0.88:
+                duplicated = True
+                break
+        if not duplicated:
+            selected.append(hit)
+            selected_tokens.append(tokens)
+    return selected
 
-    for item in history[-MAX_HISTORY_MESSAGES:]:
+
+def _clean_history(history: list[ChatMessage]) -> list[dict]:
+    """Giữ các lượt mới nhất trong ngân sách; không làm rơi context gần nhất."""
+    newest_first: list[dict] = []
+    remaining = MAX_HISTORY_CHARS
+    for item in reversed(history[-MAX_HISTORY_MESSAGES:]):
         content = " ".join(item.content.split()).strip()
         if not content:
             continue
-        # Lịch sử không được phép làm phình prompt quá mức.
-        remaining = MAX_HISTORY_CHARS - total_chars
         if remaining <= 0:
             break
         content = content[:remaining]
-        total_chars += len(content)
+        remaining -= len(content)
+        newest_first.append({"role": item.role, "content": content})
 
-        if msgs and msgs[-1]["role"] == item.role:
+    msgs: list[dict] = []
+    for item in reversed(newest_first):
+        role, content = item["role"], item["content"]
+
+        if msgs and msgs[-1]["role"] == role:
             msgs[-1]["content"] += "\n" + content
         else:
-            msgs.append({"role": item.role, "content": content})
+            msgs.append({"role": role, "content": content})
 
     # Một lịch sử hợp lệ bắt đầu bằng user; loại bỏ assistant mở đầu bất thường.
     while msgs and msgs[0]["role"] != "user":
@@ -83,17 +121,25 @@ class RAGPipeline:
         self,
         retriever: Retriever | None = None,
         llm: LLMClient | None = None,
+        fallback_llm: LLMClient | None = None,
         top_k: int = TOP_K,
         min_score: float = MIN_SCORE,
     ):
         self.retriever = retriever or get_retriever()
         self.llm = llm or get_llm()
+        self.fallback_llm = fallback_llm or ExtractiveLLM()
         self.top_k = max(1, min(int(top_k), 8))
         self.min_score = float(min_score)
 
     async def _condense(self, question: str, history: list[dict]) -> str:
         """Viết lại câu hỏi nối tiếp; nếu model lỗi thì vẫn tiếp tục bằng câu hỏi gốc."""
         if not history:
+            return question
+
+        local_query = contextualize_followup(question, history)
+        if local_query:
+            return local_query[:MAX_STANDALONE_QUERY_CHARS]
+        if not needs_llm_rewrite(question):
             return question
 
         hist_text = "\n".join(
@@ -128,32 +174,85 @@ class RAGPipeline:
             return FALLBACK_ANSWER, []
 
         hist = _clean_history(history or [])
+        decision = classify_intent(question)
+        if decision.intent is Intent.GREETING:
+            return GREETING_ANSWER, []
+        if decision.intent is Intent.UNKNOWN:
+            logger.info("Không nhận diện được intent phù hợp; không retrieval toàn cục")
+            return fallback_for_intent(decision.intent), []
+
         standalone = await self._condense(question, hist)
-        logger.info("Bắt đầu truy xuất câu hỏi: %s", standalone[:250])
+        logger.info(
+            "Bắt đầu truy xuất chat (intent=%s, query_chars=%d, history_messages=%d)",
+            decision.intent.value,
+            len(standalone),
+            len(hist),
+        )
 
         try:
             hits = await asyncio.to_thread(
-                self.retriever.search, standalone, self.top_k, self.min_score, category
+                self.retriever.search,
+                standalone,
+                self.top_k,
+                self.min_score,
+                category,
+                decision.intent,
             )
         except Exception:
             logger.exception("Truy xuất knowledge base thất bại")
             raise
 
         if not hits:
-            logger.info("Không tìm thấy nguồn đủ liên quan cho câu hỏi")
-            return FALLBACK_ANSWER, []
+            logger.info("Không tìm thấy nguồn đủ liên quan cho intent=%s", decision.intent.value)
+            return fallback_for_intent(decision.intent), []
 
+        hits = _deduplicate_hits(hits)
         context = _format_context(hits)
-        user_msg = USER_TEMPLATE.format(context=context, question=question)
-        answer = await self.llm.generate(
-            SYSTEM_PROMPT,
-            hist + [{"role": "user", "content": user_msg}],
-            max_tokens=400,
+        user_msg = USER_TEMPLATE.format(
+            intent=decision.intent.value,
+            context=context,
+            question=question,
         )
+        messages = hist + [{"role": "user", "content": user_msg}]
+        answer = ""
+        if decision.intent in DIRECT_ANSWER_INTENTS:
+            answer = await self.fallback_llm.generate(
+                SYSTEM_PROMPT,
+                messages,
+                max_tokens=280,
+            )
+            logger.info("Trả lời grounded trực tiếp cho intent=%s", decision.intent.value)
 
-        answer = (answer or "").strip()
         if not answer:
-            answer = FALLBACK_ANSWER
+            try:
+                answer = await self.llm.generate(
+                    SYSTEM_PROMPT,
+                    messages,
+                    max_tokens=280,
+                )
+            except Exception:
+                # Ollama/OpenAI-compatible outage không làm endpoint mất hoàn toàn.
+                # Fallback chỉ trích xuất dữ liệu đã retrieval nên không hallucination.
+                logger.exception("LLM provider lỗi; sử dụng câu trả lời trích xuất có căn cứ")
+                answer = await self.fallback_llm.generate(
+                    SYSTEM_PROMPT,
+                    messages,
+                    max_tokens=280,
+                )
+
+        answer = sanitize_generated_answer(answer or "")
+        if answer and not answer_prices_are_grounded(answer, context):
+            logger.warning("Loại câu trả lời có giá không tồn tại trong context")
+            answer = ""
+        if not answer:
+            answer = await self.fallback_llm.generate(
+                SYSTEM_PROMPT,
+                messages,
+                max_tokens=280,
+            )
+            answer = sanitize_generated_answer(answer or "")
+        if not answer:
+            answer = fallback_for_intent(decision.intent) or FALLBACK_ANSWER
 
         sources = [
             SourceChunk(

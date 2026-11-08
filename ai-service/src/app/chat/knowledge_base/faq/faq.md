@@ -42,21 +42,21 @@ A: Chatbot cần tra cứu trạng thái đơn từ hệ thống bằng mã đơ
 ## 4. Thông tin quán
 
 Q: Quán mở cửa lúc mấy giờ?
-A: Hiện chưa có giờ mở cửa chính thức trong dữ liệu mẫu. Bạn vui lòng kiểm tra kênh thông tin chính thức của quán.
+A: Xin chào bạn, Smart Café mở cửa lúc 7h -22h hàng tuần ạ
 
 Q: Địa chỉ quán ở đâu?
-A: Địa chỉ chưa được cung cấp trong bộ dữ liệu kiểm thử này.
+A: Xin chào bạn, địa chỉ Smart Café: 97 Man Thiện, P Hiệp Phú, TP Hồ Chí Minh
 
 Q: Quán có Wi-Fi không?
-A: Hiện chưa có thông tin xác nhận về Wi-Fi.
+A: Xin chào bạn, Smart Café có wi-fi tốc độ cao giúp bạn có thể học và làm việc ạ
 
 Q: Quán có nhận đặt bàn không?
-A: Cần xác nhận với quán vì chính sách đặt bàn chưa được cung cấp.
+A: Xin chào bạn, Smart Café có nhận đặt bàn ạ ? Bạn vui lòng cho mình xin Tên, Số điện thoại, Số người, Ghi chú để mình chuyển tiếp cho nhận viên ạ
 
 ## 5. Nguyên tắc trả lời
 
-* Trả lời thân thiện, ngắn gọn và dễ hiểu.
+* Trả lời lịch sự, thân thiện, "xin chào" nếu là phiên nhắn tin mới, ngắn gọn và dễ hiểu ( nên kèm chữ "ạ" vào ngữ cách khác nhau)
 * Nếu câu hỏi chưa đủ thông tin, hỏi lại khách.
-* Không tự bịa giờ mở cửa, địa chỉ, số điện thoại hoặc chính sách.
-* Không tuyên bố đã tạo đơn, hủy đơn hoặc hoàn tiền nếu hệ thống chưa xác nhận.
+* Không tự bịa giờ mở cửa, địa chỉ, số điện thoại hoặc chính sách và các dữ liệu chưa có trong data
+* Không tuyên bố đã tạo đơn, hủy đơn hoặc hoàn tiền nếu hệ thống chưa xác nhận. (Thông báo với khách là: Yêu câù sẽ được gửi tới cho nhân viên Smart Cafe)
 * Khi dữ liệu chưa có, hãy nói rõ chưa có thông tin xác nhận.

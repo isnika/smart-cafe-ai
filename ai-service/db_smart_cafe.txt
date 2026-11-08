@@ -1,0 +1,1567 @@
+-- ============================================================================
+-- SMART CAFE - DATABASE SCRIPT (MySQL 8.0.17+; CHECK constraints are enforced, multi-valued JSON index is used)
+-- ============================================================================
+-- Architecture: database-per-service. No cross-service foreign keys; cross-service
+-- columns are "external references" kept consistent through Outbox/Inbox events.
+--
+-- 01. Identity Service      -> smart_cafe_identity_db
+-- 02. Catalog Service       -> smart_cafe_catalog_db
+-- 03. Store Service         -> smart_cafe_store_db      (includes Workforce)
+-- 04. Order Service         -> smart_cafe_order_db
+-- 05. Payment Service       -> smart_cafe_payment_db
+-- 06. Inventory Service     -> smart_cafe_inventory_db
+-- 07. Engagement Service    -> smart_cafe_engagement_db
+-- 08. Intelligence Service  -> smart_cafe_intelligence_db
+--
+-- GLOBAL CONVENTIONS
+-- 1. All DATETIME values are stored in UTC. Configure every connection with
+--    time_zone = '+00:00'. Branch-local time uses Branches.timezone for reporting.
+-- 2. Money is VND, stored as DECIMAL(15,0) (no fractional part).
+-- 3. Prices are VAT-INCLUSIVE. Orders.vat_amount is the VAT portion contained in
+--    final_amount (informational), it is NOT added on top.
+--    Orders.final_amount = sub_total - item_discount_amount
+--                          - voucher_discount_amount + delivery_fee
+-- 4. Cross-service actor references ALWAYS use Identity Users.id (user_id).
+--    Only Store Service uses Staff_Profiles.id internally.
+-- 5. Never hard-delete business master data (users, products, branches...).
+--    Use status columns. FKs use RESTRICT unless the child is pure detail data.
+-- 6. Rules that cannot be expressed as a constraint are written as "APP RULE"
+--    in comments and MUST be enforced by the service inside one transaction.
+-- ============================================================================
+
+SET NAMES utf8mb4;
+
+-- ============================================================================
+-- 01. Identity Service
+-- ============================================================================
+CREATE DATABASE IF NOT EXISTS smart_cafe_identity_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE smart_cafe_identity_db;
+
+CREATE TABLE Roles (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE,
+    description VARCHAR(255)
+);
+
+-- Branch scope of staff is owned by Store Service (Staff_Profiles.branch_id) and
+-- should be placed in the access token claims; it is intentionally not duplicated here.
+CREATE TABLE Users (
+    id VARCHAR(36) PRIMARY KEY,
+    email VARCHAR(100) NULL UNIQUE,
+    phone VARCHAR(20) NULL UNIQUE,
+    password_hash VARCHAR(255) NULL,
+    google_id VARCHAR(100) NULL UNIQUE,
+    full_name VARCHAR(100) NOT NULL,
+    avatar VARCHAR(255),
+    role_id INT NOT NULL,
+    status ENUM('Unverified', 'Active', 'Banned', 'Deactivated') NOT NULL DEFAULT 'Unverified'
+        COMMENT 'Deactivated is set when a staff member is terminated (Store event) or the user closes the account',
+    email_verified_at DATETIME NULL,
+    phone_verified_at DATETIME NULL,
+    last_login_at DATETIME NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_users_role FOREIGN KEY (role_id) REFERENCES Roles(id),
+    CONSTRAINT chk_users_identifier CHECK (email IS NOT NULL OR phone IS NOT NULL OR google_id IS NOT NULL),
+    CONSTRAINT chk_users_credential CHECK (password_hash IS NOT NULL OR google_id IS NOT NULL),
+    INDEX idx_users_status (status),
+    INDEX idx_users_role (role_id)
+);
+
+CREATE TABLE Refresh_Tokens (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL,
+    token_hash VARCHAR(255) NOT NULL UNIQUE COMMENT 'Store only a hash of the refresh token',
+    device_info VARCHAR(255) NULL,
+    ip_address VARCHAR(45) NULL,
+    expires_at DATETIME NOT NULL,
+    revoked_at DATETIME NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_refresh_tokens_user FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE,
+    INDEX idx_refresh_user (user_id, revoked_at),
+    INDEX idx_refresh_expiry (expires_at)
+);
+
+CREATE TABLE OTP_Logs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(36) NULL COMMENT 'NULL for Register before the user exists',
+    channel ENUM('Email', 'Phone') NOT NULL,
+    target VARCHAR(100) NOT NULL COMMENT 'Email address or phone number matching channel',
+    otp_hash VARCHAR(255) NOT NULL COMMENT 'One-way hash only; never store the plaintext OTP',
+    purpose ENUM('Register', 'Reset_Password', 'Change_Password', 'Change_Email', 'Change_Phone') NOT NULL,
+    expires_at DATETIME NOT NULL,
+    attempt_count INT UNSIGNED NOT NULL DEFAULT 0,
+    max_attempts INT UNSIGNED NOT NULL DEFAULT 5,
+    is_used BOOLEAN NOT NULL DEFAULT FALSE,
+    used_at DATETIME NULL,
+    ip_address VARCHAR(45) NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_otp_max_attempts CHECK (max_attempts > 0),
+    CONSTRAINT chk_otp_attempts CHECK (attempt_count <= max_attempts),
+    CONSTRAINT chk_otp_used CHECK ((is_used = FALSE AND used_at IS NULL) OR (is_used = TRUE AND used_at IS NOT NULL)),
+    -- APP RULE: rate-limit resend by counting rows per (target, purpose) in a recent window.
+    INDEX idx_otp_target_purpose_created (target, purpose, created_at),
+    INDEX idx_otp_expiry_used (expires_at, is_used)
+);
+
+CREATE TABLE Addresses (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL,
+    label VARCHAR(50) NULL COMMENT 'Home, Office...',
+    receiver_name VARCHAR(100) NOT NULL,
+    phone VARCHAR(20) NOT NULL,
+    province VARCHAR(100) NOT NULL,
+    district VARCHAR(100) NULL COMMENT 'Legacy level; Vietnam removed district level from 2025-07-01',
+    ward VARCHAR(100) NOT NULL,
+    address_line VARCHAR(255) NOT NULL,
+    latitude DECIMAL(10,7) NULL,
+    longitude DECIMAL(10,7) NULL,
+    is_default BOOLEAN NOT NULL DEFAULT FALSE,
+    default_user_id VARCHAR(36) GENERATED ALWAYS AS (CASE WHEN is_default THEN user_id ELSE NULL END) STORED
+        COMMENT 'Used only to enforce one default address per user',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_addresses_user FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE RESTRICT, -- RESTRICT: user_id is the base column of a STORED generated column, so MySQL forbids CASCADE here
+    CONSTRAINT chk_addresses_geo CHECK (
+        (latitude IS NULL AND longitude IS NULL)
+        OR (latitude BETWEEN -90 AND 90 AND longitude BETWEEN -180 AND 180)
+    ),
+    UNIQUE KEY uq_one_default_address_per_user (default_user_id),
+    INDEX idx_addresses_user (user_id)
+);
+
+-- Events published: identity.user.banned, identity.user.deactivated.
+-- Events consumed: store.staff.terminated (-> Users.status = 'Deactivated').
+CREATE TABLE Outbox_Events (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    event_id VARCHAR(36) NOT NULL UNIQUE,
+    aggregate_type VARCHAR(50) NOT NULL,
+    aggregate_id VARCHAR(64) NOT NULL,
+    event_type VARCHAR(100) NOT NULL,
+    event_version SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+    correlation_id VARCHAR(64) NULL,
+    payload JSON NOT NULL,
+    status ENUM('Pending', 'Published', 'Failed') NOT NULL DEFAULT 'Pending',
+    retry_count INT UNSIGNED NOT NULL DEFAULT 0,
+    next_retry_at DATETIME NULL,
+    last_error VARCHAR(500) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    published_at DATETIME NULL,
+    INDEX idx_identity_outbox_dispatch (status, next_retry_at, created_at),
+    INDEX idx_identity_outbox_aggregate (aggregate_type, aggregate_id)
+);
+
+CREATE TABLE Processed_Events (
+    event_id VARCHAR(36) PRIMARY KEY,
+    event_type VARCHAR(100) NOT NULL,
+    source_service VARCHAR(100) NULL,
+    processed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_identity_processed_type_time (event_type, processed_at)
+);
+
+CREATE TABLE Audit_Logs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    actor_user_id VARCHAR(36) NULL COMMENT 'External reference to Identity Service; NULL for system actions',
+    action VARCHAR(100) NOT NULL,
+    entity_type VARCHAR(50) NOT NULL,
+    entity_id VARCHAR(64) NOT NULL,
+    old_value JSON NULL,
+    new_value JSON NULL,
+    ip_address VARCHAR(45) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_identity_audit_entity (entity_type, entity_id, created_at),
+    INDEX idx_identity_audit_actor (actor_user_id, created_at)
+);
+
+-- ============================================================================
+-- 02. Catalog Service
+-- ============================================================================
+-- AVAILABILITY RULE: an item is sellable at a branch only when
+--   Products.status = 'Active' AND Product_Variants.status = 'Active'
+--   AND (no Branch_Product_Availability row exists OR is_available = TRUE).
+-- "No row" means AVAILABLE. Options follow the same rule.
+CREATE DATABASE IF NOT EXISTS smart_cafe_catalog_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE smart_cafe_catalog_db;
+
+CREATE TABLE Categories (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    image VARCHAR(255),
+    sort_order INT NOT NULL DEFAULT 0,
+    status ENUM('Active', 'Inactive') NOT NULL DEFAULT 'Active'
+);
+
+CREATE TABLE Products (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    category_id INT NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    image VARCHAR(255) NULL,
+    description TEXT,
+    temperature ENUM('Hot', 'Iced', 'Blended', 'Hot_Or_Iced') NULL
+        COMMENT 'Serving temperature; NULL for non-drink items (food, merchandise)',
+    caffeine_level ENUM('None', 'Low', 'Medium', 'High') NOT NULL DEFAULT 'None',
+    flavor_tags JSON NULL COMMENT 'JSON array of lowercase tags, e.g. ["sweet","creamy","nutty"]; used for search and AI recommendations',
+    sort_order INT NOT NULL DEFAULT 0,
+    status ENUM('Active', 'Inactive') NOT NULL DEFAULT 'Active',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_products_category FOREIGN KEY (category_id) REFERENCES Categories(id),
+    CONSTRAINT chk_products_flavor_tags CHECK (flavor_tags IS NULL OR JSON_TYPE(flavor_tags) = 'ARRAY'),
+    INDEX idx_products_category_status (category_id, status, sort_order),
+    INDEX idx_products_temperature_caffeine (temperature, caffeine_level),
+    INDEX idx_products_flavor_tags ((CAST(flavor_tags -> '$[*]' AS CHAR(30) ARRAY)))
+);
+
+CREATE TABLE Product_Variants (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    product_id INT NOT NULL,
+    variant_name VARCHAR(50) NOT NULL DEFAULT 'Standard',
+    price DECIMAL(15,0) NOT NULL,
+    sort_order INT NOT NULL DEFAULT 0,
+    status ENUM('Active', 'Inactive') NOT NULL DEFAULT 'Active' COMMENT 'Global menu lifecycle status; branch availability is stored separately',
+    CONSTRAINT fk_variants_product FOREIGN KEY (product_id) REFERENCES Products(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_variants_price CHECK (price >= 0),
+    UNIQUE KEY uq_variant_per_product (product_id, variant_name)
+);
+
+CREATE TABLE Variant_Price_History (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    variant_id INT NOT NULL,
+    old_price DECIMAL(15,0) NULL,
+    new_price DECIMAL(15,0) NOT NULL,
+    changed_by VARCHAR(36) NULL COMMENT 'External reference to Identity Service',
+    changed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_price_history_variant FOREIGN KEY (variant_id) REFERENCES Product_Variants(id) ON DELETE RESTRICT,
+    INDEX idx_price_history_variant_time (variant_id, changed_at)
+);
+
+CREATE TABLE Branch_Product_Availability (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    branch_id INT NOT NULL COMMENT 'External reference to Store Service; no cross-service FK',
+    variant_id INT NOT NULL,
+    is_available BOOLEAN NOT NULL DEFAULT TRUE,
+    unavailable_reason VARCHAR(255) NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_branch_product_availability_variant FOREIGN KEY (variant_id) REFERENCES Product_Variants(id) ON DELETE RESTRICT,
+    UNIQUE KEY uq_branch_variant_availability (branch_id, variant_id),
+    INDEX idx_branch_product_availability_branch (branch_id, is_available),
+    INDEX idx_branch_product_availability_variant (variant_id)
+);
+
+CREATE TABLE Product_Option_Groups (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    product_id INT NOT NULL,
+    name VARCHAR(50) NOT NULL,
+    selection_type ENUM('Single', 'Multiple') NOT NULL,
+    is_required BOOLEAN NOT NULL DEFAULT FALSE,
+    min_select TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    max_select TINYINT UNSIGNED NOT NULL DEFAULT 1,
+    sort_order INT NOT NULL DEFAULT 0,
+    CONSTRAINT fk_option_groups_product FOREIGN KEY (product_id) REFERENCES Products(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_option_groups_range CHECK (max_select >= 1 AND min_select <= max_select),
+    CONSTRAINT chk_option_groups_single CHECK (selection_type <> 'Single' OR max_select = 1),
+    CONSTRAINT chk_option_groups_required CHECK (is_required = FALSE OR min_select >= 1),
+    UNIQUE KEY uq_option_group_per_product (product_id, name)
+);
+
+CREATE TABLE Product_Options (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    group_id INT NOT NULL,
+    option_name VARCHAR(100) NOT NULL,
+    extra_price DECIMAL(15,0) NOT NULL DEFAULT 0,
+    is_default BOOLEAN NOT NULL DEFAULT FALSE,
+    sort_order INT NOT NULL DEFAULT 0,
+    status ENUM('Active', 'Inactive') NOT NULL DEFAULT 'Active',
+    CONSTRAINT fk_options_group FOREIGN KEY (group_id) REFERENCES Product_Option_Groups(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_options_price CHECK (extra_price >= 0),
+    UNIQUE KEY uq_option_per_group (group_id, option_name)
+);
+
+CREATE TABLE Branch_Option_Availability (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    branch_id INT NOT NULL COMMENT 'External reference to Store Service; no cross-service FK',
+    option_id INT NOT NULL,
+    is_available BOOLEAN NOT NULL DEFAULT TRUE,
+    unavailable_reason VARCHAR(255) NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_branch_option_availability_option FOREIGN KEY (option_id) REFERENCES Product_Options(id) ON DELETE RESTRICT,
+    UNIQUE KEY uq_branch_option_availability (branch_id, option_id),
+    INDEX idx_branch_option_availability_branch (branch_id, is_available),
+    INDEX idx_branch_option_availability_option (option_id)
+);
+
+-- Product-level price for display. The source of truth stays Product_Variants.price
+-- (a product can have several sizes with different prices), so there is no duplicate column to drift.
+-- Search by flavor: WHERE 'creamy' MEMBER OF (flavor_tags)
+CREATE VIEW v_products_full AS
+SELECT p.id, p.category_id, p.name, p.image, p.description,
+       p.temperature, p.caffeine_level, p.flavor_tags, p.status, p.sort_order,
+       MIN(v.price) AS price,
+       MAX(v.price) AS max_price
+FROM Products p
+LEFT JOIN Product_Variants v ON v.product_id = p.id AND v.status = 'Active'
+GROUP BY p.id, p.category_id, p.name, p.image, p.description,
+         p.temperature, p.caffeine_level, p.flavor_tags, p.status, p.sort_order;
+
+-- Events published: catalog.variant.price_changed, catalog.product.status_changed.
+-- Events consumed: inventory.ingredient.low_stock / restocked (update Branch_*_Availability).
+
+CREATE TABLE Outbox_Events (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    event_id VARCHAR(36) NOT NULL UNIQUE,
+    aggregate_type VARCHAR(50) NOT NULL,
+    aggregate_id VARCHAR(64) NOT NULL,
+    event_type VARCHAR(100) NOT NULL,
+    event_version SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+    correlation_id VARCHAR(64) NULL,
+    payload JSON NOT NULL,
+    status ENUM('Pending', 'Published', 'Failed') NOT NULL DEFAULT 'Pending',
+    retry_count INT UNSIGNED NOT NULL DEFAULT 0,
+    next_retry_at DATETIME NULL,
+    last_error VARCHAR(500) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    published_at DATETIME NULL,
+    INDEX idx_catalog_outbox_dispatch (status, next_retry_at, created_at),
+    INDEX idx_catalog_outbox_aggregate (aggregate_type, aggregate_id)
+);
+
+CREATE TABLE Processed_Events (
+    event_id VARCHAR(36) PRIMARY KEY,
+    event_type VARCHAR(100) NOT NULL,
+    source_service VARCHAR(100) NULL,
+    processed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_catalog_processed_type_time (event_type, processed_at)
+);
+
+CREATE TABLE Audit_Logs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    actor_user_id VARCHAR(36) NULL COMMENT 'External reference to Identity Service; NULL for system actions',
+    action VARCHAR(100) NOT NULL,
+    entity_type VARCHAR(50) NOT NULL,
+    entity_id VARCHAR(64) NOT NULL,
+    old_value JSON NULL,
+    new_value JSON NULL,
+    ip_address VARCHAR(45) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_catalog_audit_entity (entity_type, entity_id, created_at),
+    INDEX idx_catalog_audit_actor (actor_user_id, created_at)
+);
+
+-- ============================================================================
+-- 03. Store Service (includes Workforce capability)
+-- ============================================================================
+CREATE DATABASE IF NOT EXISTS smart_cafe_store_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE smart_cafe_store_db;
+
+CREATE TABLE Branches (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(20) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL,
+    address VARCHAR(255) NOT NULL,
+    phone VARCHAR(20),
+    --latitude DECIMAL(10,7) NULL,
+	--longitude DECIMAL(10,7) NULL, 
+    timezone VARCHAR(50) NOT NULL DEFAULT 'Asia/Ho_Chi_Minh',
+    opening_time TIME NULL,
+    closing_time TIME NULL,
+    accepts_online_orders BOOLEAN NOT NULL DEFAULT TRUE,
+    delivery_radius_km DECIMAL(5,2) NULL COMMENT 'NULL = delivery not offered',
+    delivery_fee DECIMAL(15,0) NOT NULL DEFAULT 0,
+    status ENUM('Active', 'Inactive') NOT NULL DEFAULT 'Active',
+    CONSTRAINT chk_branches_fee CHECK (delivery_fee >= 0)
+);
+
+-- Table status is DERIVED from open sessions (see view v_table_status); it is not stored.
+CREATE TABLE Tables (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    branch_id INT NOT NULL,
+    table_number VARCHAR(20) NOT NULL,
+    qr_code VARCHAR(255) UNIQUE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    UNIQUE KEY uq_table_number_per_branch (branch_id, table_number),
+    CONSTRAINT fk_tables_branch FOREIGN KEY (branch_id) REFERENCES Branches(id) ON DELETE RESTRICT
+);
+
+CREATE TABLE Table_Sessions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    table_id INT NOT NULL,
+    session_code VARCHAR(50) NOT NULL UNIQUE COMMENT 'Must be a random, unguessable token (e.g. 128-bit)',
+    customer_id VARCHAR(36) NULL COMMENT 'External reference to Identity Service; guest QR session may be NULL',
+    status ENUM('Active', 'Payment_Pending', 'Completed', 'Cancelled') NOT NULL DEFAULT 'Active',
+    opened_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME NULL COMMENT 'Idle expiry to stop reuse of an old QR session',
+    closed_at DATETIME NULL,
+    open_table_id INT GENERATED ALWAYS AS (
+        CASE WHEN status IN ('Active', 'Payment_Pending') THEN table_id ELSE NULL END
+    ) STORED COMMENT 'Used only to enforce one open session per table',
+    CONSTRAINT fk_table_sessions_table FOREIGN KEY (table_id) REFERENCES Tables(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_table_sessions_closed CHECK (
+        (status IN ('Active', 'Payment_Pending') AND closed_at IS NULL)
+        OR (status IN ('Completed', 'Cancelled') AND closed_at IS NOT NULL)
+    ),
+    UNIQUE KEY uq_one_open_session_per_table (open_table_id),
+    INDEX idx_table_sessions_customer (customer_id),
+    INDEX idx_table_sessions_table_status (table_id, status)
+);
+
+CREATE VIEW v_table_status AS
+SELECT t.id AS table_id, t.branch_id, t.table_number, t.is_active,
+       CASE WHEN ts.id IS NULL THEN 'Empty' ELSE 'Occupied' END AS status,
+       ts.id AS open_session_id
+FROM Tables t
+LEFT JOIN Table_Sessions ts ON ts.open_table_id = t.id;
+
+-- Workforce capability. Authentication stays in Identity; user_id is an external reference.
+CREATE TABLE Staff_Profiles (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL COMMENT 'External reference to Identity Service; one user maps to at most one staff profile',
+    branch_id INT NOT NULL,
+    employee_code VARCHAR(30) NOT NULL,
+    job_title VARCHAR(100) NOT NULL COMMENT 'Barista, Cashier, Shift Leader, Store Manager...',
+    employment_type ENUM('Full_Time', 'Part_Time', 'Probation', 'Intern') NOT NULL DEFAULT 'Full_Time',
+    hire_date DATE NOT NULL,
+    termination_date DATE NULL,
+    status ENUM('Active', 'On_Leave', 'Inactive', 'Terminated') NOT NULL DEFAULT 'Active',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_staff_profiles_branch FOREIGN KEY (branch_id) REFERENCES Branches(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_staff_termination CHECK (termination_date IS NULL OR termination_date >= hire_date),
+    CONSTRAINT chk_staff_terminated CHECK (status <> 'Terminated' OR termination_date IS NOT NULL),
+    UNIQUE KEY uq_staff_profile_user (user_id),
+    UNIQUE KEY uq_staff_employee_code (employee_code),
+    UNIQUE KEY uq_staff_id_branch (id, branch_id) COMMENT 'Target of composite FK from Schedules',
+    INDEX idx_staff_branch_status (branch_id, status),
+    INDEX idx_staff_job_title (job_title)
+);
+-- APP RULE: on Terminated, publish store.staff.terminated so Identity sets Users.status = 'Deactivated'.
+-- APP RULE: to transfer a staff member, delete their future Schedules first (composite FK blocks the change),
+--           then update branch_id and insert a Staff_Branch_History row in the same transaction.
+
+CREATE TABLE Staff_Branch_History (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    staff_id BIGINT NOT NULL,
+    from_branch_id INT NULL,
+    to_branch_id INT NOT NULL,
+    effective_date DATE NOT NULL,
+    changed_by VARCHAR(36) NULL COMMENT 'External reference to Identity Service',
+    note VARCHAR(255) NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_staff_history_staff FOREIGN KEY (staff_id) REFERENCES Staff_Profiles(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_staff_history_from FOREIGN KEY (from_branch_id) REFERENCES Branches(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_staff_history_to FOREIGN KEY (to_branch_id) REFERENCES Branches(id) ON DELETE RESTRICT,
+    INDEX idx_staff_history_staff (staff_id, effective_date)
+);
+
+CREATE TABLE Shifts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    branch_id INT NOT NULL,
+    name VARCHAR(50) NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    is_overnight BOOLEAN GENERATED ALWAYS AS (end_time < start_time) STORED COMMENT 'TRUE when the shift ends on the next day',
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    CONSTRAINT fk_shifts_branch FOREIGN KEY (branch_id) REFERENCES Branches(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_shifts_time CHECK (start_time <> end_time),
+    UNIQUE KEY uq_shift_per_branch (branch_id, name),
+    UNIQUE KEY uq_shift_id_branch (id, branch_id) COMMENT 'Target of composite FK from Schedules'
+);
+
+-- One schedule row per staff per day (prevents double booking / overlapping shifts).
+-- To support split shifts later, drop uq_staff_work_date and add an overlap check in the service.
+CREATE TABLE Schedules (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    branch_id INT NOT NULL,
+    staff_id BIGINT NOT NULL,
+    shift_id INT NOT NULL,
+    work_date DATE NOT NULL,
+    status ENUM('Scheduled', 'Completed', 'Absent', 'Leave') NOT NULL DEFAULT 'Scheduled',
+    CONSTRAINT fk_schedules_staff FOREIGN KEY (staff_id, branch_id) REFERENCES Staff_Profiles(id, branch_id) ON DELETE RESTRICT,
+    CONSTRAINT fk_schedules_shift FOREIGN KEY (shift_id, branch_id) REFERENCES Shifts(id, branch_id) ON DELETE RESTRICT,
+    UNIQUE KEY uq_staff_work_date (staff_id, work_date),
+    INDEX idx_schedules_branch_date (branch_id, work_date),
+    INDEX idx_schedules_shift_date (shift_id, work_date)
+);
+
+CREATE TABLE Timekeeping (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    schedule_id BIGINT NOT NULL,
+    check_in DATETIME NULL,
+    check_out DATETIME NULL,
+    source ENUM('Manual', 'Device', 'GPS', 'QR') NOT NULL DEFAULT 'Manual',
+    is_adjusted BOOLEAN NOT NULL DEFAULT FALSE,
+    adjusted_by_staff_id BIGINT NULL,
+    adjustment_reason VARCHAR(255) NULL,
+    CONSTRAINT fk_timekeeping_schedule FOREIGN KEY (schedule_id) REFERENCES Schedules(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_timekeeping_adjuster FOREIGN KEY (adjusted_by_staff_id) REFERENCES Staff_Profiles(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_timekeeping_order CHECK (check_out IS NULL OR check_in IS NULL OR check_out >= check_in),
+    CONSTRAINT chk_timekeeping_adjust CHECK (
+        (is_adjusted = FALSE)
+        OR (is_adjusted = TRUE AND adjusted_by_staff_id IS NOT NULL AND adjustment_reason IS NOT NULL)
+    ),
+    UNIQUE KEY uq_timekeeping_schedule (schedule_id)
+);
+
+CREATE TABLE Leave_Requests (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    staff_id BIGINT NOT NULL,
+    leave_type ENUM('Annual', 'Sick', 'Unpaid', 'Other') NOT NULL DEFAULT 'Annual',
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    reason TEXT NOT NULL,
+    status ENUM('Pending', 'Approved', 'Rejected', 'Cancelled') NOT NULL DEFAULT 'Pending',
+    approver_staff_id BIGINT NULL,
+    reviewed_at DATETIME NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_leave_staff FOREIGN KEY (staff_id) REFERENCES Staff_Profiles(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_leave_approver_staff FOREIGN KEY (approver_staff_id) REFERENCES Staff_Profiles(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_leave_dates CHECK (end_date >= start_date),
+    CONSTRAINT chk_leave_self_approve CHECK (approver_staff_id IS NULL OR approver_staff_id <> staff_id),
+    CONSTRAINT chk_leave_review CHECK (
+        (status IN ('Pending', 'Cancelled') AND approver_staff_id IS NULL AND reviewed_at IS NULL)
+        OR (status IN ('Approved', 'Rejected') AND approver_staff_id IS NOT NULL AND reviewed_at IS NOT NULL)
+    ),
+    INDEX idx_leave_staff_status (staff_id, status, start_date),
+    INDEX idx_leave_approver_status (approver_staff_id, status)
+);
+-- APP RULE: reject overlapping Approved/Pending leave of the same staff; when a leave is approved,
+--           set matching Schedules.status = 'Leave' in the same transaction.
+
+
+CREATE TABLE Outbox_Events (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    event_id VARCHAR(36) NOT NULL UNIQUE,
+    aggregate_type VARCHAR(50) NOT NULL,
+    aggregate_id VARCHAR(64) NOT NULL,
+    event_type VARCHAR(100) NOT NULL,
+    event_version SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+    correlation_id VARCHAR(64) NULL,
+    payload JSON NOT NULL,
+    status ENUM('Pending', 'Published', 'Failed') NOT NULL DEFAULT 'Pending',
+    retry_count INT UNSIGNED NOT NULL DEFAULT 0,
+    next_retry_at DATETIME NULL,
+    last_error VARCHAR(500) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    published_at DATETIME NULL,
+    INDEX idx_store_outbox_dispatch (status, next_retry_at, created_at),
+    INDEX idx_store_outbox_aggregate (aggregate_type, aggregate_id)
+);
+
+CREATE TABLE Processed_Events (
+    event_id VARCHAR(36) PRIMARY KEY,
+    event_type VARCHAR(100) NOT NULL,
+    source_service VARCHAR(100) NULL,
+    processed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_store_processed_type_time (event_type, processed_at)
+);
+
+-- Events published: store.staff.terminated, store.table_session.closed, store.branch.status_changed.
+
+-- ============================================================================
+-- 04. Order Service
+-- ============================================================================
+-- ORDER STATE MACHINE (enforced in the service):
+--   Online/Delivery : Pending_Payment -> Pending -> Confirmed -> Preparing -> Ready -> Shipping -> Completed
+--   Online/Pickup   : Pending_Payment -> Pending -> Confirmed -> Preparing -> Ready -> Completed
+--   QR/POS Dine_In  : Pending -> Confirmed -> Preparing -> Ready -> Served -> Completed
+--   Any open state  -> Cancelled (by customer/staff) or Rejected (by branch, before Preparing)
+-- Pending_Payment = waiting for VNPay/Momo; auto-cancel when expires_at passes.
+-- payment_status is a read-model updated from Payment Service events.
+CREATE DATABASE IF NOT EXISTS smart_cafe_order_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE smart_cafe_order_db;
+
+CREATE TABLE Orders (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_code VARCHAR(20) NOT NULL UNIQUE,
+    idempotency_key VARCHAR(64) NULL UNIQUE COMMENT 'Prevents duplicate order creation on retry/double-submit',
+    user_id VARCHAR(36) NULL COMMENT 'External reference to Identity Service; required for Online orders',
+    created_by VARCHAR(36) NULL COMMENT 'External reference to Identity Service; staff user for POS orders',
+    branch_id INT NOT NULL COMMENT 'External reference to Store Service',
+    table_session_id BIGINT NULL COMMENT 'External reference to Store Service; required for Dine_In',
+    order_source ENUM('Online', 'QR', 'POS') NOT NULL,
+    fulfillment_type ENUM('Delivery', 'Pickup', 'Dine_In') NOT NULL,
+    delivery_name VARCHAR(100) NULL,
+    delivery_phone VARCHAR(20) NULL,
+    delivery_address VARCHAR(255) NULL,
+    delivery_latitude DECIMAL(10,7) NULL,
+    delivery_longitude DECIMAL(10,7) NULL,
+    sub_total DECIMAL(15,0) NOT NULL COMMENT 'Sum of order item line gross amounts (items + options, before discounts)',
+    item_discount_amount DECIMAL(15,0) NOT NULL DEFAULT 0 COMMENT 'Sum of Order_Items.discount_amount (e.g. loyalty reward)',
+    voucher_code VARCHAR(50) NULL COMMENT 'Snapshot; vouchers are owned by Engagement Service',
+    voucher_discount_amount DECIMAL(15,0) NOT NULL DEFAULT 0,
+    delivery_fee DECIMAL(15,0) NOT NULL DEFAULT 0,
+    vat_amount DECIMAL(15,0) NOT NULL DEFAULT 0 COMMENT 'VAT portion already included in final_amount',
+    final_amount DECIMAL(15,0) NOT NULL,
+    status ENUM('Pending_Payment', 'Pending', 'Confirmed', 'Preparing', 'Ready', 'Shipping', 'Served', 'Completed', 'Cancelled', 'Rejected')
+        NOT NULL DEFAULT 'Pending',
+    payment_status ENUM('Unpaid', 'Paid', 'Partially_Refunded', 'Refunded') NOT NULL DEFAULT 'Unpaid',
+    expires_at DATETIME NULL COMMENT 'Deadline for Pending_Payment orders',
+    cancel_reason VARCHAR(255) NULL,
+    cancelled_by VARCHAR(36) NULL COMMENT 'External reference to Identity Service',
+    cancelled_at DATETIME NULL,
+    completed_at DATETIME NULL,
+    note VARCHAR(255) NULL,
+    version INT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'Optimistic lock: UPDATE ... WHERE id=? AND version=?',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT chk_orders_amounts CHECK (
+        sub_total >= 0 AND item_discount_amount >= 0 AND voucher_discount_amount >= 0
+        AND delivery_fee >= 0 AND vat_amount >= 0 AND final_amount >= 0
+        AND item_discount_amount + voucher_discount_amount <= sub_total
+    ),
+    CONSTRAINT chk_orders_final_formula CHECK (
+        final_amount = sub_total - item_discount_amount - voucher_discount_amount + delivery_fee
+    ),
+    CONSTRAINT chk_orders_source_fulfillment CHECK (
+        (order_source = 'QR'  AND fulfillment_type = 'Dine_In')
+        OR (order_source = 'POS'    AND fulfillment_type IN ('Dine_In', 'Pickup'))
+        OR (order_source = 'Online' AND fulfillment_type IN ('Delivery', 'Pickup'))
+    ),
+    CONSTRAINT chk_orders_table_session CHECK (
+        (fulfillment_type = 'Dine_In' AND table_session_id IS NOT NULL)
+        OR (fulfillment_type <> 'Dine_In' AND table_session_id IS NULL)
+    ),
+    CONSTRAINT chk_orders_delivery CHECK (
+        (fulfillment_type = 'Delivery' AND delivery_name IS NOT NULL AND delivery_phone IS NOT NULL AND delivery_address IS NOT NULL)
+        OR (fulfillment_type <> 'Delivery' AND delivery_fee = 0)
+    ),
+    CONSTRAINT chk_orders_online_user CHECK (order_source <> 'Online' OR user_id IS NOT NULL),
+    CONSTRAINT chk_orders_pos_staff CHECK (order_source <> 'POS' OR created_by IS NOT NULL),
+    CONSTRAINT chk_orders_cancel_reason CHECK (status NOT IN ('Cancelled', 'Rejected') OR cancel_reason IS NOT NULL),
+    CONSTRAINT chk_orders_completed_at CHECK (status <> 'Completed' OR completed_at IS NOT NULL),
+    INDEX idx_orders_user_created (user_id, created_at),
+    INDEX idx_orders_branch_status (branch_id, status),
+    INDEX idx_orders_branch_created (branch_id, created_at),
+    INDEX idx_orders_table_session (table_session_id),
+    INDEX idx_orders_status_created (status, created_at),
+    INDEX idx_orders_pending_expiry (status, expires_at)
+);
+
+-- Option prices live in Order_Item_Options. Per-unit option total is snapshotted here for line_total.
+-- Reward rule: the free drink discounts the BASE price only (options are still charged).
+CREATE TABLE Order_Items (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_id BIGINT NOT NULL,
+    product_id INT NOT NULL COMMENT 'External reference to Catalog Service',
+    variant_id INT NOT NULL COMMENT 'External reference to Catalog Service',
+    product_name VARCHAR(100) NOT NULL COMMENT 'Snapshot at ordering time',
+    variant_name VARCHAR(50) NOT NULL COMMENT 'Snapshot at ordering time',
+    quantity INT NOT NULL,
+    unit_price DECIMAL(15,0) NOT NULL COMMENT 'Snapshot variant price at ordering time',
+    options_unit_total DECIMAL(15,0) NOT NULL DEFAULT 0 COMMENT 'Snapshot sum of option prices for ONE unit of this item',
+    discount_amount DECIMAL(15,0) NOT NULL DEFAULT 0 COMMENT 'Total discount applied to this line',
+    is_reward_item BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'TRUE only for the free drink redeemed with 10 loyalty stamps',
+    line_total DECIMAL(15,0) GENERATED ALWAYS AS (quantity * (unit_price + options_unit_total) - discount_amount) STORED,
+    reward_order_id BIGINT GENERATED ALWAYS AS (CASE WHEN is_reward_item THEN order_id ELSE NULL END) STORED
+        COMMENT 'Used only to enforce at most one reward item per order',
+    note VARCHAR(255),
+    CONSTRAINT fk_order_items_order FOREIGN KEY (order_id) REFERENCES Orders(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_order_items_qty CHECK (quantity > 0),
+    CONSTRAINT chk_order_items_price CHECK (unit_price >= 0 AND options_unit_total >= 0),
+    CONSTRAINT chk_order_items_discount CHECK (discount_amount >= 0 AND discount_amount <= unit_price * quantity),
+    CONSTRAINT chk_order_items_reward CHECK (is_reward_item = FALSE OR (quantity = 1 AND discount_amount = unit_price)),
+    UNIQUE KEY uq_one_reward_item_per_order (reward_order_id),
+    INDEX idx_order_items_order (order_id),
+    INDEX idx_order_items_variant (variant_id),
+    INDEX idx_order_items_product (product_id)
+);
+-- APP RULE: reward items are only allowed for orders with user_id (members), and must match a Redeem
+--           transaction in Engagement. Orders.sub_total / item_discount_amount must equal the sums of the lines.
+
+CREATE TABLE Order_Item_Options (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_item_id BIGINT NOT NULL,
+    option_id INT NOT NULL COMMENT 'External reference to Catalog Service',
+    option_name VARCHAR(100) NOT NULL COMMENT 'Snapshot at ordering time',
+    quantity INT NOT NULL DEFAULT 1 COMMENT 'Count of this option PER ONE unit of the item',
+    unit_price DECIMAL(15,0) NOT NULL DEFAULT 0 COMMENT 'Snapshot option price',
+    CONSTRAINT fk_order_item_options_item FOREIGN KEY (order_item_id) REFERENCES Order_Items(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_order_item_options CHECK (quantity > 0 AND unit_price >= 0),
+    UNIQUE KEY uq_order_item_option (order_item_id, option_id)
+);
+
+CREATE TABLE Order_Status_History (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_id BIGINT NOT NULL,
+    from_status VARCHAR(20) NULL,
+    status ENUM('Pending_Payment', 'Pending', 'Confirmed', 'Preparing', 'Ready', 'Shipping', 'Served', 'Completed', 'Cancelled', 'Rejected') NOT NULL,
+    changed_by VARCHAR(36) NULL COMMENT 'External reference to Identity Service; NULL for system',
+    note VARCHAR(255) NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_order_history_order FOREIGN KEY (order_id) REFERENCES Orders(id) ON DELETE RESTRICT,
+    INDEX idx_order_history_order_time (order_id, created_at)
+);
+
+CREATE TABLE Carts (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    cart_source ENUM('Online', 'QR') NOT NULL,
+    branch_id INT NOT NULL COMMENT 'External reference to Store Service; availability and delivery fee depend on it',
+    fulfillment_type ENUM('Delivery', 'Pickup', 'Dine_In') NOT NULL,
+    user_id VARCHAR(36) NULL COMMENT 'External reference to Identity Service; required for Online carts',
+    table_session_id BIGINT NULL COMMENT 'External reference to Store Service; required for QR carts',
+    client_key VARCHAR(64) NULL COMMENT 'Anonymous device key; required for QR carts so guests at one table keep separate carts',
+    status ENUM('Active', 'Converted', 'Abandoned') NOT NULL DEFAULT 'Active',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    active_online_user_id VARCHAR(36) GENERATED ALWAYS AS (
+        CASE WHEN cart_source = 'Online' AND status = 'Active' THEN user_id ELSE NULL END
+    ) STORED,
+    active_qr_session_id BIGINT GENERATED ALWAYS AS (
+        CASE WHEN cart_source = 'QR' AND status = 'Active' THEN table_session_id ELSE NULL END
+    ) STORED,
+    active_qr_client_key VARCHAR(64) GENERATED ALWAYS AS (
+        CASE WHEN cart_source = 'QR' AND status = 'Active' THEN client_key ELSE NULL END
+    ) STORED,
+    CONSTRAINT chk_carts_shape CHECK (
+        (cart_source = 'Online' AND fulfillment_type IN ('Delivery', 'Pickup')
+            AND user_id IS NOT NULL AND table_session_id IS NULL AND client_key IS NULL)
+        OR
+        (cart_source = 'QR' AND fulfillment_type = 'Dine_In'
+            AND table_session_id IS NOT NULL AND client_key IS NOT NULL)
+    ),
+    UNIQUE KEY uq_one_active_online_cart_per_user (active_online_user_id),
+    UNIQUE KEY uq_one_active_qr_cart_per_client (active_qr_session_id, active_qr_client_key),
+    INDEX idx_carts_user_status (user_id, status),
+    INDEX idx_carts_table_session_status (table_session_id, status),
+    INDEX idx_carts_branch (branch_id)
+);
+
+CREATE TABLE Cart_Items (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    cart_id BIGINT NOT NULL,
+    variant_id INT NOT NULL COMMENT 'External reference to Catalog Service',
+    quantity INT NOT NULL DEFAULT 1,
+    note VARCHAR(255) NULL,
+    CONSTRAINT fk_cart_items_cart FOREIGN KEY (cart_id) REFERENCES Carts(id) ON DELETE CASCADE,
+    CONSTRAINT chk_cart_items_qty CHECK (quantity > 0),
+    INDEX idx_cart_items_cart (cart_id),
+    INDEX idx_cart_items_variant (variant_id)
+);
+
+CREATE TABLE Cart_Item_Options (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    cart_item_id BIGINT NOT NULL,
+    option_id INT NOT NULL COMMENT 'External reference to Catalog Service',
+    quantity INT NOT NULL DEFAULT 1,
+    CONSTRAINT fk_cart_item_options_item FOREIGN KEY (cart_item_id) REFERENCES Cart_Items(id) ON DELETE CASCADE,
+    CONSTRAINT chk_cart_item_options_qty CHECK (quantity > 0),
+    UNIQUE KEY uq_cart_item_option (cart_item_id, option_id)
+);
+
+-- Events published: order.created, order.status_changed, order.completed, order.cancelled.
+-- Events consumed: payment.succeeded / payment.refunded (-> payment_status), store.table_session.closed.
+CREATE TABLE Outbox_Events (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    event_id VARCHAR(36) NOT NULL UNIQUE,
+    aggregate_type VARCHAR(50) NOT NULL,
+    aggregate_id VARCHAR(64) NOT NULL,
+    event_type VARCHAR(100) NOT NULL,
+    event_version SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+    correlation_id VARCHAR(64) NULL,
+    payload JSON NOT NULL,
+    status ENUM('Pending', 'Published', 'Failed') NOT NULL DEFAULT 'Pending',
+    retry_count INT UNSIGNED NOT NULL DEFAULT 0,
+    next_retry_at DATETIME NULL,
+    last_error VARCHAR(500) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    published_at DATETIME NULL,
+    INDEX idx_order_outbox_dispatch (status, next_retry_at, created_at),
+    INDEX idx_order_outbox_aggregate (aggregate_type, aggregate_id)
+);
+
+CREATE TABLE Processed_Events (
+    event_id VARCHAR(36) PRIMARY KEY,
+    event_type VARCHAR(100) NOT NULL,
+    source_service VARCHAR(100) NULL,
+    processed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_order_processed_type_time (event_type, processed_at)
+);
+
+-- ============================================================================
+-- 05. Payment Service
+-- ============================================================================
+-- MODEL: every payment is linked to orders ONLY through Payment_Order_Allocations
+-- (single-order payment = 1 allocation; table-session settlement = N allocations).
+-- APP RULES (one transaction, lock the order rows with SELECT ... FOR UPDATE):
+--   * SUM(allocated_amount) of a payment = Payments.amount
+--   * SUM(allocations of Success payments) - SUM(refund allocations) <= Orders.final_amount, per order
+--   * Cash/COD: cash is "owned" by the cashier shift that received/remitted it.
+CREATE DATABASE IF NOT EXISTS smart_cafe_payment_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE smart_cafe_payment_db;
+
+CREATE TABLE Cashier_Shifts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    branch_id INT NOT NULL COMMENT 'External reference to Store Service',
+    register_code VARCHAR(20) NOT NULL DEFAULT 'MAIN' COMMENT 'Cash register / drawer identifier',
+    staff_user_id VARCHAR(36) NOT NULL COMMENT 'External reference to Identity Service (Users.id)',
+    opening_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    closing_time DATETIME NULL,
+    opening_cash DECIMAL(15,0) NOT NULL DEFAULT 0,
+    -- Totals below are computed and frozen when the shift is closed.
+    total_orders INT NOT NULL DEFAULT 0,
+    total_cash_sales DECIMAL(15,0) NOT NULL DEFAULT 0,
+    total_online_sales DECIMAL(15,0) NOT NULL DEFAULT 0,
+    total_cash_refunds DECIMAL(15,0) NOT NULL DEFAULT 0,
+    total_cash_in DECIMAL(15,0) NOT NULL DEFAULT 0,
+    total_cash_out DECIMAL(15,0) NOT NULL DEFAULT 0,
+    expected_cash DECIMAL(15,0) NULL COMMENT 'opening + cash sales - cash refunds + cash in - cash out',
+    closing_cash DECIMAL(15,0) NULL COMMENT 'Counted cash at close',
+    discrepancy DECIMAL(15,0) GENERATED ALWAYS AS (closing_cash - expected_cash) STORED,
+    status ENUM('Open', 'Closed') NOT NULL DEFAULT 'Open',
+    open_staff_user_id VARCHAR(36) GENERATED ALWAYS AS (CASE WHEN status = 'Open' THEN staff_user_id ELSE NULL END) STORED,
+    open_register_key VARCHAR(60) GENERATED ALWAYS AS (CASE WHEN status = 'Open' THEN CONCAT(branch_id, ':', register_code) ELSE NULL END) STORED,
+    CONSTRAINT chk_cashier_shift_amounts CHECK (
+        opening_cash >= 0 AND total_orders >= 0 AND total_cash_sales >= 0 AND total_online_sales >= 0
+        AND total_cash_refunds >= 0 AND total_cash_in >= 0 AND total_cash_out >= 0
+    ),
+    CONSTRAINT chk_cashier_shift_closed CHECK (
+        (status = 'Open' AND closing_time IS NULL AND closing_cash IS NULL AND expected_cash IS NULL)
+        OR (status = 'Closed' AND closing_time IS NOT NULL AND closing_cash IS NOT NULL AND expected_cash IS NOT NULL)
+    ),
+    UNIQUE KEY uq_one_open_shift_per_staff (open_staff_user_id),
+    UNIQUE KEY uq_one_open_shift_per_register (open_register_key),
+    INDEX idx_cashier_shift_branch_status (branch_id, status),
+    INDEX idx_cashier_shift_staff (staff_user_id)
+);
+
+CREATE TABLE Cash_Movements (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    cashier_shift_id INT NOT NULL,
+    movement_type ENUM('Cash_In', 'Cash_Out', 'Safe_Drop', 'COD_Remittance') NOT NULL
+        COMMENT 'Cash_In and COD_Remittance increase the drawer; Cash_Out and Safe_Drop decrease it',
+    amount DECIMAL(15,0) NOT NULL,
+    reason VARCHAR(255) NOT NULL,
+    created_by VARCHAR(36) NOT NULL COMMENT 'External reference to Identity Service',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_cash_movements_shift FOREIGN KEY (cashier_shift_id) REFERENCES Cashier_Shifts(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_cash_movements_amount CHECK (amount > 0),
+    INDEX idx_cash_movements_shift (cashier_shift_id, created_at)
+);
+
+CREATE TABLE Payments (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    branch_id INT NOT NULL COMMENT 'External reference to Store Service',
+    cashier_shift_id INT NULL COMMENT 'Shift that received the cash (Cash); for COD set when the shipper remits the cash',
+    idempotency_key VARCHAR(64) NULL UNIQUE,
+    payment_method ENUM('Cash', 'COD', 'VNPay', 'Momo') NOT NULL,
+    amount DECIMAL(15,0) NOT NULL,
+    refunded_amount DECIMAL(15,0) NOT NULL DEFAULT 0 COMMENT 'Running total of Processed refunds; updated in the same transaction as the refund',
+    cash_received DECIMAL(15,0) NULL COMMENT 'Counter cash handed over by customer; NULL otherwise',
+    change_amount DECIMAL(15,0) NULL COMMENT 'Counter cash returned to customer; NULL otherwise',
+    collected_by VARCHAR(36) NULL COMMENT 'External reference to Identity Service; shipper/staff who collected COD cash',
+    transaction_id VARCHAR(100) NULL UNIQUE COMMENT 'Gateway transaction id',
+    status ENUM('Pending', 'Success', 'Failed', 'Cancelled', 'Expired') NOT NULL DEFAULT 'Pending',
+    expires_at DATETIME NULL COMMENT 'Deadline for Pending gateway payments',
+    paid_at DATETIME NULL,
+    created_by VARCHAR(36) NULL COMMENT 'External reference to Identity Service',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_payments_cashier_shift FOREIGN KEY (cashier_shift_id) REFERENCES Cashier_Shifts(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_payments_amount CHECK (amount > 0 AND refunded_amount >= 0 AND refunded_amount <= amount),
+    CONSTRAINT chk_payments_cash_fields CHECK (
+        (payment_method = 'Cash' AND (
+            (cash_received IS NULL AND change_amount IS NULL)
+            OR (cash_received IS NOT NULL AND change_amount IS NOT NULL
+                AND cash_received >= amount AND change_amount = cash_received - amount)
+        ))
+        OR (payment_method <> 'Cash' AND cash_received IS NULL AND change_amount IS NULL)
+    ),
+    CONSTRAINT chk_payments_cash_success CHECK (
+        payment_method <> 'Cash' OR status <> 'Success'
+        OR (cashier_shift_id IS NOT NULL AND cash_received IS NOT NULL AND change_amount IS NOT NULL)
+    ),
+    CONSTRAINT chk_payments_cod_success CHECK (
+        payment_method <> 'COD' OR status <> 'Success' OR collected_by IS NOT NULL
+    ),
+    CONSTRAINT chk_payments_gateway_success CHECK (
+        payment_method NOT IN ('VNPay', 'Momo') OR status <> 'Success' OR transaction_id IS NOT NULL
+    ),
+    CONSTRAINT chk_payments_paid_at CHECK (status <> 'Success' OR paid_at IS NOT NULL),
+    INDEX idx_payments_cashier_shift (cashier_shift_id),
+    INDEX idx_payments_branch_created (branch_id, created_at),
+    INDEX idx_payments_status_created (status, created_at),
+    INDEX idx_payments_pending_expiry (status, expires_at)
+);
+
+CREATE TABLE Payment_Order_Allocations (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    payment_id BIGINT NOT NULL,
+    order_id BIGINT NOT NULL COMMENT 'External reference to Order Service',
+    allocated_amount DECIMAL(15,0) NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_payment_allocations_payment FOREIGN KEY (payment_id) REFERENCES Payments(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_payment_allocations_amount CHECK (allocated_amount > 0),
+    UNIQUE KEY uq_payment_order_allocation (payment_id, order_id),
+    INDEX idx_payment_allocations_order (order_id)
+);
+
+CREATE TABLE Payment_Gateway_Logs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    payment_id BIGINT NULL COMMENT 'NULL when the callback cannot be matched to a payment',
+    provider ENUM('VNPay', 'Momo') NOT NULL,
+    direction ENUM('Request', 'Callback', 'IPN', 'Query') NOT NULL,
+    event_key VARCHAR(100) NOT NULL COMMENT 'Provider txn/request id + event type; makes webhook handling idempotent',
+    signature_valid BOOLEAN NULL,
+    http_status SMALLINT NULL,
+    raw_payload JSON NOT NULL,
+    processed_at DATETIME NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_gateway_logs_payment FOREIGN KEY (payment_id) REFERENCES Payments(id) ON DELETE RESTRICT,
+    UNIQUE KEY uq_gateway_event (provider, direction, event_key),
+    INDEX idx_gateway_logs_payment (payment_id)
+);
+
+CREATE TABLE Refunds (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    payment_id BIGINT NOT NULL,
+    refund_method ENUM('Cash', 'VNPay', 'Momo') NOT NULL,
+    cashier_shift_id INT NULL COMMENT 'Shift that paid out the cash; required when a Cash refund is Processed',
+    amount DECIMAL(15,0) NOT NULL,
+    reason TEXT NOT NULL,
+    status ENUM('Pending', 'Approved', 'Rejected', 'Processed', 'Failed') NOT NULL DEFAULT 'Pending',
+    requested_by VARCHAR(36) NOT NULL COMMENT 'External reference to Identity Service',
+    approved_by VARCHAR(36) NULL COMMENT 'External reference to Identity Service',
+    processed_by VARCHAR(36) NULL COMMENT 'External reference to Identity Service',
+    processed_at DATETIME NULL,
+    refund_transaction_id VARCHAR(100) NULL UNIQUE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_refunds_payment FOREIGN KEY (payment_id) REFERENCES Payments(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_refunds_cashier_shift FOREIGN KEY (cashier_shift_id) REFERENCES Cashier_Shifts(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_refunds_amount CHECK (amount > 0),
+    CONSTRAINT chk_refunds_processed CHECK (status <> 'Processed' OR (processed_at IS NOT NULL AND processed_by IS NOT NULL)),
+    CONSTRAINT chk_refunds_approved CHECK (status NOT IN ('Approved', 'Processed') OR approved_by IS NOT NULL),
+    CONSTRAINT chk_refunds_cash_shift CHECK (refund_method <> 'Cash' OR status <> 'Processed' OR cashier_shift_id IS NOT NULL),
+    INDEX idx_refunds_payment_status (payment_id, status),
+    INDEX idx_refunds_shift (cashier_shift_id)
+);
+-- APP RULE: SUM(Processed refunds) per payment <= Payments.amount (also guarded by Payments.refunded_amount).
+
+CREATE TABLE Refund_Order_Allocations (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    refund_id BIGINT NOT NULL,
+    order_id BIGINT NOT NULL COMMENT 'External reference to Order Service',
+    amount DECIMAL(15,0) NOT NULL,
+    restock_inventory BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'TRUE only if the drink was not made yet; Inventory returns ingredients',
+    reverse_loyalty BOOLEAN NOT NULL DEFAULT TRUE COMMENT 'Engagement reverses earned stamps for this order',
+    CONSTRAINT fk_refund_allocations_refund FOREIGN KEY (refund_id) REFERENCES Refunds(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_refund_allocations_amount CHECK (amount > 0),
+    UNIQUE KEY uq_refund_order_allocation (refund_id, order_id),
+    INDEX idx_refund_allocations_order (order_id)
+);
+
+-- One invoice can cover several orders (table-session settlement). Invoice_Orders links them.
+CREATE TABLE Invoices (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    invoice_number VARCHAR(50) NULL UNIQUE,
+    symbol VARCHAR(20) NULL,
+    template_code VARCHAR(20) NULL,
+    buyer_name VARCHAR(255) NOT NULL COMMENT 'Company name or individual name',
+    buyer_tax_code VARCHAR(20) NULL COMMENT 'NULL for retail invoices without a tax code',
+    buyer_address VARCHAR(255) NULL,
+    email VARCHAR(100) NULL,
+    subtotal_amount DECIMAL(15,0) NOT NULL COMMENT 'Amount before VAT',
+    vat_rate DECIMAL(5,2) NOT NULL DEFAULT 8.00 COMMENT 'Verify the legally applicable rate before go-live',
+    vat_amount DECIMAL(15,0) NOT NULL,
+    total_amount DECIMAL(15,0) NOT NULL COMMENT 'Amount including VAT',
+    lookup_code VARCHAR(100) NULL,
+    pdf_url VARCHAR(255) NULL,
+    status ENUM('Requested', 'Issued', 'Cancelled', 'Replaced', 'Adjusted') NOT NULL DEFAULT 'Requested',
+    related_invoice_id BIGINT NULL COMMENT 'Original invoice when this one replaces/adjusts it (e.g. after a refund)',
+    relation_type ENUM('Replace', 'Adjust') NULL,
+    issued_at DATETIME NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_invoices_related FOREIGN KEY (related_invoice_id) REFERENCES Invoices(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_invoices_amounts CHECK (
+        subtotal_amount >= 0 AND vat_amount >= 0 AND total_amount = subtotal_amount + vat_amount
+    ),
+    CONSTRAINT chk_invoices_relation CHECK ((related_invoice_id IS NULL) = (relation_type IS NULL)),
+    CONSTRAINT chk_invoices_issued CHECK (status <> 'Issued' OR (invoice_number IS NOT NULL AND issued_at IS NOT NULL)),
+    INDEX idx_invoices_status (status, created_at)
+);
+
+CREATE TABLE Invoice_Orders (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    invoice_id BIGINT NOT NULL,
+    order_id BIGINT NOT NULL COMMENT 'External reference to Order Service',
+    is_active BOOLEAN NOT NULL DEFAULT TRUE COMMENT 'Set FALSE when the invoice is cancelled/replaced so the order can be invoiced again',
+    active_order_id BIGINT GENERATED ALWAYS AS (CASE WHEN is_active THEN order_id ELSE NULL END) STORED,
+    CONSTRAINT fk_invoice_orders_invoice FOREIGN KEY (invoice_id) REFERENCES Invoices(id) ON DELETE RESTRICT,
+    UNIQUE KEY uq_invoice_order (invoice_id, order_id),
+    UNIQUE KEY uq_one_active_invoice_per_order (active_order_id),
+    INDEX idx_invoice_orders_order (order_id)
+);
+
+CREATE TABLE Invoice_Items (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    invoice_id BIGINT NOT NULL,
+    line_no INT NOT NULL,
+    description VARCHAR(255) NOT NULL,
+    unit VARCHAR(20) NULL,
+    quantity DECIMAL(12,3) NOT NULL,
+    unit_price DECIMAL(15,0) NOT NULL,
+    amount DECIMAL(15,0) NOT NULL,
+    vat_rate DECIMAL(5,2) NOT NULL DEFAULT 8.00,
+    CONSTRAINT fk_invoice_items_invoice FOREIGN KEY (invoice_id) REFERENCES Invoices(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_invoice_items CHECK (quantity > 0 AND unit_price >= 0 AND amount >= 0),
+    UNIQUE KEY uq_invoice_line (invoice_id, line_no)
+);
+
+-- Events published: payment.succeeded, payment.failed, payment.expired, payment.refunded, invoice.issued.
+-- Events consumed: order.created / order.cancelled / order.completed.
+CREATE TABLE Outbox_Events (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    event_id VARCHAR(36) NOT NULL UNIQUE,
+    aggregate_type VARCHAR(50) NOT NULL,
+    aggregate_id VARCHAR(64) NOT NULL,
+    event_type VARCHAR(100) NOT NULL,
+    event_version SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+    correlation_id VARCHAR(64) NULL,
+    payload JSON NOT NULL,
+    status ENUM('Pending', 'Published', 'Failed') NOT NULL DEFAULT 'Pending',
+    retry_count INT UNSIGNED NOT NULL DEFAULT 0,
+    next_retry_at DATETIME NULL,
+    last_error VARCHAR(500) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    published_at DATETIME NULL,
+    INDEX idx_payment_outbox_dispatch (status, next_retry_at, created_at),
+    INDEX idx_payment_outbox_aggregate (aggregate_type, aggregate_id)
+);
+
+CREATE TABLE Processed_Events (
+    event_id VARCHAR(36) PRIMARY KEY,
+    event_type VARCHAR(100) NOT NULL,
+    source_service VARCHAR(100) NULL,
+    processed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_payment_processed_type_time (event_type, processed_at)
+);
+
+CREATE TABLE Audit_Logs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    actor_user_id VARCHAR(36) NULL COMMENT 'External reference to Identity Service; NULL for system actions',
+    action VARCHAR(100) NOT NULL,
+    entity_type VARCHAR(50) NOT NULL,
+    entity_id VARCHAR(64) NOT NULL,
+    old_value JSON NULL,
+    new_value JSON NULL,
+    ip_address VARCHAR(45) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_payment_audit_entity (entity_type, entity_id, created_at),
+    INDEX idx_payment_audit_actor (actor_user_id, created_at)
+);
+
+-- ============================================================================
+-- 06. Inventory Service
+-- ============================================================================
+-- STOCK FLOW (event-driven, idempotent):
+--   order.created   -> create Stock_Reservations, Inventories.reserved_quantity += qty   (prevents oversell)
+--   order.completed -> reservation Committed, quantity_in_stock -= qty, reserved_quantity -= qty, log Auto_Deduct
+--   order.cancelled -> reservation Released, reserved_quantity -= qty
+--   refund (restock_inventory = TRUE) -> log Refund (+)
+-- Every Inventory_Logs row carries a unique idempotency_key so a replayed event never double-counts.
+-- Stock cannot go below 0. If the business wants negative stock, drop chk_inventories_qty.
+CREATE DATABASE IF NOT EXISTS smart_cafe_inventory_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE smart_cafe_inventory_db;
+
+CREATE TABLE Ingredients (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    unit VARCHAR(20) NOT NULL COMMENT 'Base (usage) unit, e.g. g, ml',
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    UNIQUE KEY uq_ingredient_name_unit (name, unit)
+);
+
+CREATE TABLE Suppliers (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    phone VARCHAR(20),
+    email VARCHAR(100) NULL,
+    tax_code VARCHAR(20) NULL,
+    address VARCHAR(255),
+    status ENUM('Active', 'Inactive') NOT NULL DEFAULT 'Active'
+);
+
+CREATE TABLE Recipes (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    variant_id INT NOT NULL COMMENT 'External reference to Catalog Service',
+    ingredient_id INT NOT NULL,
+    quantity_required DECIMAL(12,3) NOT NULL,
+    CONSTRAINT fk_recipes_ingredient FOREIGN KEY (ingredient_id) REFERENCES Ingredients(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_recipes_qty CHECK (quantity_required > 0),
+    UNIQUE KEY uq_recipe_variant_ingredient (variant_id, ingredient_id),
+    INDEX idx_recipes_variant (variant_id)
+);
+
+CREATE TABLE Option_Recipe_Adjustments (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    option_id INT NOT NULL COMMENT 'External reference to Catalog Service Product_Options',
+    ingredient_id INT NOT NULL,
+    quantity_delta DECIMAL(12,3) NOT NULL COMMENT 'Signed adjustment to the base recipe: positive adds, negative reduces',
+    CONSTRAINT fk_option_recipe_ingredient FOREIGN KEY (ingredient_id) REFERENCES Ingredients(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_option_recipe_delta CHECK (quantity_delta <> 0),
+    UNIQUE KEY uq_option_recipe_ingredient (option_id, ingredient_id),
+    INDEX idx_option_recipe_option (option_id)
+);
+
+CREATE TABLE Inventories (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    branch_id INT NOT NULL COMMENT 'External reference to Store Service',
+    ingredient_id INT NOT NULL,
+    quantity_in_stock DECIMAL(14,3) NOT NULL DEFAULT 0,
+    reserved_quantity DECIMAL(14,3) NOT NULL DEFAULT 0 COMMENT 'Held for open orders; available = in_stock - reserved',
+    reorder_level DECIMAL(14,3) NOT NULL DEFAULT 0 COMMENT 'At or below this level emit inventory.ingredient.low_stock',
+    average_cost DECIMAL(15,4) NOT NULL DEFAULT 0 COMMENT 'Moving average cost per base unit, per branch; recomputed on each Import',
+    version INT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'Optimistic lock',
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_inventories_ingredient FOREIGN KEY (ingredient_id) REFERENCES Ingredients(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_inventories_qty CHECK (quantity_in_stock >= 0 AND reserved_quantity >= 0 AND reorder_level >= 0 AND average_cost >= 0),
+    UNIQUE KEY uq_inventory_branch_ingredient (branch_id, ingredient_id),
+    INDEX idx_inventory_branch (branch_id)
+);
+
+CREATE TABLE Stock_Reservations (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_id BIGINT NOT NULL COMMENT 'External reference to Order Service',
+    branch_id INT NOT NULL COMMENT 'External reference to Store Service',
+    ingredient_id INT NOT NULL,
+    quantity DECIMAL(14,3) NOT NULL,
+    status ENUM('Reserved', 'Committed', 'Released', 'Expired') NOT NULL DEFAULT 'Reserved',
+    expires_at DATETIME NULL COMMENT 'Auto-release unpaid Pending_Payment orders',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_reservations_ingredient FOREIGN KEY (ingredient_id) REFERENCES Ingredients(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_reservations_qty CHECK (quantity > 0),
+    UNIQUE KEY uq_reservation_order_ingredient (order_id, ingredient_id),
+    INDEX idx_reservations_status_expiry (status, expires_at),
+    INDEX idx_reservations_branch_ingredient (branch_id, ingredient_id, status)
+);
+
+CREATE TABLE Purchase_Orders (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    branch_id INT NOT NULL COMMENT 'External reference to Store Service',
+    supplier_id INT NOT NULL,
+    total_amount DECIMAL(15,0) NOT NULL DEFAULT 0 COMMENT 'Must equal SUM(PO_Details.line_total); maintained by the service',
+    status ENUM('Draft', 'Ordered', 'Partially_Received', 'Received', 'Cancelled') NOT NULL DEFAULT 'Draft',
+    created_by VARCHAR(36) NOT NULL COMMENT 'External reference to Identity Service',
+    approved_by VARCHAR(36) NULL COMMENT 'External reference to Identity Service',
+    ordered_at DATETIME NULL,
+    expected_at DATETIME NULL,
+    received_at DATETIME NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_purchase_orders_supplier FOREIGN KEY (supplier_id) REFERENCES Suppliers(id),
+    CONSTRAINT chk_purchase_orders_total CHECK (total_amount >= 0),
+    CONSTRAINT chk_purchase_orders_flow CHECK (
+        (status IN ('Draft', 'Cancelled') OR (approved_by IS NOT NULL AND ordered_at IS NOT NULL))
+        AND (status <> 'Received' OR received_at IS NOT NULL)
+    ),
+    INDEX idx_purchase_orders_branch_status (branch_id, status)
+);
+
+CREATE TABLE PO_Details (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    po_id BIGINT NOT NULL,
+    ingredient_id INT NOT NULL,
+    purchase_unit VARCHAR(20) NOT NULL COMMENT 'Unit bought from supplier, e.g. kg, box',
+    conversion_factor DECIMAL(14,4) NOT NULL DEFAULT 1 COMMENT 'Base units per purchase unit (1 kg = 1000 g)',
+    quantity DECIMAL(14,3) NOT NULL COMMENT 'In purchase_unit',
+    received_quantity DECIMAL(14,3) NOT NULL DEFAULT 0 COMMENT 'In purchase_unit',
+    unit_price DECIMAL(15,0) NOT NULL COMMENT 'Per purchase_unit',
+    base_quantity DECIMAL(18,3) GENERATED ALWAYS AS (quantity * conversion_factor) STORED,
+    line_total DECIMAL(18,0) GENERATED ALWAYS AS (ROUND(quantity * unit_price, 0)) STORED,
+    CONSTRAINT fk_po_details_po FOREIGN KEY (po_id) REFERENCES Purchase_Orders(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_po_details_ingredient FOREIGN KEY (ingredient_id) REFERENCES Ingredients(id),
+    CONSTRAINT chk_po_details CHECK (
+        quantity > 0 AND unit_price >= 0 AND conversion_factor > 0
+        AND received_quantity >= 0 AND received_quantity <= quantity
+    ),
+    UNIQUE KEY uq_po_ingredient (po_id, ingredient_id)
+);
+
+CREATE TABLE Inventory_Logs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    idempotency_key VARCHAR(100) NULL UNIQUE COMMENT 'e.g. order:123:ing:5:deduct, po:9:rcpt:2:ing:7:import; prevents double processing on event replay',
+    branch_id INT NOT NULL COMMENT 'External reference to Store Service',
+    ingredient_id INT NOT NULL,
+    transaction_type ENUM('Import', 'Auto_Deduct', 'Refund', 'Waste', 'Adjustment', 'Stocktake') NOT NULL,
+    quantity_changed DECIMAL(14,3) NOT NULL,
+    balance_after DECIMAL(14,3) NOT NULL COMMENT 'quantity_in_stock after this change',
+    reference_type VARCHAR(50) NULL COMMENT 'Order, PurchaseOrder, Refund, Stocktake...',
+    reference_id VARCHAR(64) NULL COMMENT 'External or local business reference; intentionally no FK',
+    reason VARCHAR(255) NULL,
+    created_by VARCHAR(36) NULL COMMENT 'External reference to Identity Service; NULL for system/events',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_inventory_logs_ingredient FOREIGN KEY (ingredient_id) REFERENCES Ingredients(id),
+    CONSTRAINT chk_inventory_logs_sign CHECK (
+        (transaction_type IN ('Import', 'Refund') AND quantity_changed > 0)
+        OR (transaction_type IN ('Auto_Deduct', 'Waste') AND quantity_changed < 0)
+        OR (transaction_type IN ('Adjustment', 'Stocktake') AND quantity_changed <> 0)
+    ),
+    CONSTRAINT chk_inventory_logs_manual CHECK (
+        transaction_type NOT IN ('Waste', 'Adjustment', 'Stocktake') OR (reason IS NOT NULL AND created_by IS NOT NULL)
+    ),
+    INDEX idx_inventory_logs_branch_time (branch_id, created_at),
+    INDEX idx_inventory_logs_ingredient (branch_id, ingredient_id, created_at),
+    INDEX idx_inventory_logs_reference (reference_type, reference_id)
+);
+
+-- Events published: inventory.ingredient.low_stock, inventory.ingredient.restocked, inventory.deducted.
+-- Events consumed: order.created, order.completed, order.cancelled, payment.refunded.
+CREATE TABLE Outbox_Events (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    event_id VARCHAR(36) NOT NULL UNIQUE,
+    aggregate_type VARCHAR(50) NOT NULL,
+    aggregate_id VARCHAR(64) NOT NULL,
+    event_type VARCHAR(100) NOT NULL,
+    event_version SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+    correlation_id VARCHAR(64) NULL,
+    payload JSON NOT NULL,
+    status ENUM('Pending', 'Published', 'Failed') NOT NULL DEFAULT 'Pending',
+    retry_count INT UNSIGNED NOT NULL DEFAULT 0,
+    next_retry_at DATETIME NULL,
+    last_error VARCHAR(500) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    published_at DATETIME NULL,
+    INDEX idx_inventory_outbox_dispatch (status, next_retry_at, created_at),
+    INDEX idx_inventory_outbox_aggregate (aggregate_type, aggregate_id)
+);
+
+CREATE TABLE Processed_Events (
+    event_id VARCHAR(36) PRIMARY KEY,
+    event_type VARCHAR(100) NOT NULL,
+    source_service VARCHAR(100) NULL,
+    processed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_inventory_processed_type_time (event_type, processed_at)
+);
+
+CREATE TABLE Audit_Logs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    actor_user_id VARCHAR(36) NULL COMMENT 'External reference to Identity Service; NULL for system actions',
+    action VARCHAR(100) NOT NULL,
+    entity_type VARCHAR(50) NOT NULL,
+    entity_id VARCHAR(64) NOT NULL,
+    old_value JSON NULL,
+    new_value JSON NULL,
+    ip_address VARCHAR(45) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_inventory_audit_entity (entity_type, entity_id, created_at),
+    INDEX idx_inventory_audit_actor (actor_user_id, created_at)
+);
+
+-- ============================================================================
+-- 07. Engagement Service
+-- ============================================================================
+-- LOYALTY POLICY: 1 stamp per eligible drink, earned when an order is Completed.
+-- Stamps accumulate WITHOUT a cap (no overflow loss). Each 10 stamps = 1 free drink.
+-- Redeem = exactly -10 stamps, always tied to the order that contains the reward item.
+-- Loyalty_Cards.current_stamps must always equal SUM(Loyalty_Transactions.stamps).
+-- A Reversal may push the balance negative ("stamp debt") instead of rewriting history;
+-- redeeming requires current_stamps >= 10 (APP RULE).
+CREATE DATABASE IF NOT EXISTS smart_cafe_engagement_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE smart_cafe_engagement_db;
+
+CREATE TABLE Loyalty_Cards (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL UNIQUE COMMENT 'External reference to Identity Service',
+    current_stamps INT NOT NULL DEFAULT 0,
+    lifetime_stamps_earned INT UNSIGNED NOT NULL DEFAULT 0,
+    total_redeemed_cups INT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'Lifetime number of free drinks redeemed',
+    version INT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'Optimistic lock',
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT chk_loyalty_cards_stamps CHECK (current_stamps >= -100)
+);
+
+CREATE TABLE Loyalty_Transactions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    idempotency_key VARCHAR(64) NULL UNIQUE COMMENT 'Prevents duplicate command/retry processing',
+    user_id VARCHAR(36) NOT NULL COMMENT 'External reference to Identity Service',
+    order_id BIGINT NULL COMMENT 'External reference to Order Service',
+    transaction_type ENUM('Earn', 'Redeem', 'Reversal', 'Adjustment') NOT NULL,
+    stamps INT NOT NULL COMMENT 'Signed delta. Earn > 0; Redeem = -10; Reversal opposes the original',
+    balance_after INT NOT NULL,
+    reversal_of_id BIGINT NULL COMMENT 'The Earn/Redeem transaction being reversed',
+    note VARCHAR(255) NULL,
+    created_by VARCHAR(36) NULL COMMENT 'External reference to Identity Service; required for manual Adjustment',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    earn_order_id BIGINT GENERATED ALWAYS AS (CASE WHEN transaction_type = 'Earn' THEN order_id ELSE NULL END) STORED,
+    redeem_order_id BIGINT GENERATED ALWAYS AS (CASE WHEN transaction_type = 'Redeem' THEN order_id ELSE NULL END) STORED,
+    CONSTRAINT fk_loyalty_tx_reversal FOREIGN KEY (reversal_of_id) REFERENCES Loyalty_Transactions(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_loyalty_tx_shape CHECK (
+        (transaction_type = 'Earn' AND order_id IS NOT NULL AND stamps BETWEEN 1 AND 50 AND reversal_of_id IS NULL)
+        OR (transaction_type = 'Redeem' AND order_id IS NOT NULL AND stamps = -10 AND reversal_of_id IS NULL)
+        OR (transaction_type = 'Reversal' AND reversal_of_id IS NOT NULL AND stamps <> 0)
+        OR (transaction_type = 'Adjustment' AND stamps <> 0 AND created_by IS NOT NULL AND note IS NOT NULL)
+    ),
+    UNIQUE KEY uq_one_loyalty_earn_per_order (earn_order_id),
+    UNIQUE KEY uq_one_loyalty_redeem_per_order (redeem_order_id),
+    UNIQUE KEY uq_one_reversal_per_transaction (reversal_of_id),
+    INDEX idx_loyalty_tx_user_time (user_id, created_at),
+    INDEX idx_loyalty_tx_order (order_id),
+    INDEX idx_loyalty_tx_type_time (transaction_type, created_at)
+);
+
+CREATE TABLE Vouchers (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(50) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL,
+    discount_type ENUM('Percent', 'Fixed') NOT NULL,
+    discount_value DECIMAL(15,0) NOT NULL COMMENT 'Percent: 1-100; Fixed: VND',
+    max_discount_amount DECIMAL(15,0) NULL COMMENT 'Cap for Percent vouchers',
+    min_order_amount DECIMAL(15,0) NOT NULL DEFAULT 0,
+    branch_id INT NULL COMMENT 'External reference to Store Service; NULL = all branches',
+    applicable_fulfillment ENUM('All', 'Delivery', 'Pickup', 'Dine_In') NOT NULL DEFAULT 'All',
+    starts_at DATETIME NOT NULL,
+    ends_at DATETIME NOT NULL,
+    usage_limit_total INT UNSIGNED NULL COMMENT 'NULL = unlimited',
+    usage_limit_per_user INT UNSIGNED NOT NULL DEFAULT 1,
+    used_count INT UNSIGNED NOT NULL DEFAULT 0,
+    status ENUM('Active', 'Inactive') NOT NULL DEFAULT 'Active',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_vouchers_value CHECK (
+        (discount_type = 'Percent' AND discount_value BETWEEN 1 AND 100)
+        OR (discount_type = 'Fixed' AND discount_value > 0)
+    ),
+    CONSTRAINT chk_vouchers_period CHECK (ends_at > starts_at),
+    CONSTRAINT chk_vouchers_limits CHECK (
+        min_order_amount >= 0 AND usage_limit_per_user >= 1
+        AND (usage_limit_total IS NULL OR used_count <= usage_limit_total)
+    ),
+    INDEX idx_vouchers_active (status, starts_at, ends_at)
+);
+
+CREATE TABLE Voucher_Redemptions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    voucher_id BIGINT NOT NULL,
+    user_id VARCHAR(36) NOT NULL COMMENT 'External reference to Identity Service',
+    order_id BIGINT NOT NULL COMMENT 'External reference to Order Service',
+    discount_amount DECIMAL(15,0) NOT NULL,
+    status ENUM('Applied', 'Reversed') NOT NULL DEFAULT 'Applied',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_voucher_redemptions_voucher FOREIGN KEY (voucher_id) REFERENCES Vouchers(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_voucher_redemptions_amount CHECK (discount_amount > 0),
+    UNIQUE KEY uq_voucher_order (voucher_id, order_id),
+    INDEX idx_voucher_redemptions_user (voucher_id, user_id, status)
+);
+
+-- Local read-model filled from the order.completed event. It is what makes a review verifiable
+-- without cross-service queries and guarantees product_id matches the purchased order item.
+CREATE TABLE Verified_Purchases (
+    order_item_id BIGINT PRIMARY KEY COMMENT 'External reference to Order Service',
+    order_id BIGINT NOT NULL,
+    user_id VARCHAR(36) NOT NULL,
+    product_id INT NOT NULL,
+    branch_id INT NOT NULL,
+    purchased_at DATETIME NOT NULL,
+    UNIQUE KEY uq_verified_purchase_identity (order_item_id, user_id, product_id),
+    INDEX idx_verified_purchases_user (user_id, purchased_at)
+);
+
+CREATE TABLE Product_Reviews (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    product_id INT NOT NULL COMMENT 'External reference to Catalog Service',
+    user_id VARCHAR(36) NOT NULL COMMENT 'External reference to Identity Service',
+    order_item_id BIGINT NOT NULL,
+    rating TINYINT UNSIGNED NOT NULL,
+    comment TEXT,
+    status ENUM('Pending', 'Approved', 'Hidden') NOT NULL DEFAULT 'Pending',
+    moderated_by VARCHAR(36) NULL COMMENT 'External reference to Identity Service',
+    moderated_at DATETIME NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_reviews_verified_purchase FOREIGN KEY (order_item_id, user_id, product_id)
+        REFERENCES Verified_Purchases(order_item_id, user_id, product_id) ON DELETE RESTRICT,
+    CONSTRAINT chk_reviews_rating CHECK (rating BETWEEN 1 AND 5),
+    UNIQUE KEY uq_review_order_item_user (order_item_id, user_id),
+    INDEX idx_reviews_product_status (product_id, status),
+    INDEX idx_reviews_user (user_id)
+);
+
+CREATE TABLE Device_Tokens (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL COMMENT 'External reference to Identity Service',
+    platform ENUM('iOS', 'Android', 'Web') NOT NULL,
+    token VARCHAR(512) NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_seen_at DATETIME NULL,
+    UNIQUE KEY uq_device_token (platform, token(255)),
+    INDEX idx_device_tokens_user (user_id, is_active)
+);
+
+CREATE TABLE Notifications (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL COMMENT 'External reference to Identity Service',
+    type VARCHAR(50) NOT NULL COMMENT 'order_status, promotion, loyalty...',
+    channel ENUM('Push', 'Email', 'SMS', 'In_App') NOT NULL,
+    title VARCHAR(150) NOT NULL,
+    body VARCHAR(500) NOT NULL,
+    data JSON NULL,
+    status ENUM('Pending', 'Sent', 'Failed') NOT NULL DEFAULT 'Pending',
+    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    sent_at DATETIME NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_notifications_user (user_id, is_read, created_at),
+    INDEX idx_notifications_status (status, created_at)
+);
+
+-- Events published: engagement.loyalty.earned / redeemed / reversed, engagement.review.created.
+-- Events consumed: order.completed (earn stamps + Verified_Purchases), order.cancelled / payment.refunded (reverse),
+--                  order.status_changed (notifications).
+CREATE TABLE Outbox_Events (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    event_id VARCHAR(36) NOT NULL UNIQUE,
+    aggregate_type VARCHAR(50) NOT NULL,
+    aggregate_id VARCHAR(64) NOT NULL,
+    event_type VARCHAR(100) NOT NULL,
+    event_version SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+    correlation_id VARCHAR(64) NULL,
+    payload JSON NOT NULL,
+    status ENUM('Pending', 'Published', 'Failed') NOT NULL DEFAULT 'Pending',
+    retry_count INT UNSIGNED NOT NULL DEFAULT 0,
+    next_retry_at DATETIME NULL,
+    last_error VARCHAR(500) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    published_at DATETIME NULL,
+    INDEX idx_engagement_outbox_dispatch (status, next_retry_at, created_at),
+    INDEX idx_engagement_outbox_aggregate (aggregate_type, aggregate_id)
+);
+
+CREATE TABLE Processed_Events (
+    event_id VARCHAR(36) PRIMARY KEY,
+    event_type VARCHAR(100) NOT NULL,
+    source_service VARCHAR(100) NULL,
+    processed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_engagement_processed_type_time (event_type, processed_at)
+);
+
+-- ============================================================================
+-- 08. Intelligence Service
+-- ============================================================================
+CREATE DATABASE IF NOT EXISTS smart_cafe_intelligence_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE smart_cafe_intelligence_db;
+
+CREATE TABLE Chat_Sessions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(36) NULL COMMENT 'External reference to Identity Service; NULL for guest chat',
+    guest_key VARCHAR(64) NULL COMMENT 'Anonymous browser/session identifier',
+    staff_user_id VARCHAR(36) NULL COMMENT 'External reference to Identity Service; staff who took over',
+    branch_id INT NULL COMMENT 'External reference to Store Service',
+    status ENUM('Active', 'Waiting_Staff', 'Handed_Off', 'Closed') NOT NULL DEFAULT 'Active',
+    handed_off_at DATETIME NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    closed_at DATETIME NULL,
+    CONSTRAINT chk_chat_sessions_owner CHECK (user_id IS NOT NULL OR guest_key IS NOT NULL),
+    CONSTRAINT chk_chat_sessions_handoff CHECK (status <> 'Handed_Off' OR (staff_user_id IS NOT NULL AND handed_off_at IS NOT NULL)),
+    CONSTRAINT chk_chat_sessions_closed CHECK ((status = 'Closed') = (closed_at IS NOT NULL)),
+    INDEX idx_chat_sessions_user (user_id),
+    INDEX idx_chat_sessions_staff_status (staff_user_id, status),
+    INDEX idx_chat_sessions_guest (guest_key),
+    INDEX idx_chat_sessions_queue (branch_id, status)
+);
+
+CREATE TABLE Chat_Messages (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    session_id BIGINT NOT NULL,
+    sender_role ENUM('Customer', 'AI', 'Staff') NOT NULL,
+    sender_user_id VARCHAR(36) NULL COMMENT 'External reference to Identity Service; required for Staff messages',
+    content TEXT NOT NULL,
+    metadata JSON NULL COMMENT 'Model name, retrieved Knowledge_Base ids, token usage...',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_chat_messages_session FOREIGN KEY (session_id) REFERENCES Chat_Sessions(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_chat_messages_staff CHECK (sender_role <> 'Staff' OR sender_user_id IS NOT NULL),
+    INDEX idx_chat_messages_session_time (session_id, created_at)
+);
+
+-- Customer chatbot MUST filter audience IN ('Customer', 'Both'); staff assistant uses 'Staff' and 'Both'.
+-- FULLTEXT works for keyword search; Vietnamese needs app-side tokenization or an embedding/vector store.
+CREATE TABLE Knowledge_Base (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    category ENUM('FAQ', 'SOP_Staff', 'Policy', 'Menu_Guide') NOT NULL,
+    audience ENUM('Customer', 'Staff', 'Both') NOT NULL DEFAULT 'Customer',
+    language CHAR(2) NOT NULL DEFAULT 'vi',
+    title VARCHAR(255) NOT NULL,
+    content TEXT NOT NULL,
+    keywords VARCHAR(255) NULL,
+    version INT UNSIGNED NOT NULL DEFAULT 1,
+    status ENUM('Active', 'Hidden') NOT NULL DEFAULT 'Active',
+    created_by VARCHAR(36) NULL COMMENT 'External reference to Identity Service',
+    updated_by VARCHAR(36) NULL COMMENT 'External reference to Identity Service',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT chk_knowledge_staff_only CHECK (category <> 'SOP_Staff' OR audience = 'Staff'),
+    INDEX idx_knowledge_lookup (audience, category, status),
+    FULLTEXT KEY ft_knowledge_search (title, content, keywords)
+);
+
+-- History is kept: each model run inserts new rows; only the newest per target has is_latest = TRUE.
+CREATE TABLE AI_Forecasts (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    branch_id INT NOT NULL COMMENT 'External reference to Store Service',
+    forecast_type ENUM('Revenue', 'Product_Demand', 'Ingredient_Usage') NOT NULL,
+    target_id INT NOT NULL DEFAULT 0 COMMENT '0 for Revenue; Catalog variant_id for Product_Demand; Inventory ingredient_id for Ingredient_Usage',
+    forecast_date DATE NOT NULL,
+    predicted_value DECIMAL(18,3) NOT NULL COMMENT 'VND for Revenue; units for demand/usage',
+    lower_bound DECIMAL(18,3) NULL,
+    upper_bound DECIMAL(18,3) NULL,
+    actual_value DECIMAL(18,3) NULL COMMENT 'Back-filled later to measure accuracy',
+    model_version VARCHAR(50) NOT NULL,
+    run_id VARCHAR(36) NOT NULL,
+    raw_data JSON,
+    is_latest BOOLEAN NOT NULL DEFAULT TRUE,
+    generated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    latest_key VARCHAR(80) GENERATED ALWAYS AS (
+        CASE WHEN is_latest THEN CONCAT_WS(':', branch_id, forecast_type, target_id, forecast_date) ELSE NULL END
+    ) STORED,
+    CONSTRAINT chk_ai_forecasts_bounds CHECK (
+        (lower_bound IS NULL OR lower_bound <= predicted_value) AND (upper_bound IS NULL OR upper_bound >= predicted_value)
+    ),
+    UNIQUE KEY uq_ai_forecast_latest (latest_key),
+    UNIQUE KEY uq_ai_forecast_run (run_id, branch_id, forecast_type, target_id, forecast_date),
+    INDEX idx_ai_forecast_lookup (branch_id, forecast_type, forecast_date)
+);
+
+CREATE TABLE AI_Recommendations (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL COMMENT 'External reference to Identity Service',
+    branch_id INT NULL COMMENT 'External reference to Store Service',
+    product_id INT NOT NULL COMMENT 'External reference to Catalog Service',
+    recommendation_type ENUM('Cross_Sell', 'Up_Sell', 'Personalized', 'Trending') NOT NULL,
+    confidence_score DECIMAL(5,4) NOT NULL DEFAULT 0.0000,
+    reason TEXT NULL,
+    model_version VARCHAR(50) NOT NULL,
+    expires_at DATETIME NULL,
+    clicked_at DATETIME NULL,
+    purchased_at DATETIME NULL,
+    order_id BIGINT NULL COMMENT 'External reference to Order Service; set when the recommendation converted',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_ai_recommend_score CHECK (confidence_score BETWEEN 0.0000 AND 1.0000),
+    CONSTRAINT chk_ai_recommend_conversion CHECK (purchased_at IS NULL OR order_id IS NOT NULL),
+    INDEX idx_ai_recommend_user_time (user_id, created_at),
+    INDEX idx_ai_recommend_product (product_id),
+    INDEX idx_ai_recommend_model (model_version, created_at)
+);
+
+-- Events consumed: order.completed (training data), catalog.* (menu changes), inventory.deducted.
+CREATE TABLE Outbox_Events (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    event_id VARCHAR(36) NOT NULL UNIQUE,
+    aggregate_type VARCHAR(50) NOT NULL,
+    aggregate_id VARCHAR(64) NOT NULL,
+    event_type VARCHAR(100) NOT NULL,
+    event_version SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+    correlation_id VARCHAR(64) NULL,
+    payload JSON NOT NULL,
+    status ENUM('Pending', 'Published', 'Failed') NOT NULL DEFAULT 'Pending',
+    retry_count INT UNSIGNED NOT NULL DEFAULT 0,
+    next_retry_at DATETIME NULL,
+    last_error VARCHAR(500) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    published_at DATETIME NULL,
+    INDEX idx_intelligence_outbox_dispatch (status, next_retry_at, created_at),
+    INDEX idx_intelligence_outbox_aggregate (aggregate_type, aggregate_id)
+);
+
+CREATE TABLE Processed_Events (
+    event_id VARCHAR(36) PRIMARY KEY,
+    event_type VARCHAR(100) NOT NULL,
+    source_service VARCHAR(100) NULL,
+    processed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_intelligence_processed_type_time (event_type, processed_at)
+);

@@ -27,7 +27,7 @@ SAMPLE_QUESTIONS = [
 ]
 
 
-def test_retrieval(questions: list[str]) -> None:
+def run_retrieval(questions: list[str]) -> None:
     r = get_retriever()
     print(f"\nĐã nạp {len(r.chunks)} chunk\n")
     for q in questions:
@@ -38,7 +38,7 @@ def test_retrieval(questions: list[str]) -> None:
             print("        ", h.chunk.text[:100].replace("\n", " "), "...")
 
 
-async def test_chat(questions: list[str]) -> None:
+async def run_chat(questions: list[str]) -> None:
     pipeline = RAGPipeline()
     for q in questions:
         print("=" * 70)
@@ -66,9 +66,9 @@ if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) > 1 else "retrieval"
     qs = [sys.argv[2]] if len(sys.argv) > 2 else SAMPLE_QUESTIONS
     if mode == "retrieval":
-        test_retrieval(qs)
+        run_retrieval(qs)
     elif mode == "chat":
-        asyncio.run(test_chat(qs))
+        asyncio.run(run_chat(qs))
     elif mode == "interactive":
         asyncio.run(interactive())
     else:

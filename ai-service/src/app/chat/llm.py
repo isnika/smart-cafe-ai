@@ -3,17 +3,19 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
-import re
+import random
+import time
+
+from .response import build_extractive_answer
 
 logger = logging.getLogger(__name__)
 
 
 class ExtractiveLLM:
     """Fallback không dùng model sinh câu trả lời."""
-
-    MAX_BLOCKS = 2
 
     async def generate(
             self,
@@ -22,22 +24,7 @@ class ExtractiveLLM:
             max_tokens: int = 256,
     ) -> str:
         content = messages[-1]["content"] if messages else ""
-        match = re.search(r"<context>\s*(.*?)\s*</context>", content, re.S)
-
-        if not match:
-            return ""
-
-        blocks = match.group(1).split("\n\n---\n\n")[: self.MAX_BLOCKS]
-        texts = [
-            re.sub(r"^\(Nguồn:.*?\)\n", "", block, flags=re.S).strip()
-            for block in blocks
-        ]
-        texts = [item for item in texts if item]
-
-        if not texts:
-            return ""
-
-        return "Mình tìm được thông tin liên quan:\n\n" + "\n\n".join(texts)
+        return build_extractive_answer(content)
 
 
 class OpenAICompatLLM:
@@ -49,6 +36,8 @@ class OpenAICompatLLM:
             api_key: str | None = None,
             model: str | None = None,
             timeout: float | None = None,
+            max_retries: int | None = None,
+            retry_base_seconds: float | None = None,
     ):
         self.base_url = (
                 base_url
@@ -57,9 +46,37 @@ class OpenAICompatLLM:
 
         self.api_key = api_key or os.getenv("LLM_API_KEY", "ollama")
         self.model = model or os.getenv("LLM_MODEL", "qwen2.5:3b")
-        self.timeout = timeout or float(
-            os.getenv("LLM_TIMEOUT_SECONDS", "90")
+        self.timeout = timeout if timeout is not None else float(
+            os.getenv("LLM_TIMEOUT_SECONDS", "45")
         )
+        configured_retries = max_retries if max_retries is not None else int(
+            os.getenv("LLM_MAX_RETRIES", "2")
+        )
+        self.max_retries = max(0, min(configured_retries, 4))
+        self.retry_base_seconds = (
+            retry_base_seconds if retry_base_seconds is not None
+            else float(os.getenv("LLM_RETRY_BASE_SECONDS", "0.4"))
+        )
+        self.retry_max_seconds = float(os.getenv("LLM_RETRY_MAX_SECONDS", "4"))
+
+    async def _wait_before_retry(self, attempt: int, response=None) -> None:
+        delay = max(0.0, self.retry_base_seconds) * (2 ** attempt)
+        if response is not None:
+            retry_after = response.headers.get("Retry-After")
+            if retry_after:
+                try:
+                    delay = max(delay, float(retry_after))
+                except ValueError:
+                    pass
+        delay = min(delay, max(0.0, self.retry_max_seconds))
+        delay += random.uniform(0.0, min(0.2, max(0.0, self.retry_base_seconds)))
+        logger.warning(
+            "Thử lại LLM (attempt=%d/%d, delay=%.2fs)",
+            attempt + 2,
+            self.max_retries + 1,
+            delay,
+        )
+        await asyncio.sleep(delay)
 
     async def generate(
             self,
@@ -80,40 +97,43 @@ class OpenAICompatLLM:
             "stream": False,
         }
 
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(
-                    f"{self.base_url}/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                    },
-                    json=payload,
-                )
-                response.raise_for_status()
-                data = response.json()
-
-        except httpx.TimeoutException as exc:
-            logger.exception("LLM timeout sau %s giây", self.timeout)
-            raise RuntimeError(
-                f"Model phản hồi quá thời gian cho phép ({self.timeout}s)."
-            ) from exc
-
-        except httpx.HTTPStatusError as exc:
-            logger.error(
-                "LLM HTTP error: status=%s body=%s",
-                exc.response.status_code,
-                exc.response.text[:500],
-            )
-            raise RuntimeError(
-                f"LLM API trả về HTTP {exc.response.status_code}."
-            ) from exc
-
-        except httpx.HTTPError as exc:
-            logger.exception("Không kết nối được LLM tại %s", self.base_url)
-            raise RuntimeError(
-                "Không kết nối được Ollama. Hãy kiểm tra Ollama đang chạy."
-            ) from exc
-
+        started = time.perf_counter()
+        timeout = httpx.Timeout(self.timeout, connect=min(5.0, self.timeout))
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            for attempt in range(self.max_retries + 1):
+                try:
+                    response = await client.post(
+                        f"{self.base_url}/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {self.api_key}",
+                        },
+                        json=payload,
+                    )
+                    response.raise_for_status()
+                    data = response.json()
+                    break
+                except httpx.TimeoutException as exc:
+                    if attempt < self.max_retries:
+                        await self._wait_before_retry(attempt)
+                        continue
+                    logger.error("LLM timeout sau %s giây", self.timeout)
+                    raise RuntimeError(
+                        f"Model phản hồi quá thời gian cho phép ({self.timeout}s)."
+                    ) from exc
+                except httpx.HTTPStatusError as exc:
+                    status = exc.response.status_code
+                    retryable = status == 429 or status in {500, 502, 503, 504}
+                    if retryable and attempt < self.max_retries:
+                        await self._wait_before_retry(attempt, exc.response)
+                        continue
+                    logger.error("LLM HTTP error: status=%s", status)
+                    raise RuntimeError(f"LLM API trả về HTTP {status}.") from exc
+                except httpx.TransportError as exc:
+                    if attempt < self.max_retries:
+                        await self._wait_before_retry(attempt)
+                        continue
+                    logger.error("Không kết nối được LLM provider")
+                    raise RuntimeError("Không kết nối được LLM provider.") from exc
         try:
             answer = data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
@@ -124,6 +144,14 @@ class OpenAICompatLLM:
         if not isinstance(answer, str) or not answer.strip():
             raise RuntimeError("LLM trả về câu trả lời rỗng.")
 
+        usage = data.get("usage") if isinstance(data, dict) else None
+        logger.info(
+            "LLM hoàn tất (model=%s, elapsed_ms=%d, prompt_tokens=%s, completion_tokens=%s)",
+            self.model,
+            round((time.perf_counter() - started) * 1000),
+            usage.get("prompt_tokens") if isinstance(usage, dict) else None,
+            usage.get("completion_tokens") if isinstance(usage, dict) else None,
+        )
         return answer.strip()
 
 
@@ -137,8 +165,9 @@ def get_llm():
         return OpenAICompatLLM()
 
     if provider == "anthropic":
-        from .rag import AnthropicLLM
-        return AnthropicLLM()
+        raise ValueError(
+            "LLM_PROVIDER='anthropic' chưa có adapter trong source hiện tại."
+        )
 
     if provider == "extractive":
         logger.warning("Đang sử dụng ExtractiveLLM, không gọi model sinh.")

@@ -11,10 +11,20 @@ import logging
 import os
 import re
 import threading
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
+from difflib import SequenceMatcher
 from pathlib import Path
 
 import numpy as np
+
+from .intent import (
+    BUSINESS_INTENTS,
+    PRODUCT_INTENTS,
+    DocumentType,
+    Intent,
+    allowed_document_types,
+)
+from .normalize import canonicalize_query, fold_text, search_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +33,29 @@ KB_DIR = CHAT_DIR / "knowledge_base"
 CACHE_DIR = CHAT_DIR / ".rag_cache"
 
 EMBEDDING_MODEL = os.getenv("RAG_EMBEDDING_MODEL", "intfloat/multilingual-e5-small")
+ALLOW_MODEL_DOWNLOAD = os.getenv("RAG_ALLOW_MODEL_DOWNLOAD", "true").lower() in {"1", "true", "yes"}
+DISABLE_EMBEDDINGS = os.getenv("RAG_DISABLE_EMBEDDINGS", "false").lower() in {"1", "true", "yes"}
+LEXICAL_WEIGHT = max(0.0, min(float(os.getenv("RAG_LEXICAL_WEIGHT", "0.30")), 1.0))
 MAX_CHUNK_CHARS = 900
 SUPPORTED_EXT = {".md", ".txt"}
 HEADING_RE = re.compile(r"^(#{1,4})\s+(.*\S)\s*$")
+
+# Các từ mô tả thuộc tính không phải là tên sản phẩm. Loại chúng ra khỏi
+# entity guard để "trà sữa khoai môn giá bao nhiêu" không match một món chỉ vì có từ "sữa".
+_PRODUCT_ATTRIBUTE_TOKENS = {
+    "bao", "nhieu", "tien", "gia", "may", "dong", "mon", "do", "uong",
+    "thanh", "phan", "nguyen", "lieu", "caffeine", "huong", "vi", "ngot",
+    "duong", "it", "dang", "beo", "nong", "lanh", "tuy", "chinh",
+}
+_LEXICAL_FAST_PATH_INTENTS = frozenset({
+    Intent.PRODUCT_PRICE,
+    Intent.PRODUCT_DETAIL,
+    Intent.OPENING_HOURS,
+    Intent.WIFI_QUERY,
+    Intent.LOCATION_QUERY,
+    Intent.SERVICE_QUERY,
+    Intent.POLICY_QUERY,
+})
 
 
 @dataclass
@@ -35,6 +65,9 @@ class Chunk:
     source: str  # đường dẫn tương đối, vd "menu/coffee.md"
     category: str  # thư mục cấp 1 trong knowledge_base
     heading: str
+    document_type: str = DocumentType.INTERNAL.value
+    intents: list[str] = field(default_factory=list)
+    retrievable: bool = True
 
 
 @dataclass
@@ -97,6 +130,57 @@ def _split_long(body: str, max_chars: int = MAX_CHUNK_CHARS) -> list[str]:
     return chunks
 
 
+def _section_metadata(source: str, heading: str) -> tuple[str, list[str], bool]:
+    """Ánh xạ metadata từ cấu trúc KB; không chứa dữ liệu trả lời nghiệp vụ."""
+    normalized_heading = fold_text(heading)
+    if source.startswith("menu/"):
+        return (
+            DocumentType.PRODUCT.value,
+            sorted(intent.value for intent in PRODUCT_INTENTS),
+            True,
+        )
+
+    if source.startswith("policies/"):
+        return (
+            DocumentType.POLICY.value,
+            [Intent.POLICY_QUERY.value, Intent.SERVICE_QUERY.value],
+            True,
+        )
+
+    if source.startswith("faq/"):
+        if "thong tin quan" in normalized_heading:
+            return (
+                DocumentType.BUSINESS.value,
+                sorted(intent.value for intent in BUSINESS_INTENTS),
+                True,
+            )
+        if "tu van do uong" in normalized_heading:
+            return (
+                DocumentType.PRODUCT.value,
+                [
+                    Intent.PRODUCT_DETAIL.value,
+                    Intent.PRODUCT_FILTER.value,
+                    Intent.PRODUCT_RECOMMENDATION.value,
+                ],
+                True,
+            )
+        if "menu va gia" in normalized_heading:
+            return (
+                DocumentType.PRODUCT.value,
+                [Intent.MENU_QUERY.value, Intent.PRODUCT_PRICE.value],
+                True,
+            )
+        if "dat hang" in normalized_heading:
+            return (
+                DocumentType.BUSINESS.value,
+                [Intent.SERVICE_QUERY.value],
+                True,
+            )
+
+    # Các section hướng dẫn nội bộ không được đưa vào context trả lời khách.
+    return DocumentType.INTERNAL.value, [], False
+
+
 def load_chunks(kb_dir: Path = KB_DIR) -> list[Chunk]:
     chunks: list[Chunk] = []
     if not kb_dir.exists():
@@ -108,6 +192,7 @@ def load_chunks(kb_dir: Path = KB_DIR) -> list[Chunk]:
             continue
         rel = path.relative_to(kb_dir)
         category = rel.parts[0] if len(rel.parts) > 1 else path.stem
+        source = rel.as_posix()
         text = path.read_text(encoding="utf-8").strip()
         if not text:
             continue
@@ -117,13 +202,17 @@ def load_chunks(kb_dir: Path = KB_DIR) -> list[Chunk]:
         for heading, body in sections:
             for piece in _split_long(body):
                 head = heading or file_title
+                document_type, intents, retrievable = _section_metadata(source, head)
                 chunks.append(
                     Chunk(
                         id=len(chunks),
                         text=f"[{head}]\n{piece}",
-                        source=rel.as_posix(),
+                        source=source,
                         category=category,
                         heading=head,
+                        document_type=document_type,
+                        intents=intents,
+                        retrievable=retrievable,
                     )
                 )
     logger.info("Đã tạo %d chunk từ %s", len(chunks), kb_dir)
@@ -139,8 +228,11 @@ class Retriever:
         self.model_name = model_name
         self._model = None
         self._lock = threading.Lock()
+        self._embedding_disabled = DISABLE_EMBEDDINGS
         self.chunks: list[Chunk] = []
         self.embeddings: np.ndarray = np.zeros((0, 1), dtype=np.float32)
+        self._chunk_tokens: list[set[str]] = []
+        self._chunk_folded: list[str] = []
         self.build_index()
 
     # -- model -------------------------------------------------------------- #
@@ -149,8 +241,17 @@ class Retriever:
             with self._lock:
                 if self._model is None:
                     from sentence_transformers import SentenceTransformer
-
-                    self._model = SentenceTransformer(self.model_name)
+                    try:
+                        # Ưu tiên cache local để tránh các request HEAD không cần thiết.
+                        self._model = SentenceTransformer(
+                            self.model_name,
+                            local_files_only=True,
+                        )
+                    except Exception:
+                        if not ALLOW_MODEL_DOWNLOAD:
+                            raise
+                        logger.info("Model embedding chưa có đủ trong cache; cho phép tải model")
+                        self._model = SentenceTransformer(self.model_name)
         return self._model
 
     def _embed(self, texts: list[str], prefix: str) -> np.ndarray:
@@ -171,11 +272,56 @@ class Retriever:
             h.update(c.text.encode())
         return h.hexdigest()[:16]
 
+    def _refresh_lexical_index(self) -> None:
+        self._chunk_tokens = [set(search_tokens(c.text)) for c in self.chunks]
+        self._chunk_folded = [fold_text(c.text) for c in self.chunks]
+
+    @staticmethod
+    def _lexical_score(query_tokens: set[str], query_folded: str,
+                       chunk_tokens: set[str], chunk_folded: str) -> float:
+        if not query_tokens or not chunk_tokens:
+            return 0.0
+        if len(query_folded) >= 4 and query_folded in chunk_folded:
+            return 1.0
+
+        matched = 0
+        for query_token in query_tokens:
+            if query_token in chunk_tokens:
+                matched += 1
+                continue
+            # Fuzzy token matching xử lý lỗi gõ nhẹ như "late"/"latte".
+            if len(query_token) >= 4 and any(
+                abs(len(query_token) - len(candidate)) <= 2
+                and SequenceMatcher(None, query_token, candidate).ratio() >= 0.82
+                for candidate in chunk_tokens
+            ):
+                matched += 1
+        return matched / len(query_tokens)
+
+    @staticmethod
+    def _token_matches(query_token: str, candidates: set[str]) -> bool:
+        if query_token in candidates:
+            return True
+        return len(query_token) >= 4 and any(
+            abs(len(query_token) - len(candidate)) <= 2
+            and SequenceMatcher(None, query_token, candidate).ratio() >= 0.82
+            for candidate in candidates
+        )
+
+    @classmethod
+    def _product_entity_score(cls, entity_tokens: set[str], heading: str) -> float:
+        heading_tokens = set(search_tokens(heading))
+        if not entity_tokens or not heading_tokens:
+            return 0.0
+        matched = sum(cls._token_matches(token, heading_tokens) for token in entity_tokens)
+        return matched / len(entity_tokens)
+
     def build_index(self, force: bool = False) -> None:
         """Tạo index; dùng cache nếu knowledge_base không đổi."""
         chunks = load_chunks(self.kb_dir)
         if not chunks:
             self.chunks, self.embeddings = [], np.zeros((0, 1), dtype=np.float32)
+            self._refresh_lexical_index()
             return
 
         fp = self._fingerprint(chunks)
@@ -185,13 +331,29 @@ class Retriever:
 
         if not force and emb_file.exists() and meta_file.exists():
             self.embeddings = np.load(emb_file)
-            self.chunks = [Chunk(**d) for d in json.loads(meta_file.read_text("utf-8"))]
+            # Embedding cache phụ thuộc content; metadata luôn lấy từ code/chunks
+            # hiện tại để thay đổi routing không buộc phải vector hóa lại.
+            self.chunks = chunks
+            self._refresh_lexical_index()
             logger.info("Nạp index từ cache (%s)", fp)
             return
 
-        logger.info("Đang embedding %d chunk...", len(chunks))
-        self.embeddings = self._embed([c.text for c in chunks], "passage: ")
         self.chunks = chunks
+        self._refresh_lexical_index()
+        if self._embedding_disabled:
+            self.embeddings = np.zeros((len(chunks), 1), dtype=np.float32)
+            logger.warning("Dense embedding đã tắt; retriever dùng lexical search")
+            return
+
+        logger.info("Đang embedding %d chunk...", len(chunks))
+        try:
+            self.embeddings = self._embed([c.text for c in chunks], "passage: ")
+        except Exception:
+            # Chat vẫn hoạt động ở chế độ lexical khi model embedding không sẵn sàng.
+            self._embedding_disabled = True
+            self.embeddings = np.zeros((len(chunks), 1), dtype=np.float32)
+            logger.exception("Không nạp được model embedding; chuyển sang lexical search")
+            return
         np.save(emb_file, self.embeddings)
         meta_file.write_text(
             json.dumps([asdict(c) for c in chunks], ensure_ascii=False), "utf-8"
@@ -208,22 +370,94 @@ class Retriever:
         top_k: int = 4,
         min_score: float = 0.0,
         category: str | None = None,
+        intent: Intent | str | None = None,
     ) -> list[SearchHit]:
         if not self.chunks:
             return []
 
-        q = self._embed([query], "query: ")[0]
-        scores = self.embeddings @ q  # đã normalize -> cosine
+        canonical_query = canonicalize_query(query)
+        query_folded = fold_text(canonical_query)
+        query_tokens = set(search_tokens(canonical_query))
+        lexical_scores = np.asarray([
+            self._lexical_score(query_tokens, query_folded, tokens, folded)
+            for tokens, folded in zip(self._chunk_tokens, self._chunk_folded)
+        ], dtype=np.float32)
 
+        mask = np.array([chunk.retrievable for chunk in self.chunks], dtype=bool)
         if category:
-            mask = np.array([c.category == category for c in self.chunks])
-            scores = np.where(mask, scores, -1.0)
+            mask &= np.array([c.category == category for c in self.chunks])
 
+        parsed_intent = Intent.UNKNOWN
+        if intent:
+            intent_value = intent.value if isinstance(intent, Intent) else str(intent)
+            try:
+                parsed_intent = Intent(intent_value)
+            except ValueError:
+                parsed_intent = Intent.UNKNOWN
+            allowed_types = {item.value for item in allowed_document_types(parsed_intent)}
+            if parsed_intent is not Intent.UNKNOWN:
+                mask &= np.array([
+                    chunk.document_type in allowed_types and intent_value in chunk.intents
+                    for chunk in self.chunks
+                ])
+
+            # Giá/thuộc tính là truy vấn theo một món cụ thể. Bắt buộc tên món
+            # phải phù hợp heading, thay vì để cosine similarity tự chọn một món khác.
+            if parsed_intent in {Intent.PRODUCT_PRICE, Intent.PRODUCT_DETAIL}:
+                entity_tokens = query_tokens - _PRODUCT_ATTRIBUTE_TOKENS
+                if not entity_tokens:
+                    return []
+                mask &= np.array([
+                    self._product_entity_score(entity_tokens, chunk.heading) >= 0.60
+                    for chunk in self.chunks
+                ])
+
+        if not mask.any():
+            return []
+
+        # Fact lookup có lexical match mạnh và đã được metadata-filter không cần
+        # nạp model embedding. Fast path này loại cold-start và không ảnh hưởng
+        # các truy vấn tư vấn/lọc phức tạp vẫn dùng hybrid retrieval.
+        lexical_fast_path = (
+            parsed_intent in _LEXICAL_FAST_PATH_INTENTS
+            and float(np.max(lexical_scores[mask])) >= 0.50
+        )
+        dense_available = (
+            not lexical_fast_path
+            and not self._embedding_disabled
+            and len(self.embeddings) == len(self.chunks)
+        )
+        if dense_available:
+            try:
+                q = self._embed([canonical_query], "query: ")[0]
+                dense_scores = self.embeddings @ q  # đã normalize -> cosine
+            except Exception:
+                # Tránh để outage của model/Hugging Face làm sập toàn bộ endpoint.
+                self._embedding_disabled = True
+                dense_available = False
+                dense_scores = np.zeros(len(self.chunks), dtype=np.float32)
+                logger.exception("Embedding query thất bại; chuyển sang lexical search")
+        else:
+            dense_scores = np.zeros(len(self.chunks), dtype=np.float32)
+
+        if dense_available:
+            blended = (1.0 - LEXICAL_WEIGHT) * dense_scores + LEXICAL_WEIGHT * lexical_scores
+            # Giữ tương thích với ngưỡng cosine cũ, lexical chỉ được phép tăng điểm.
+            scores = np.maximum(dense_scores, blended)
+        else:
+            scores = lexical_scores
+
+        scores = np.where(mask, scores, -1.0)
+
+        # RAG_MIN_SCORE là ngưỡng cosine. Khi model embedding không sẵn sàng,
+        # lexical overlap có thang điểm khác; dùng ngưỡng bảo thủ hơn nhưng vẫn
+        # giữ intent/document mask và product entity guard phía trên.
+        effective_min_score = min_score if dense_available else min(min_score, 0.34)
         order = np.argsort(-scores)[:top_k]
         return [
             SearchHit(self.chunks[i], float(scores[i]))
             for i in order
-            if scores[i] >= min_score
+            if scores[i] >= effective_min_score
         ]
 
 
