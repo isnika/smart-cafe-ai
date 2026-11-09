@@ -1,12 +1,11 @@
 import { Link } from 'react-router-dom';
 import { to } from '@/app/routes';
-import { FULFILLMENT_LABEL, itemCount } from '@/features/order-queue/status';
-import { customerStatusLabel } from '@/features/online-order/status';
+import { PAYMENT_STATUS_LABEL, orderKindLabel, trackingStatusLabel } from '@/features/online-order/tracking';
 import { formatVnd } from '@/shared/lib';
-import type { OrderDetail, OrderStatus } from '@/shared/types';
-import { Badge, Button, Card, type BadgeTone } from '@/shared/ui';
-import { orderSummary, orderTimeLabel } from '../format';
-import { canReorder } from '../reorder';
+import type { MyOrderSummary } from '@/shared/api/order-me.types';
+import type { OrderStatus, PaymentStatus } from '@/shared/types';
+import { Badge, Card, type BadgeTone } from '@/shared/ui';
+import { orderTimeLabel } from '../format';
 
 const STATUS_TONE: Record<OrderStatus, BadgeTone> = {
   Pending_Payment: 'warning',
@@ -21,14 +20,20 @@ const STATUS_TONE: Record<OrderStatus, BadgeTone> = {
   Rejected: 'error',
 };
 
+const PAYMENT_TONE: Record<PaymentStatus, BadgeTone> = {
+  Unpaid: 'warning',
+  Paid: 'info',
+  Partially_Refunded: 'neutral',
+  Refunded: 'neutral',
+};
+
 interface Props {
-  order: OrderDetail;
-  onReorder: (order: OrderDetail) => void;
+  order: MyOrderSummary;
   now?: Date;
 }
 
-/** Thẻ đơn trong lịch sử: bấm vào thẻ → theo dõi đơn; nút "Đặt lại" tách riêng, không kích hoạt điều hướng. */
-export function OrderHistoryCard({ order, onReorder, now }: Props) {
+/** Thẻ đơn trong lịch sử: bấm vào thẻ → trang theo dõi đơn. Order status và payment status là hai nhãn riêng. */
+export function OrderHistoryCard({ order, now }: Props) {
   const code = `#${order.orderCode}`;
   return (
     <Card padding="none" className="relative overflow-hidden" role="article" aria-label={`Đơn ${code}`}>
@@ -41,25 +46,22 @@ export function OrderHistoryCard({ order, onReorder, now }: Props) {
           >
             {code}
           </Link>
-          <Badge tone={STATUS_TONE[order.status]}>{customerStatusLabel(order.status, order.fulfillmentType)}</Badge>
+          <Badge tone={STATUS_TONE[order.status]} aria-label="Trạng thái đơn">
+            {trackingStatusLabel(order.status, order.fulfillmentType)}
+          </Badge>
         </div>
         <p className="text-caption text-gray-500">{orderTimeLabel(order.createdAt, now)}</p>
-        <p className="text-caption text-gray-600">{FULFILLMENT_LABEL[order.fulfillmentType]}</p>
+        <p className="text-caption text-gray-600">{orderKindLabel(order)}</p>
       </div>
 
       <div className="space-y-2 border-t border-gray-100 p-4 pt-3">
         <div className="flex items-baseline justify-between gap-3">
-          <p className="min-w-0 truncate text-body-lg text-gray-800">{orderSummary(order)}</p>
+          <p className="text-caption text-gray-500">{order.itemCount !== null ? `${order.itemCount} sản phẩm` : ''}</p>
           <p className="shrink-0 text-body-lg font-semibold text-gray-900">{formatVnd(order.finalAmount)}</p>
         </div>
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-caption text-gray-500">{itemCount(order)} sản phẩm</p>
-          {canReorder(order) && (
-            <Button variant="outline" size="sm" className="relative z-10" onClick={() => onReorder(order)}>
-              Đặt lại
-            </Button>
-          )}
-        </div>
+        <Badge tone={PAYMENT_TONE[order.paymentStatus]} aria-label="Trạng thái thanh toán">
+          {PAYMENT_STATUS_LABEL[order.paymentStatus]}
+        </Badge>
       </div>
     </Card>
   );

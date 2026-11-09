@@ -10,11 +10,15 @@ export const ORDER_TABS: ReadonlyArray<{ id: OrderTab; label: string }> = [
   { id: 'cancelled', label: 'Đã huỷ' },
 ];
 
-/** Tab → status gửi lên server (undefined = không lọc). Đơn bị quán từ chối được xếp vào "Đã huỷ". */
-export const TAB_STATUSES: Record<OrderTab, OrderStatus[] | undefined> = {
+/**
+ * Tab → order status gửi lên GET /orders/me (undefined = không lọc). Chỉ lọc theo ORDER status, không bao giờ theo payment_status.
+ * Spec chưa xác nhận `status` nhận nhiều giá trị nên mỗi tab đúng một giá trị: "Đã huỷ" = Cancelled
+ * (đơn bị quán từ chối - Rejected - chỉ hiện ở tab "Tất cả").
+ */
+export const TAB_STATUSES: Record<OrderTab, OrderStatus | undefined> = {
   all: undefined,
-  completed: ['Completed'],
-  cancelled: ['Cancelled', 'Rejected'],
+  completed: 'Completed',
+  cancelled: 'Cancelled',
 };
 
 const pad = (n: number) => String(n).padStart(2, '0');

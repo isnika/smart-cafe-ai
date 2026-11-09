@@ -16,6 +16,8 @@ import { chatHandlers } from './chat';
 import { workforceHandlers } from './workforce';
 import { dineInV1Handlers } from './dine-in-v1';
 import { onlineV1Handlers } from './online-v1';
+import { orderReadV1Handlers } from './order-read-v1';
+import { orderCancelV1Handlers } from './order-cancel-v1';
 
 // onlineV1Handlers đứng TRƯỚC: request không phải Online được nhả xuống handler Dine-in.
-export const handlers = [...onlineV1Handlers, ...dineInV1Handlers, ...cashierHandlers, ...catalogHandlers, ...storeHandlers, ...orderHandlers, ...identityHandlers, ...orderReadHandlers, ...authFlowHandlers, ...branchHandlers, ...voucherHandlers, ...paymentV1Handlers, ...paymentHandlers, ...inventoryHandlers, ...reviewHandlers, ...intelligenceHandlers, ...chatHandlers, ...workforceHandlers];
+export const handlers = [...onlineV1Handlers, ...orderReadV1Handlers, ...orderCancelV1Handlers, ...dineInV1Handlers, ...cashierHandlers, ...catalogHandlers, ...storeHandlers, ...orderHandlers, ...identityHandlers, ...orderReadHandlers, ...authFlowHandlers, ...branchHandlers, ...voucherHandlers, ...paymentV1Handlers, ...paymentHandlers, ...inventoryHandlers, ...reviewHandlers, ...intelligenceHandlers, ...chatHandlers, ...workforceHandlers];

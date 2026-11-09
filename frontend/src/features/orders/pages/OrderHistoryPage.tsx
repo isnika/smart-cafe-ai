@@ -1,16 +1,14 @@
 import { ClipboardList } from 'lucide-react';
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { PATHS } from '@/app/routes';
 import { PageHeader } from '@/features/dine-in/components/PageHeader';
-import { useOnlineCartStore } from '@/features/online-order/store';
 import { cn } from '@/shared/lib/cn';
-import type { OrderDetail } from '@/shared/types';
 import { Button, Skeleton } from '@/shared/ui';
 import { OrderHistoryCard } from '../components/OrderHistoryCard';
+import { OrderPagination } from '../components/OrderPagination';
 import { ORDER_TABS, type OrderTab } from '../format';
 import { useMyOrders } from '../hooks/useMyOrders';
-import { orderToCartLines, reorderFulfillment } from '../reorder';
 
 const EMPTY_TEXT: Record<OrderTab, string> = {
   all: 'Bạn chưa có đơn hàng nào.',
@@ -20,21 +18,23 @@ const EMPTY_TEXT: Record<OrderTab, string> = {
 
 /**
  * Lịch sử đơn hàng của khách (route nằm trong RequireRole → chưa đăng nhập sẽ bị chuyển về /login).
- * Dữ liệu do server lọc theo chủ đơn; trang này không bao giờ truyền userId.
+ * Dữ liệu (lọc theo order status + phân trang) do GET /orders/me trả về theo chủ đơn; trang này không bao giờ truyền userId.
  */
 export default function OrderHistoryPage() {
   const [tab, setTab] = useState<OrderTab>('all');
-  const { data, isPending, isError, refetch, isFetching } = useMyOrders(tab);
-  const navigate = useNavigate();
+  const [page, setPage] = useState(1);
+  const { data, isPending, isError, refetch, isFetching } = useMyOrders(tab, page);
   const orders = data?.items ?? [];
+  const totalPages = data?.meta.totalPages ?? 0;
 
-  // Đặt lại = đưa lại các món vào giỏ Online rồi sang giỏ hàng; giá/tồn kho do server kiểm tra lúc đặt.
-  const reorder = (order: OrderDetail) => {
-    const cart = useOnlineCartStore.getState();
-    cart.setFulfillment(reorderFulfillment(order));
-    for (const { line, quantity } of orderToCartLines(order)) cart.addLine(line, quantity);
-    navigate(PATHS.cart);
+  const selectTab = (next: OrderTab) => {
+    setTab(next);
+    setPage(1);
   };
+
+  // Trang hiện tại vượt quá tổng số trang (đơn vừa bị xoá/đổi bộ lọc) → lùi về trang cuối có dữ liệu.
+  // (Cập nhật state ngay trong lúc render, đúng mẫu "điều chỉnh state khi dữ liệu đổi" của React; không dùng effect.)
+  if (data && totalPages >= 1 && page > totalPages) setPage(totalPages);
 
   return (
     <div className="min-h-screen bg-primary-50">
@@ -49,7 +49,7 @@ export default function OrderHistoryPage() {
               type="button"
               role="tab"
               aria-selected={active}
-              onClick={() => setTab(t.id)}
+              onClick={() => selectTab(t.id)}
               className={cn(
                 'shrink-0 rounded-full border px-4 py-1.5 text-body font-medium transition-colors',
                 active ? 'border-primary-600 bg-primary-600 text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50',
@@ -80,7 +80,7 @@ export default function OrderHistoryPage() {
           </div>
         )}
 
-        {!isPending && !isError && orders.length === 0 && (
+        {!isPending && !isError && orders.length === 0 && page <= Math.max(totalPages, 1) && (
           <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
             <ClipboardList className="size-12 text-primary-300" aria-hidden />
             <h2 className="text-h4">{EMPTY_TEXT[tab]}</h2>
@@ -98,8 +98,10 @@ export default function OrderHistoryPage() {
         )}
 
         {orders.map((o) => (
-          <OrderHistoryCard key={o.id} order={o} onReorder={reorder} />
+          <OrderHistoryCard key={o.id} order={o} />
         ))}
+
+        {data && orders.length > 0 && <OrderPagination meta={data.meta} busy={isFetching} onPage={setPage} />}
       </div>
     </div>
   );

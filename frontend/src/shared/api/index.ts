@@ -6,6 +6,7 @@ export * as identityApi from './identity';
 export * as catalogApi from './catalog';
 export * as storeApi from './store';
 export * as orderApi from './order';
+export * as myOrderApi from './order-me';
 export * as paymentApi from './payment';
 export * as inventoryApi from './inventory';
 export * as engagementApi from './engagement';

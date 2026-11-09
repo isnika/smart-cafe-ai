@@ -30,6 +30,9 @@ const enqueue = <T,>(task: () => Promise<T>): Promise<T> => {
   return run;
 };
 
+/** Chạy một thao tác giỏ Online trong cùng hàng đợi với syncOnlineCart (dùng cho đặt lại đơn) → không chạy chồng nhau. */
+export const runOnlineCartExclusive = <T,>(task: () => Promise<T>): Promise<T> => enqueue(task);
+
 /** Chỉ dành cho test. */
 export function resetOnlineCartSync(): void {
   queue = Promise.resolve();
