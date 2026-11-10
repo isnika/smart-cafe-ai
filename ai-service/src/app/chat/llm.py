@@ -47,10 +47,10 @@ class OpenAICompatLLM:
         self.api_key = api_key or os.getenv("LLM_API_KEY", "ollama")
         self.model = model or os.getenv("LLM_MODEL", "qwen2.5:3b")
         self.timeout = timeout if timeout is not None else float(
-            os.getenv("LLM_TIMEOUT_SECONDS", "45")
+            os.getenv("LLM_TIMEOUT_SECONDS", "15")
         )
         configured_retries = max_retries if max_retries is not None else int(
-            os.getenv("LLM_MAX_RETRIES", "2")
+            os.getenv("LLM_MAX_RETRIES", "1")
         )
         self.max_retries = max(0, min(configured_retries, 4))
         self.retry_base_seconds = (

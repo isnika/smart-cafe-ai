@@ -29,6 +29,9 @@ Tài liệu này dùng để kiểm thử chatbot về câu hỏi thanh toán. C
 
 ## 3. Câu hỏi thường gặp
 
+* TODO_CHU_QUAN_DIEN_PHUONG_THUC_THANH_TOAN: các phương thức quán thực tế chấp nhận.
+* TODO_CHU_QUAN_DIEN_XUAT_HOA_DON: loại hóa đơn, thông tin cần cung cấp và thời gian xử lý.
+
 Q: Quán có nhận tiền mặt không?
 A: Trong kịch bản kiểm thử, quán có hỗ trợ tiền mặt. Cần xác nhận lại với cấu hình thanh toán thực tế trước khi đưa vào sử dụng.
 
@@ -43,6 +46,9 @@ A: Không. Bạn không nên chia sẻ mã OTP, mật khẩu hoặc thông tin �
 
 Q: Thanh toán bị lỗi thì làm sao?
 A: Hãy kiểm tra trạng thái giao dịch và tránh thanh toán lại nhiều lần khi giao dịch trước chưa rõ kết quả. Liên hệ nhân viên để được hỗ trợ đối chiếu.
+
+Q: Quán có xuất hóa đơn, hóa đơn VAT hoặc hóa đơn đỏ không?
+A: Hiện chưa có chính sách xuất hóa đơn được xác nhận. Bạn vui lòng hỏi nhân viên trước khi thanh toán và chuẩn bị thông tin xuất hóa đơn nếu quán yêu cầu.
 
 ## 4. Nguyên tắc an toàn
 

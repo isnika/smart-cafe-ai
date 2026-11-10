@@ -39,8 +39,13 @@ Không yêu cầu mật khẩu, mã OTP hoặc toàn bộ thông tin thẻ thanh
 
 ## 6. Câu hỏi thường gặp
 
+* TODO_CHU_QUAN_DIEN_CHINH_SACH_HOAN_HUY: điều kiện hủy/hoàn chính thức, thời hạn và kênh tiếp nhận.
+
 Q: Tôi muốn hủy đơn hàng.
 A: Mình có thể hướng dẫn bạn kiểm tra yêu cầu hủy. Bạn vui lòng cung cấp mã đơn hàng để hệ thống xác minh trạng thái đơn.
+
+Q: Quán có hoàn đơn, hoàn tiền hoặc cho hủy đơn không?
+A: Khả năng hoàn hoặc hủy phụ thuộc trạng thái đơn và giao dịch. Mình chưa thể xác nhận kết quả; bạn vui lòng cung cấp mã đơn để nhân viên kiểm tra theo chính sách thực tế.
 
 Q: Tôi đã thanh toán nhưng muốn hủy đơn.
 A: Yêu cầu cần được kiểm tra theo trạng thái đơn và giao dịch thanh toán. Mình không thể xác nhận hoàn tiền trước khi hệ thống hoặc nhân viên kiểm tra.

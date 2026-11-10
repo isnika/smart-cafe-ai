@@ -1,4 +1,4 @@
-"""Retriever: nạp knowledge_base -> chunk theo heading -> embedding -> tìm kiếm cosine.
+"""Retriever hybrid: catalog/Markdown -> BM25 + lexical/fuzzy + dense cosine.
 
 Phụ thuộc: numpy, sentence-transformers
 Model mặc định: intfloat/multilingual-e5-small (hỗ trợ tiếng Việt, nhẹ, chạy CPU tốt).
@@ -6,12 +6,16 @@ Model mặc định: intfloat/multilingual-e5-small (hỗ trợ tiếng Việt, 
 from __future__ import annotations
 
 import hashlib
+import csv
 import json
 import logging
+import math
 import os
 import re
 import threading
+from collections import Counter
 from dataclasses import asdict, dataclass, field
+from datetime import date
 from difflib import SequenceMatcher
 from pathlib import Path
 
@@ -47,7 +51,7 @@ _PRODUCT_ATTRIBUTE_TOKENS = {
     "thanh", "phan", "nguyen", "lieu", "caffeine", "huong", "vi", "ngot",
     "duong", "it", "dang", "beo", "nong", "lanh", "tuy", "chinh",
     "them", "bot", "nhieu", "topping", "size", "xem", "kiem", "tra",
-    "thi", "sao", "the", "nao",
+    "thi", "sao", "the", "nao", "ngon",
 }
 _GENERIC_SINGLE_PRODUCT_TOKENS = {"da", "sua", "xay", "nong", "lanh"}
 _PRODUCT_LOOKUP_INTENTS = frozenset({
@@ -72,6 +76,11 @@ _LEXICAL_FAST_PATH_INTENTS = frozenset({
     Intent.SERVICE_QUERY,
     Intent.ORDER_INTENT,
     Intent.ORDER_ONLINE,
+    Intent.ORDER_STATUS,
+    Intent.DELIVERY_QUERY,
+    Intent.PAYMENT_QUERY,
+    Intent.PROMOTION_QUERY,
+    Intent.CONTACT_QUERY,
     Intent.POLICY_QUERY,
 })
 
@@ -159,9 +168,14 @@ def _section_metadata(source: str, heading: str) -> tuple[str, list[str], bool]:
         )
 
     if source.startswith("policies/"):
+        policy_intents = (
+            [Intent.PAYMENT_QUERY.value]
+            if source.endswith("payment.md")
+            else [Intent.POLICY_QUERY.value]
+        )
         return (
             DocumentType.POLICY.value,
-            [Intent.POLICY_QUERY.value, Intent.SERVICE_QUERY.value],
+            policy_intents,
             True,
         )
 
@@ -173,12 +187,14 @@ def _section_metadata(source: str, heading: str) -> tuple[str, list[str], bool]:
                     Intent.OPENING_HOURS.value,
                     Intent.WIFI_QUERY.value,
                     Intent.LOCATION_QUERY.value,
+                    Intent.CONTACT_QUERY.value,
                     Intent.STORE_INFO.value,
                     Intent.SERVICE_QUERY.value,
+                    Intent.DELIVERY_QUERY.value,
                 ],
                 True,
             )
-        if "tu van do uong" in normalized_heading:
+        if "tu van do uong" in normalized_heading or "di ung" in normalized_heading:
             return (
                 DocumentType.PRODUCT.value,
                 [
@@ -205,7 +221,15 @@ def _section_metadata(source: str, heading: str) -> tuple[str, list[str], bool]:
                     Intent.SERVICE_QUERY.value,
                     Intent.ORDER_INTENT.value,
                     Intent.ORDER_ONLINE.value,
+                    Intent.ORDER_STATUS.value,
+                    Intent.DELIVERY_QUERY.value,
                 ],
+                True,
+            )
+        if "khuyen mai" in normalized_heading or "thanh vien" in normalized_heading:
+            return (
+                DocumentType.BUSINESS.value,
+                [Intent.PROMOTION_QUERY.value],
                 True,
             )
 
@@ -213,8 +237,83 @@ def _section_metadata(source: str, heading: str) -> tuple[str, list[str], bool]:
     return DocumentType.INTERNAL.value, [], False
 
 
-def load_chunks(kb_dir: Path = KB_DIR) -> list[Chunk]:
+def _menu_advisory_fields(menu_dir: Path) -> dict[str, dict[str, str]]:
+    """Giữ mô tả/tư vấn giàu thông tin từ Markdown, không lấy giá cũ."""
+    result: dict[str, dict[str, str]] = {}
+    labels = ("Mô tả", "Phù hợp với", "Độ ngọt", "Tùy chỉnh", "Lưu ý")
+    if not menu_dir.exists():
+        return result
+    for path in sorted(menu_dir.glob("*.md")):
+        for heading, body in _split_by_heading(path.read_text(encoding="utf-8")):
+            if "Mã món:" not in body:
+                continue
+            fields: dict[str, str] = {}
+            for label in labels:
+                match = re.search(rf"^\s*[-*]\s*{re.escape(label)}:\s*(.+)$", body, re.I | re.M)
+                if match:
+                    fields[label] = match.group(1).strip()
+            if fields:
+                result[fold_text(heading.split(" > ")[-1])] = fields
+    return result
+
+
+def _load_product_catalog(path: Path, advisory: dict[str, dict[str, str]]) -> list[Chunk]:
+    """Nạp products.csv làm catalog ưu tiên, một sản phẩm trên mỗi chunk."""
+    if not path.exists():
+        return []
     chunks: list[Chunk] = []
+    temperature_labels = {
+        "hot": "Nóng", "cold": "Lạnh", "either": "Nóng hoặc lạnh", "neutral": "Không áp dụng",
+    }
+    caffeine_labels = {"high": "Cao", "medium": "Trung bình", "low": "Thấp", "none": "Không"}
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        for row in csv.DictReader(handle):
+            name = (row.get("name") or "").strip()
+            product_id = (row.get("product_id") or "").strip()
+            price_text = (row.get("price_vnd") or "").strip()
+            if not name or not product_id or not price_text.isdigit():
+                logger.warning("Bỏ qua dòng products.csv không hợp lệ: id=%r name=%r", product_id, name)
+                continue
+            launch_date = (row.get("launch_date") or "").strip()
+            try:
+                if launch_date and date.fromisoformat(launch_date) > date.today():
+                    continue
+            except ValueError:
+                logger.warning("Ngày mở bán không hợp lệ cho product_id=%s", product_id)
+            price = f"{int(price_text):,}".replace(",", ".")
+            heading = f"Danh mục sản phẩm > {name}"
+            advice = advisory.get(fold_text(name), {})
+            fields = [
+                f"* Mã món: {product_id}",
+                f"* Danh mục: {(row.get('category') or '').strip()}",
+                f"* Giá: {price} VND",
+                f"* Mô tả: {advice.get('Mô tả') or (row.get('description') or '').strip()}",
+                f"* Nhiệt độ: {temperature_labels.get((row.get('temperature') or '').strip(), (row.get('temperature') or '').strip())}",
+                f"* Caffeine: {caffeine_labels.get((row.get('caffeine_level') or '').strip(), (row.get('caffeine_level') or '').strip())}",
+                f"* Hương vị: {(row.get('flavor_tags') or '').replace('|', ', ').strip()}",
+                f"* Ngày mở bán: {launch_date}",
+            ]
+            for label in ("Phù hợp với", "Độ ngọt", "Tùy chỉnh", "Lưu ý"):
+                if advice.get(label):
+                    fields.append(f"* {label}: {advice[label]}")
+            chunks.append(Chunk(
+                id=len(chunks),
+                text=f"[{heading}]\n" + "\n".join(fields),
+                source=path.name,
+                category="menu",
+                heading=heading,
+                document_type=DocumentType.PRODUCT.value,
+                intents=sorted(intent.value for intent in PRODUCT_INTENTS),
+                retrievable=True,
+            ))
+    logger.info("Đã nạp %d sản phẩm từ %s", len(chunks), path.name)
+    return chunks
+
+
+def load_chunks(kb_dir: Path = KB_DIR) -> list[Chunk]:
+    advisory = _menu_advisory_fields(kb_dir / "menu")
+    chunks: list[Chunk] = _load_product_catalog(kb_dir / "products.csv", advisory)
+    has_primary_catalog = bool(chunks)
     if not kb_dir.exists():
         logger.warning("Không tìm thấy knowledge base: %s", kb_dir)
         return chunks
@@ -232,6 +331,10 @@ def load_chunks(kb_dir: Path = KB_DIR) -> list[Chunk]:
         file_title = path.stem
         sections = _split_by_heading(text) or [("", text)]
         for heading, body in sections:
+            # CSV mới là nguồn catalog ưu tiên; giữ Markdown cho quy tắc/Q&A,
+            # nhưng không index record món cũ để tránh hai mức giá cho một món.
+            if has_primary_catalog and source.startswith("menu/") and "Mã món:" in body:
+                continue
             for piece in _split_long(body):
                 head = heading or file_title
                 document_type, intents, retrievable = _section_metadata(source, head)
@@ -264,6 +367,9 @@ class Retriever:
         self.chunks: list[Chunk] = []
         self.embeddings: np.ndarray = np.zeros((0, 1), dtype=np.float32)
         self._chunk_tokens: list[set[str]] = []
+        self._chunk_token_counts: list[Counter[str]] = []
+        self._document_frequency: Counter[str] = Counter()
+        self._average_document_length = 0.0
         self._chunk_folded: list[str] = []
         self.build_index()
 
@@ -305,8 +411,45 @@ class Retriever:
         return h.hexdigest()[:16]
 
     def _refresh_lexical_index(self) -> None:
-        self._chunk_tokens = [set(search_tokens(c.text)) for c in self.chunks]
+        token_lists = [search_tokens(c.text) for c in self.chunks]
+        self._chunk_token_counts = [Counter(tokens) for tokens in token_lists]
+        self._chunk_tokens = [set(tokens) for tokens in token_lists]
+        self._document_frequency = Counter(
+            token for tokens in self._chunk_tokens for token in tokens
+        )
+        self._average_document_length = (
+            sum(len(tokens) for tokens in token_lists) / len(token_lists)
+            if token_lists else 0.0
+        )
         self._chunk_folded = [fold_text(c.text) for c in self.chunks]
+
+    def _bm25_scores(self, query_tokens: set[str]) -> np.ndarray:
+        """BM25 nhẹ, không thêm dependency; chuẩn hóa về [0, 1] để blend với cosine."""
+        scores = np.zeros(len(self.chunks), dtype=np.float32)
+        coverages = np.zeros(len(self.chunks), dtype=np.float32)
+        if not query_tokens or not self.chunks or self._average_document_length <= 0:
+            return scores
+        total = len(self.chunks)
+        k1, b = 1.5, 0.75
+        for index, counts in enumerate(self._chunk_token_counts):
+            doc_length = sum(counts.values())
+            matched_terms = 0
+            for token in query_tokens:
+                frequency = counts.get(token, 0)
+                if not frequency:
+                    continue
+                matched_terms += 1
+                document_frequency = self._document_frequency.get(token, 0)
+                inverse_frequency = math.log(
+                    1 + (total - document_frequency + 0.5) / (document_frequency + 0.5)
+                )
+                denominator = frequency + k1 * (
+                    1 - b + b * doc_length / self._average_document_length
+                )
+                scores[index] += inverse_frequency * frequency * (k1 + 1) / denominator
+            coverages[index] = matched_terms / len(query_tokens)
+        maximum = float(np.max(scores)) if len(scores) else 0.0
+        return (scores / maximum) * coverages if maximum > 0 else scores
 
     @staticmethod
     def _lexical_score(query_tokens: set[str], query_folded: str,
@@ -357,6 +500,7 @@ class Retriever:
 
     def _product_match_mask(
         self,
+        query_canonical: str,
         query_folded: str,
         query_tokens: set[str],
         base_mask: np.ndarray,
@@ -394,6 +538,15 @@ class Retriever:
             return resolved
 
         entity_tokens = query_tokens - _PRODUCT_ATTRIBUTE_TOKENS
+        # Sau khi bỏ dấu, "trà" trùng với động từ trong "kiểm tra" và "môn"
+        # trùng với từ chung "món". Giữ lại chúng khi bản query có dấu cho thấy
+        # đây thực sự là một phần tên món, nếu không "Trà sữa khoai môn" có thể
+        # bị rút còn "sữa khoai" rồi khớp sai "Sữa tươi khoai môn".
+        canonical_words = set(re.findall(r"[0-9a-zA-ZÀ-ỹđĐ]+", query_canonical.lower()))
+        if "trà" in canonical_words:
+            entity_tokens.add("tra")
+        if "môn" in canonical_words:
+            entity_tokens.add("mon")
         if not entity_tokens:
             return np.zeros(len(self.chunks), dtype=bool)
         if len(entity_tokens) == 1 and next(iter(entity_tokens)) in _GENERIC_SINGLE_PRODUCT_TOKENS:
@@ -405,6 +558,7 @@ class Retriever:
             next(iter(entity_tokens)), {"matcha"}
         )
         resolved = np.zeros(len(self.chunks), dtype=bool)
+        specificity = np.zeros(len(self.chunks), dtype=np.float32)
         for index, chunk in enumerate(self.chunks):
             if not candidates[index]:
                 continue
@@ -419,7 +573,27 @@ class Retriever:
                 self._token_matches(token, entity_tokens) for token in heading_tokens
             ) / len(heading_tokens)
             resolved[index] = entity_coverage == 1.0 and name_coverage >= 0.50
+            specificity[index] = name_coverage if resolved[index] else 0.0
+        if resolved.sum() > 1:
+            best_specificity = float(np.max(specificity[resolved]))
+            resolved &= specificity >= best_specificity
         return resolved
+
+    def resolve_product_names(self, query: str) -> tuple[str, ...]:
+        """Resolve catalog entity mà không embedding hoặc gọi LLM."""
+        canonical = canonicalize_query(query)
+        base_mask = np.array([
+            chunk.retrievable and self._is_product_record(chunk)
+            for chunk in self.chunks
+        ], dtype=bool)
+        resolved = self._product_match_mask(
+            canonical, fold_text(canonical), set(search_tokens(canonical)), base_mask
+        )
+        return tuple(
+            chunk.heading.split(" > ")[-1]
+            for index, chunk in enumerate(self.chunks)
+            if resolved[index]
+        )
 
     def build_index(self, force: bool = False) -> None:
         """Tạo index; dùng cache nếu knowledge_base không đổi."""
@@ -487,6 +661,8 @@ class Retriever:
             self._lexical_score(query_tokens, query_folded, tokens, folded)
             for tokens, folded in zip(self._chunk_tokens, self._chunk_folded)
         ], dtype=np.float32)
+        bm25_scores = self._bm25_scores(query_tokens)
+        lexical_scores = np.maximum(lexical_scores, bm25_scores)
 
         mask = np.array([chunk.retrievable for chunk in self.chunks], dtype=bool)
         if category:
@@ -509,7 +685,17 @@ class Retriever:
 
             # Lookup fact theo món bắt buộc qua entity resolver trước semantic ranking.
             if parsed_intent in _PRODUCT_LOOKUP_INTENTS:
-                mask &= self._product_match_mask(query_folded, query_tokens, mask)
+                mask &= self._product_match_mask(
+                    canonical_query, query_folded, query_tokens, mask
+                )
+
+            # Với bộ lọc vị mặn, không để token chung "món" hay fuzzy mon/man kéo
+            # về các đồ uống bất kỳ. Chỉ giữ record thật sự khai báo mặn/salty.
+            if parsed_intent is Intent.PRODUCT_FILTER and "man" in query_tokens:
+                mask &= np.array([
+                    bool({"man", "salty"} & tokens)
+                    for tokens in self._chunk_tokens
+                ], dtype=bool)
 
             # Menu/gợi ý chỉ lấy record sản phẩm thật, không lấy overview/FAQ.
             if parsed_intent in {Intent.MENU_QUERY, Intent.PRODUCT_RECOMMENDATION}:
@@ -529,7 +715,7 @@ class Retriever:
         # các truy vấn tư vấn/lọc phức tạp vẫn dùng hybrid retrieval.
         lexical_fast_path = (
             parsed_intent in _LEXICAL_FAST_PATH_INTENTS
-            and float(np.max(lexical_scores[mask])) >= 0.50
+            and float(np.max(lexical_scores[mask])) >= 0.34
         )
         dense_available = (
             not lexical_fast_path
@@ -568,7 +754,7 @@ class Retriever:
         # lexical overlap có thang điểm khác; dùng ngưỡng bảo thủ hơn nhưng vẫn
         # giữ intent/document mask và product entity guard phía trên.
         effective_min_score = min_score if dense_available else min(min_score, 0.34)
-        order = np.argsort(-scores)[:top_k]
+        order = np.argsort(-scores, kind="stable")[:top_k]
         return [
             SearchHit(self.chunks[i], float(scores[i]))
             for i in order

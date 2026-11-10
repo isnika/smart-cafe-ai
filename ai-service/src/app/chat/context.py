@@ -5,6 +5,7 @@ này không giữ state toàn cục, tránh rò rỉ context giữa người dù
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from .intent import Intent, classify_intent
@@ -18,6 +19,42 @@ class ConversationContext:
     current_product: str | None
     last_intent: Intent
     pending_question: str | None
+    pending_intent: Intent | None
+    candidate_products: tuple[str, ...]
+    last_assistant_question: str | None
+    last_assistant_message: str | None
+
+
+def _mentioned_products(text: str, product_names: tuple[str, ...]) -> tuple[str, ...]:
+    """Lấy tên món được nhắc rõ, loại match con như Latte trong Matcha Latte."""
+    folded = fold_text(text)
+    occurrences: list[tuple[int, int, str]] = []
+    for product_name in product_names:
+        name = fold_text(product_name)
+        for match in re.finditer(rf"(?<!\w){re.escape(name)}(?!\w)", folded):
+            occurrences.append((match.start(), match.end(), product_name))
+
+    selected: list[tuple[int, int, str]] = []
+    for start, end, product_name in sorted(
+        occurrences, key=lambda item: (-(item[1] - item[0]), item[0])
+    ):
+        if any(other_start <= start and end <= other_end for other_start, other_end, _ in selected):
+            continue
+        selected.append((start, end, product_name))
+    return tuple(dict.fromkeys(item[2] for item in sorted(selected)))
+
+
+def _pending_intent(last_assistant_message: str | None, last_intent: Intent) -> Intent | None:
+    if not last_assistant_message:
+        return None
+    folded = fold_text(last_assistant_message)
+    if any(phrase in folded for phrase in ("xem gia", "biet gia", "bao gia")):
+        return Intent.PRODUCT_PRICE
+    if "ma don" in folded:
+        if last_intent is Intent.POLICY_QUERY:
+            return Intent.POLICY_QUERY
+        return Intent.ORDER_STATUS
+    return None
 
 
 def build_conversation_context(
@@ -26,13 +63,12 @@ def build_conversation_context(
     product_names: tuple[str, ...],
 ) -> ConversationContext:
     current_product = None
+    candidate_products: tuple[str, ...] = ()
     for item in reversed(history):
-        content = fold_text(str(item.get("content", "")))
-        for product_name in product_names:
-            if fold_text(product_name) in content:
-                current_product = product_name
-                break
-        if current_product:
+        mentioned = _mentioned_products(str(item.get("content", "")), product_names)
+        if mentioned:
+            candidate_products = mentioned
+            current_product = mentioned[0] if len(mentioned) == 1 else None
             break
 
     last_intent = Intent.UNKNOWN
@@ -42,10 +78,24 @@ def build_conversation_context(
             break
 
     pending = question if is_contextual_followup(question) else None
+    last_assistant_question = None
+    last_assistant_message = None
+    for item in reversed(history):
+        if item.get("role") != "assistant":
+            continue
+        content = str(item.get("content", "")).strip()
+        last_assistant_message = content or None
+        if "?" in content:
+            last_assistant_question = content[content.rfind(".") + 1:].strip()
+        break
     return ConversationContext(
         session_id=None,
         recent_messages=tuple(history),
         current_product=current_product,
         last_intent=last_intent,
         pending_question=pending,
+        pending_intent=_pending_intent(last_assistant_message, last_intent),
+        candidate_products=candidate_products,
+        last_assistant_question=last_assistant_question,
+        last_assistant_message=last_assistant_message,
     )
