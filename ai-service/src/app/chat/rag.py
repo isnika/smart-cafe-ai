@@ -6,9 +6,10 @@ import logging
 import os
 from typing import Protocol
 
+from .context import build_conversation_context
 from .intent import Intent, classify_intent, fallback_for_intent
 from .llm import ExtractiveLLM, get_llm
-from .normalize import contextualize_followup, needs_llm_rewrite, search_tokens
+from .normalize import contextualize_followup, fold_text, needs_llm_rewrite, search_tokens
 from .prompts import (
     CONDENSE_SYSTEM,
     CONDENSE_USER,
@@ -23,7 +24,7 @@ from .schemas import ChatMessage, SourceChunk
 
 logger = logging.getLogger(__name__)
 
-TOP_K = max(1, min(int(os.getenv("RAG_TOP_K", "4")), 8))
+TOP_K = max(1, min(int(os.getenv("RAG_TOP_K", "5")), 8))
 MIN_SCORE = float(os.getenv("RAG_MIN_SCORE", "0.68"))
 MAX_HISTORY_MESSAGES = 8
 MAX_HISTORY_CHARS = 3200
@@ -34,13 +35,22 @@ MAX_CONTEXT_CHARS = 4800
 # model sinh cho nhóm này giảm latency/token và giữ nguyên các điều kiện như
 # "nếu quán hỗ trợ" thay vì để LLM vô tình khẳng định quá mức.
 DIRECT_ANSWER_INTENTS = frozenset({
+    Intent.PRODUCT_AVAILABILITY,
     Intent.PRODUCT_PRICE,
     Intent.PRODUCT_DETAIL,
+    Intent.PRODUCT_INFO,
+    Intent.PRODUCT_INTEREST,
+    Intent.CUSTOMIZE_DRINK,
     Intent.OPENING_HOURS,
     Intent.WIFI_QUERY,
     Intent.LOCATION_QUERY,
+    Intent.STORE_INFO,
     Intent.SERVICE_QUERY,
+    Intent.ORDER_INTENT,
+    Intent.ORDER_ONLINE,
     Intent.POLICY_QUERY,
+    Intent.MENU_QUERY,
+    Intent.PRODUCT_RECOMMENDATION,
 })
 
 
@@ -130,6 +140,11 @@ class RAGPipeline:
         self.fallback_llm = fallback_llm or ExtractiveLLM()
         self.top_k = max(1, min(int(top_k), 8))
         self.min_score = float(min_score)
+        self.product_names = tuple(sorted({
+            chunk.heading.split(" > ")[-1]
+            for chunk in getattr(self.retriever, "chunks", [])
+            if chunk.document_type == "product" and "Mã món:" in chunk.text
+        }, key=len, reverse=True))
 
     async def _condense(self, question: str, history: list[dict]) -> str:
         """Viết lại câu hỏi nối tiếp; nếu model lỗi thì vẫn tiếp tục bằng câu hỏi gốc."""
@@ -174,19 +189,42 @@ class RAGPipeline:
             return FALLBACK_ANSWER, []
 
         hist = _clean_history(history or [])
+        conversation = build_conversation_context(hist, question, self.product_names)
         decision = classify_intent(question)
         if decision.intent is Intent.GREETING:
             return GREETING_ANSWER, []
-        if decision.intent is Intent.UNKNOWN:
-            logger.info("Không nhận diện được intent phù hợp; không retrieval toàn cục")
-            return fallback_for_intent(decision.intent), []
 
         standalone = await self._condense(question, hist)
+        if (
+            conversation.current_product
+            and conversation.pending_question
+            and fold_text(conversation.current_product) not in fold_text(standalone)
+        ):
+            standalone = f"{conversation.current_product} {standalone}"[:MAX_STANDALONE_QUERY_CHARS]
+        if decision.intent in {Intent.UNKNOWN, Intent.FOLLOW_UP} and standalone != question:
+            contextual_decision = classify_intent(standalone)
+            if contextual_decision.intent not in {Intent.UNKNOWN, Intent.FOLLOW_UP}:
+                decision = contextual_decision
+        if (
+            decision.intent is Intent.FOLLOW_UP
+            and conversation.last_intent not in {Intent.UNKNOWN, Intent.FOLLOW_UP}
+        ):
+            decision = type(decision)(
+                conversation.last_intent,
+                0.80,
+                "inherited-last-intent",
+            )
+        if decision.intent in {Intent.UNKNOWN, Intent.FOLLOW_UP}:
+            logger.info(
+                "Không nhận diện được intent phù hợp; fallback_reason=missing_context"
+            )
+            return fallback_for_intent(decision.intent), []
         logger.info(
-            "Bắt đầu truy xuất chat (intent=%s, query_chars=%d, history_messages=%d)",
+            "Bắt đầu truy xuất chat (intent=%s, query_chars=%d, history_messages=%d, current_product=%s)",
             decision.intent.value,
             len(standalone),
             len(hist),
+            conversation.current_product,
         )
 
         try:
@@ -207,11 +245,18 @@ class RAGPipeline:
             return fallback_for_intent(decision.intent), []
 
         hits = _deduplicate_hits(hits)
+        logger.info(
+            "Retrieval hoàn tất (intent=%s, hits=%d, top_score=%.4f, categories=%s)",
+            decision.intent.value,
+            len(hits),
+            hits[0].score if hits else 0.0,
+            sorted({hit.chunk.document_type for hit in hits}),
+        )
         context = _format_context(hits)
         user_msg = USER_TEMPLATE.format(
             intent=decision.intent.value,
             context=context,
-            question=question,
+            question=standalone,
         )
         messages = hist + [{"role": "user", "content": user_msg}]
         answer = ""

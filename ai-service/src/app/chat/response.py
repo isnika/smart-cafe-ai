@@ -148,26 +148,88 @@ def build_extractive_answer(prompt_content: str) -> str:
         return ""
 
     if intent is Intent.PRODUCT_PRICE:
-        heading, body = blocks[0]
-        price = _field(body, "Giá mẫu") or _field(body, "Giá")
-        if price:
-            price = re.sub(r"\s*VND\b", "đ", price, flags=re.I)
-            description = _field(body, "Mô tả")
-            answer = f"{_display_heading(heading)} có giá tham khảo {price} nha!"
+        priced: list[tuple[str, str, str | None]] = []
+        for heading, body in blocks:
+            price = _field(body, "Giá mẫu") or _field(body, "Giá")
+            if price:
+                priced.append((
+                    _display_heading(heading),
+                    re.sub(r"\s*VND\b", "đ", price, flags=re.I),
+                    _field(body, "Mô tả"),
+                ))
+        if len(priced) > 1:
+            options = "; ".join(f"{name}: {price}" for name, price, _ in priced[:5])
+            return f"Các món phù hợp trong menu gồm {options}. Bạn muốn chọn món nào nha?"
+        if priced:
+            name, price, description = priced[0]
+            answer = f"{name} có giá tham khảo {price} nha!"
             if description:
                 answer += f" {description}"
             return answer
 
-    if intent is Intent.PRODUCT_DETAIL:
+    if intent is Intent.PRODUCT_AVAILABILITY:
+        names = _product_headings(blocks)[:5]
+        if len(names) == 1:
+            return (
+                f"Dạ có nha! Quán hiện có {names[0]}. "
+                "Bạn muốn mình xem giá món này không?"
+            )
+        if names:
+            return (
+                f"Dạ có nha! Quán hiện có {', '.join(names)}. "
+                "Bạn muốn mình xem giá món nào?"
+            )
+
+    if intent in {
+        Intent.PRODUCT_DETAIL,
+        Intent.PRODUCT_INFO,
+        Intent.PRODUCT_INTEREST,
+        Intent.CUSTOMIZE_DRINK,
+    }:
         heading, body = blocks[0]
         query_tokens = set(search_tokens(question))
+        folded_question = fold_text(question)
         fields: list[str] = []
         if {"ngot", "duong"} & query_tokens:
-            fields.extend(filter(None, [_field(body, "Độ ngọt"), _field(body, "Tùy chỉnh")]))
+            sweetness = _field(body, "Độ ngọt")
+            customization = _field(body, "Tùy chỉnh")
+            supports_sweetness_change = bool(
+                customization and re.search(r"ngọt|đường|sữa", customization, re.I)
+            )
+            if sweetness and any(
+                phrase in folded_question for phrase in ("tai sao", "vi sao", "sao vay")
+            ):
+                detail = sweetness.rstrip(".")
+                detail = detail[:1].lower() + detail[1:] if detail else detail
+                return (
+                    f"Độ ngọt của {_display_heading(heading)} {detail}. "
+                    "Vì vậy, mức ngọt thực tế cần được quán xác nhận nhé!"
+                )
+            if intent is Intent.CUSTOMIZE_DRINK and sweetness and not supports_sweetness_change:
+                return (
+                    f"{_display_heading(heading)} có độ ngọt {sweetness[:1].lower() + sweetness[1:]} "
+                    "Hiện mình chưa xác nhận được quán có hỗ trợ làm ít ngọt cho món này; "
+                    "bạn hỏi nhân viên giúp mình nhé!"
+                )
+            fields.extend(filter(None, [sweetness]))
+            if customization and supports_sweetness_change:
+                fields.append(customization)
         elif "caffeine" in query_tokens:
             fields.extend(filter(None, [_field(body, "Caffeine")]))
         elif {"thanh", "phan", "nguyen", "lieu"} & query_tokens:
             fields.extend(filter(None, [_field(body, "Mô tả"), _field(body, "Lưu ý")]))
+        elif intent is Intent.CUSTOMIZE_DRINK:
+            customization = _field(body, "Tùy chỉnh")
+            requested_terms = {"da", "topping", "size"} & query_tokens
+            if customization and any(
+                term in set(search_tokens(customization)) for term in requested_terms
+            ):
+                fields.append(customization)
+            else:
+                return (
+                    f"Hiện mình chưa xác nhận được quán có hỗ trợ tùy chỉnh này cho "
+                    f"{_display_heading(heading)}; bạn hỏi nhân viên giúp mình nhé!"
+                )
         else:
             fields.extend(filter(None, [_field(body, "Mô tả")]))
         if fields:
@@ -177,7 +239,10 @@ def build_extractive_answer(prompt_content: str) -> str:
         Intent.WIFI_QUERY,
         Intent.OPENING_HOURS,
         Intent.LOCATION_QUERY,
+        Intent.STORE_INFO,
         Intent.SERVICE_QUERY,
+        Intent.ORDER_INTENT,
+        Intent.ORDER_ONLINE,
         Intent.POLICY_QUERY,
     }:
         answer = _best_qa(blocks, question)
@@ -188,15 +253,18 @@ def build_extractive_answer(prompt_content: str) -> str:
 
     if intent in {
         Intent.MENU_QUERY,
+        Intent.PRODUCT_COMPARISON,
         Intent.PRODUCT_RECOMMENDATION,
         Intent.PRODUCT_FILTER,
     }:
         answer = _best_qa(blocks, question)
         if answer:
             return _clean_business_answer(answer)
-        names = _product_headings(blocks)[:3]
+        names = _product_headings(blocks)[:5]
         if names:
-            return f"Bạn có thể tham khảo {', '.join(names)} nhé."
+            if intent is Intent.PRODUCT_RECOMMENDATION:
+                return f"Dạ, bạn có thể thử {', '.join(names)} nhé. Đây đều là các món hiện có trong menu."
+            return f"Một số món hiện có trong menu gồm {', '.join(names)} nhé."
 
     answer = _best_qa(blocks, question)
     return _clean_business_answer(answer) if answer else _plain_excerpt(blocks[0][1])

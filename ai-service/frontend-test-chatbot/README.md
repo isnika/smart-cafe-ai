@@ -55,8 +55,8 @@ npm.cmd run build
 
 ## Hành vi test case
 
-- Có 16 test case, bao gồm regression Wi-Fi→Matcha, câu không dấu, sai chính
-  tả, đổi chủ đề và follow-up độ ngọt.
+- Có 19 test case, bao gồm regression Wi-Fi→Matcha, câu không dấu, sai chính
+  tả, đặt đơn online, product interest, đổi chủ đề và follow-up độ ngọt.
 - Nhấn test case để điền câu hỏi. UI hiển thị intent kỳ vọng và tiêu chí
   kiểm tra, nhưng không tự động đánh dấu PASS chỉ vì HTTP 200.
 - Test Context có hai bước. Sau khi bước 1 trả lời thành công, frontend mới điền

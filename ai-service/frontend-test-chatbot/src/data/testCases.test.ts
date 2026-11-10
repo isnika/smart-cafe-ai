@@ -3,7 +3,7 @@ import { TEST_CASES } from './testCases'
 
 describe('Smart Café regression cases', () => {
   it('keeps every test manually reviewable with an expected intent and checks', () => {
-    expect(TEST_CASES).toHaveLength(16)
+    expect(TEST_CASES).toHaveLength(19)
     expect(new Set(TEST_CASES.map((testCase) => testCase.id)).size).toBe(TEST_CASES.length)
     for (const testCase of TEST_CASES) {
       expect(testCase.expectedIntent).not.toBe('')
@@ -20,6 +20,7 @@ describe('Smart Café regression cases', () => {
     expect(TEST_CASES.find((testCase) => testCase.id === 'sweetness-followup')?.steps).toEqual([
       'Bạc xỉu bao nhiêu tiền?',
       'Có ít ngọt không?',
+      'Tại sao?',
     ])
   })
 })

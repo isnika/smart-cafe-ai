@@ -5,7 +5,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.app.chat.intent import DocumentType, Intent, classify_intent, fallback_for_intent
+from src.app.chat.context import build_conversation_context
 from src.app.chat.llm import ExtractiveLLM
+from src.app.chat.normalize import canonicalize_query
 from src.app.chat.rag import RAGPipeline
 from src.app.chat.response import answer_prices_are_grounded
 from src.app.chat.retriever import Chunk, Retriever, load_chunks
@@ -28,6 +30,18 @@ from src.app.main import app
         ("Món nào dưới 40k?", Intent.PRODUCT_FILTER),
         ("Có món nào ít ngọt không?", Intent.PRODUCT_RECOMMENDATION),
         ("Matcha có thành phần gì?", Intent.PRODUCT_DETAIL),
+        ("mình uống ít ngọt được không", Intent.CUSTOMIZE_DRINK),
+        ("đặt đơn onl dc k", Intent.ORDER_ONLINE),
+        ("minh muon uong cafe den", Intent.PRODUCT_INTEREST),
+        ("ca phe sua thi sao", Intent.PRODUCT_INFO),
+        ("so sánh Latte và Bạc xỉu", Intent.PRODUCT_COMPARISON),
+        ("mình muốn đặt món", Intent.ORDER_INTENT),
+        ("tại sao", Intent.FOLLOW_UP),
+        ("Có cà phê sữa không?", Intent.PRODUCT_AVAILABILITY),
+        ("Quán có món gì ngon?", Intent.PRODUCT_RECOMMENDATION),
+        ("Hi, quán có món gì ngon?", Intent.PRODUCT_RECOMMENDATION),
+        ("Cho mình xem thực đơn", Intent.MENU_QUERY),
+        ("Cà phê sữa ít đá, thêm topping được không?", Intent.CUSTOMIZE_DRINK),
         ("Xin chào", Intent.GREETING),
     ],
 )
@@ -146,6 +160,28 @@ def test_wifi_without_business_data_returns_unconfirmed_answer_without_llm_call(
     assert sources == []
 
 
+def test_missing_product_for_customization_asks_for_the_product_name():
+    answer, sources = asyncio.run(_offline_pipeline().answer("mình uống ít ngọt được không"))
+
+    assert "món nào" in answer.lower()
+    assert sources == []
+
+
+def test_unconfirmed_policy_uses_safe_fallback_without_generation():
+    class FailingLLM:
+        async def generate(self, *args, **kwargs):
+            raise AssertionError("LLM must not be called without policy context")
+
+    answer, sources = asyncio.run(
+        RAGPipeline(retriever=EmptyRetriever(), llm=FailingLLM()).answer(
+            "Uống hết rồi có đổi món được không?"
+        )
+    )
+
+    assert "chưa có đủ thông tin" in answer.lower()
+    assert sources == []
+
+
 def test_product_price_is_short_and_does_not_expose_internal_metadata():
     answer, sources = asyncio.run(_offline_pipeline().answer("Bạc xỉu giá bao nhiêu?"))
 
@@ -168,6 +204,72 @@ def test_followup_attribute_is_bound_to_previous_product():
     assert "Bạc xỉu" in answer
     assert "ngọt" in answer.lower()
     assert sources and all("Bạc xỉu" in source.heading for source in sources)
+
+
+def test_natural_chat_sequence_keeps_product_context_and_handles_service_switch():
+    pipeline = _offline_pipeline()
+    history: list[ChatMessage] = []
+
+    price, _ = asyncio.run(pipeline.answer("Matcha Latte giá bao nhiêu?", history))
+    history.extend([
+        ChatMessage(role="user", content="Matcha Latte giá bao nhiêu?"),
+        ChatMessage(role="assistant", content=price),
+    ])
+    sweetness, sweetness_sources = asyncio.run(
+        pipeline.answer("mình uống ít ngọt dc k", history)
+    )
+    history.extend([
+        ChatMessage(role="user", content="mình uống ít ngọt dc k"),
+        ChatMessage(role="assistant", content=sweetness),
+    ])
+    why, why_sources = asyncio.run(pipeline.answer("tại sao", history))
+    service, service_sources = asyncio.run(pipeline.answer("đặt đơn onl dc k", history))
+
+    assert "Matcha Latte" in sweetness and any(
+        term in sweetness.lower() for term in ("ngọt", "đường")
+    )
+    assert "chưa xác nhận" in sweetness.lower()
+    assert sweetness_sources and {source.source for source in sweetness_sources} == {"menu/matcha.md"}
+    assert "Matcha Latte" in why and any(term in why.lower() for term in ("ngọt", "đường"))
+    assert "thực tế" in why.lower() and why != sweetness
+    assert why_sources and {source.source for source in why_sources} == {"menu/matcha.md"}
+    assert "đặt" in service.lower()
+    assert service_sources and {source.source for source in service_sources} == {"faq/faq.md"}
+    assert all("3. Đặt hàng" in source.heading for source in service_sources)
+
+
+@pytest.mark.parametrize(
+    ("query", "expected_name"),
+    [
+        ("minh muon uong cafe den", "Cà phê đen"),
+        ("ca phe sua thi sao", "Cà phê sữa đá"),
+    ],
+)
+def test_natural_product_phrases_resolve_an_explicit_product(query, expected_name):
+    answer, sources = asyncio.run(_offline_pipeline().answer(query))
+
+    assert expected_name in answer
+    assert sources and all(expected_name in source.heading for source in sources)
+
+
+def test_conversation_context_is_derived_per_request_without_session_leakage():
+    product_names = ("Matcha Latte", "Cà phê đen")
+    matcha_context = build_conversation_context(
+        [{"role": "user", "content": "Matcha Latte giá bao nhiêu?"}],
+        "ít ngọt được không?",
+        product_names,
+    )
+    coffee_context = build_conversation_context(
+        [{"role": "user", "content": "Mình muốn uống cà phê đen"}],
+        "có caffeine không?",
+        product_names,
+    )
+    empty_context = build_conversation_context([], "tại sao?", product_names)
+
+    assert matcha_context.current_product == "Matcha Latte"
+    assert coffee_context.current_product == "Cà phê đen"
+    assert empty_context.current_product is None
+    assert matcha_context.session_id is None
 
 
 def test_new_opening_hours_topic_does_not_reuse_old_menu_entity():
@@ -198,7 +300,7 @@ def test_unknown_product_and_low_similarity_do_not_return_another_product():
     answer, sources = asyncio.run(pipeline.answer("Trà sữa khoai môn size XXL giá bao nhiêu?"))
 
     assert sources == []
-    assert "chưa có đủ thông tin" in answer.lower()
+    assert "chưa tìm thấy thông tin chính xác" in answer.lower()
     assert "matcha" not in answer.lower()
 
 
@@ -255,3 +357,86 @@ def test_invalid_history_payloads_return_422_without_calling_chat_pipeline():
 
     assert missing_role.status_code == 422
     assert empty_content.status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("query", "expected"),
+    [
+        ("mát cha giá bao nhiêu", "matcha giá bao nhiêu"),
+        ("cf sữa giá bn", "cà phê sữa giá bao nhiêu"),
+        ("caphe sua", "cà phê sữa"),
+    ],
+)
+def test_supported_vietnamese_aliases_are_canonicalized(query, expected):
+    assert canonicalize_query(query) == expected
+
+
+def test_product_availability_resolves_a_menu_product_without_claiming_stock():
+    answer, sources = asyncio.run(_offline_pipeline().answer("Có cà phê sữa không?"))
+
+    assert answer.startswith("Dạ có nha!")
+    assert "Cà phê sữa đá" in answer
+    assert "xem giá" in answer.lower()
+    assert sources and all("Cà phê sữa đá" in source.heading for source in sources)
+
+
+@pytest.mark.parametrize(
+    ("query", "expected_name", "expected_price", "unexpected_price"),
+    [
+        ("Đá xay giá bao nhiêu?", "Matcha Đá Xay", "49.000đ", "29.000đ"),
+        ("caphe sua gia bn?", "Cà phê sữa đá", "29.000đ", "49.000đ"),
+        ("Matcha đá giá bao nhiêu?", "Matcha Đá", "35.000đ", "49.000đ"),
+        ("Matcha late giá bao nhiêu?", "Matcha Latte", "39.000đ", "35.000đ"),
+    ],
+)
+def test_price_retrieval_uses_product_identity_before_semantic_similarity(
+    query, expected_name, expected_price, unexpected_price
+):
+    answer, sources = asyncio.run(_offline_pipeline().answer(query))
+
+    assert expected_name in answer
+    assert expected_price in answer
+    assert unexpected_price not in answer
+    assert sources and all(expected_name in source.heading for source in sources)
+
+
+def test_matcha_alias_only_returns_grounded_matcha_products():
+    answer, sources = asyncio.run(_offline_pipeline().answer("Mát cha giá bao nhiêu?"))
+
+    assert "Matcha" in answer
+    assert sources
+    assert all("Matcha" in source.heading for source in sources)
+    assert all(source.source == "menu/matcha.md" for source in sources)
+
+
+def test_unknown_product_does_not_borrow_the_price_of_a_similar_menu_item():
+    answer, sources = asyncio.run(_offline_pipeline().answer("Sinh tố xoài đá giá bao nhiêu?"))
+
+    assert sources == []
+    assert "chưa tìm thấy thông tin chính xác" in answer.lower()
+    assert "29.000" not in answer and "49.000" not in answer
+
+
+def test_generic_recommendation_lists_three_to_five_real_menu_products():
+    answer, sources = asyncio.run(_offline_pipeline().answer("Quán có món gì ngon?"))
+
+    product_sources = [source for source in sources if "Mã món:" in source.content]
+    names = {source.heading.split(" > ")[-1] for source in product_sources}
+    assert 3 <= len(names) <= 5
+    assert all(source.source.startswith("menu/") for source in product_sources)
+    assert sum(name in answer for name in names) >= 3
+
+
+def test_availability_then_price_keeps_the_resolved_product_context():
+    pipeline = _offline_pipeline()
+    availability, _ = asyncio.run(pipeline.answer("Có cà phê sữa không?"))
+    history = [
+        ChatMessage(role="user", content="Có cà phê sữa không?"),
+        ChatMessage(role="assistant", content=availability),
+    ]
+
+    answer, sources = asyncio.run(pipeline.answer("Giá bao nhiêu?", history))
+
+    assert "Cà phê sữa đá" in answer
+    assert "29.000đ" in answer
+    assert sources and all("Cà phê sữa đá" in source.heading for source in sources)

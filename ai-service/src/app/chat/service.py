@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from functools import lru_cache
 
 from .rag import RAGPipeline
@@ -14,7 +15,15 @@ class ChatService:
         self.pipeline = pipeline or RAGPipeline()
 
     async def chat(self, req: ChatRequest) -> ChatResponse:
+        started = time.perf_counter()
         answer, sources = await self.pipeline.answer(req.message, req.history)
+        logger.info(
+            "Chat hoàn tất (elapsed_ms=%d, history_messages=%d, sources=%d, fallback=%s)",
+            round((time.perf_counter() - started) * 1000),
+            len(req.history),
+            len(sources),
+            not sources,
+        )
         return ChatResponse(answer=answer, sources=sources)
 
     def reindex(self) -> int:

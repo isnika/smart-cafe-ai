@@ -16,8 +16,12 @@ _WORD_RE = re.compile(r"[0-9a-zA-ZÀ-ỹđĐ]+", re.UNICODE)
 # Không dùng một từ điển sửa chính tả rộng vì có thể làm đổi tên món.
 _QUERY_REPLACEMENTS = (
     (re.compile(r"\b(?:ca\s*phe|cafe|coffee|cf)\b", re.I), "cà phê"),
-    (re.compile(r"\b(?:matcha|mat\s*cha)\b", re.I), "matcha"),
+    (re.compile(r"\bcà phê\s+sua\b", re.I), "cà phê sữa"),
+    (re.compile(r"\b(?:matcha|mat\s*cha|mát\s*cha)\b", re.I), "matcha"),
     (re.compile(r"\b(?:khong|ko|k|hok|hông|hong|hem)\b", re.I), "không"),
+    (re.compile(r"\b(?:dc|duoc)\b", re.I), "được"),
+    (re.compile(r"\b(?:onl|online)\b", re.I), "online"),
+    (re.compile(r"\b(?:dat|đặt)\s*(?:don|đơn)\b", re.I), "đặt hàng"),
     (re.compile(r"\b(?:bao\s*nhiu|bao\s*nhieu|bi\s*nhiu|bn|bnh)\b", re.I), "bao nhiêu"),
     (re.compile(r"\b(?:mấy\s*đồng|bao\s*nhiêu\s*tiền)\b", re.I), "giá bao nhiêu"),
     (re.compile(r"\b(?:wi[\s-]?fi|wife|internet|mạng|mang)\b", re.I), "wifi"),
@@ -27,13 +31,14 @@ _STOP_WORDS = {
     "a", "ạ", "anh", "ban", "bạn", "bao", "chi", "chị", "cho", "co", "có",
     "cua", "của", "duoc", "được", "gi", "gì", "la", "là", "minh", "mình",
     "khong", "mot", "một", "nhe", "nhé", "nhieu", "oi", "ơi", "quan", "quán",
-    "smart", "cafe", "tien", "toi", "tôi", "va", "và", "voi", "với",
+    "smart", "cafe", "tien", "toi", "tôi", "uong", "va", "và", "voi", "với",
 }
 
 _FOLLOWUP_PHRASES = (
     "bao nhiêu", "giá", "món đó", "món này", "loại đó", "loại kia",
     "cái đó", "cái này", "nó", "còn không", "còn món", "còn loại",
     "thứ hai", "thứ 2", "vậy", "thế", "còn cái",
+    "tại sao", "vì sao", "sao vậy",
 )
 
 _ATTRIBUTE_FOLLOWUP_PHRASES = (
@@ -42,7 +47,7 @@ _ATTRIBUTE_FOLLOWUP_PHRASES = (
 
 _REFERENCE_PHRASES = (
     "món đó", "món này", "loại đó", "loại kia", "cái đó", "cái này",
-    "nó", "thứ hai", "thứ 2", "vậy", "thế",
+    "nó", "thứ hai", "thứ 2", "vậy", "thế", "tại sao", "vì sao", "sao vậy",
 )
 
 

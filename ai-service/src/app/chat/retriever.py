@@ -46,14 +46,32 @@ _PRODUCT_ATTRIBUTE_TOKENS = {
     "bao", "nhieu", "tien", "gia", "may", "dong", "mon", "do", "uong",
     "thanh", "phan", "nguyen", "lieu", "caffeine", "huong", "vi", "ngot",
     "duong", "it", "dang", "beo", "nong", "lanh", "tuy", "chinh",
+    "them", "bot", "nhieu", "topping", "size", "xem", "kiem", "tra",
+    "thi", "sao", "the", "nao",
 }
-_LEXICAL_FAST_PATH_INTENTS = frozenset({
+_GENERIC_SINGLE_PRODUCT_TOKENS = {"da", "sua", "xay", "nong", "lanh"}
+_PRODUCT_LOOKUP_INTENTS = frozenset({
+    Intent.PRODUCT_AVAILABILITY,
     Intent.PRODUCT_PRICE,
     Intent.PRODUCT_DETAIL,
+    Intent.PRODUCT_INFO,
+    Intent.PRODUCT_INTEREST,
+    Intent.CUSTOMIZE_DRINK,
+})
+_LEXICAL_FAST_PATH_INTENTS = frozenset({
+    Intent.PRODUCT_AVAILABILITY,
+    Intent.PRODUCT_PRICE,
+    Intent.PRODUCT_DETAIL,
+    Intent.PRODUCT_INFO,
+    Intent.PRODUCT_INTEREST,
+    Intent.CUSTOMIZE_DRINK,
     Intent.OPENING_HOURS,
     Intent.WIFI_QUERY,
     Intent.LOCATION_QUERY,
+    Intent.STORE_INFO,
     Intent.SERVICE_QUERY,
+    Intent.ORDER_INTENT,
+    Intent.ORDER_ONLINE,
     Intent.POLICY_QUERY,
 })
 
@@ -151,7 +169,13 @@ def _section_metadata(source: str, heading: str) -> tuple[str, list[str], bool]:
         if "thong tin quan" in normalized_heading:
             return (
                 DocumentType.BUSINESS.value,
-                sorted(intent.value for intent in BUSINESS_INTENTS),
+                [
+                    Intent.OPENING_HOURS.value,
+                    Intent.WIFI_QUERY.value,
+                    Intent.LOCATION_QUERY.value,
+                    Intent.STORE_INFO.value,
+                    Intent.SERVICE_QUERY.value,
+                ],
                 True,
             )
         if "tu van do uong" in normalized_heading:
@@ -159,6 +183,10 @@ def _section_metadata(source: str, heading: str) -> tuple[str, list[str], bool]:
                 DocumentType.PRODUCT.value,
                 [
                     Intent.PRODUCT_DETAIL.value,
+                    Intent.PRODUCT_INFO.value,
+                    Intent.PRODUCT_INTEREST.value,
+                    Intent.PRODUCT_COMPARISON.value,
+                    Intent.CUSTOMIZE_DRINK.value,
                     Intent.PRODUCT_FILTER.value,
                     Intent.PRODUCT_RECOMMENDATION.value,
                 ],
@@ -173,7 +201,11 @@ def _section_metadata(source: str, heading: str) -> tuple[str, list[str], bool]:
         if "dat hang" in normalized_heading:
             return (
                 DocumentType.BUSINESS.value,
-                [Intent.SERVICE_QUERY.value],
+                [
+                    Intent.SERVICE_QUERY.value,
+                    Intent.ORDER_INTENT.value,
+                    Intent.ORDER_ONLINE.value,
+                ],
                 True,
             )
 
@@ -310,11 +342,84 @@ class Retriever:
 
     @classmethod
     def _product_entity_score(cls, entity_tokens: set[str], heading: str) -> float:
-        heading_tokens = set(search_tokens(heading))
+        heading_tokens = set(search_tokens(heading.split(" > ")[-1]))
         if not entity_tokens or not heading_tokens:
             return 0.0
-        matched = sum(cls._token_matches(token, heading_tokens) for token in entity_tokens)
-        return matched / len(entity_tokens)
+        # Chấm coverage theo tên món, không theo toàn bộ query. Query nối tiếp
+        # có thể chứa thêm lời bot trước đó; các token này không được làm
+        # loãng entity đã xuất hiện rõ như "Matcha Latte".
+        matched = sum(cls._token_matches(token, entity_tokens) for token in heading_tokens)
+        return matched / len(heading_tokens)
+
+    @staticmethod
+    def _is_product_record(chunk: Chunk) -> bool:
+        return chunk.document_type == DocumentType.PRODUCT.value and "Mã món:" in chunk.text
+
+    def _product_match_mask(
+        self,
+        query_folded: str,
+        query_tokens: set[str],
+        base_mask: np.ndarray,
+    ) -> np.ndarray:
+        """Resolve tên món theo exact -> alias đã chuẩn hóa -> fuzzy có ràng buộc.
+
+        Dense similarity không tham gia bước này. Nó chỉ được xếp hạng sau khi
+        danh tính sản phẩm đã được xác nhận bằng tên/alias, tránh lấy giá của món
+        khác chỉ vì cùng có một từ như "đá".
+        """
+        product_mask = np.array([
+            self._is_product_record(chunk) for chunk in self.chunks
+        ], dtype=bool)
+        candidates = base_mask & product_mask
+        if not candidates.any():
+            return np.zeros(len(self.chunks), dtype=bool)
+
+        exact_indices: list[int] = []
+        exact_lengths: list[int] = []
+        for index, chunk in enumerate(self.chunks):
+            if not candidates[index]:
+                continue
+            name = fold_text(chunk.heading.split(" > ")[-1])
+            if re.search(rf"(?<!\w){re.escape(name)}(?!\w)", query_folded):
+                exact_indices.append(index)
+                exact_lengths.append(len(search_tokens(name)))
+
+        if exact_indices:
+            # "Matcha Latte" cũng chứa tên món "Latte"; luôn giữ tên đầy đủ nhất.
+            longest = max(exact_lengths)
+            resolved = np.zeros(len(self.chunks), dtype=bool)
+            for index, length in zip(exact_indices, exact_lengths):
+                if length == longest:
+                    resolved[index] = True
+            return resolved
+
+        entity_tokens = query_tokens - _PRODUCT_ATTRIBUTE_TOKENS
+        if not entity_tokens:
+            return np.zeros(len(self.chunks), dtype=bool)
+        if len(entity_tokens) == 1 and next(iter(entity_tokens)) in _GENERIC_SINGLE_PRODUCT_TOKENS:
+            return np.zeros(len(self.chunks), dtype=bool)
+
+        # "mát cha" đã được canonicalize thành "matcha". Đây là alias danh mục
+        # rõ ràng nên có thể trả về các biến thể Matcha, không tự chọn một biến thể.
+        matcha_family = len(entity_tokens) == 1 and self._token_matches(
+            next(iter(entity_tokens)), {"matcha"}
+        )
+        resolved = np.zeros(len(self.chunks), dtype=bool)
+        for index, chunk in enumerate(self.chunks):
+            if not candidates[index]:
+                continue
+            heading_tokens = set(search_tokens(chunk.heading.split(" > ")[-1]))
+            if matcha_family:
+                resolved[index] = "matcha" in heading_tokens
+                continue
+            entity_coverage = sum(
+                self._token_matches(token, heading_tokens) for token in entity_tokens
+            ) / len(entity_tokens)
+            name_coverage = sum(
+                self._token_matches(token, entity_tokens) for token in heading_tokens
+            ) / len(heading_tokens)
+            resolved[index] = entity_coverage == 1.0 and name_coverage >= 0.50
+        return resolved
 
     def build_index(self, force: bool = False) -> None:
         """Tạo index; dùng cache nếu knowledge_base không đổi."""
@@ -367,7 +472,7 @@ class Retriever:
     def search(
         self,
         query: str,
-        top_k: int = 4,
+        top_k: int = 5,
         min_score: float = 0.0,
         category: str | None = None,
         intent: Intent | str | None = None,
@@ -388,6 +493,7 @@ class Retriever:
             mask &= np.array([c.category == category for c in self.chunks])
 
         parsed_intent = Intent.UNKNOWN
+        catalog_browse = False
         if intent:
             intent_value = intent.value if isinstance(intent, Intent) else str(intent)
             try:
@@ -401,16 +507,19 @@ class Retriever:
                     for chunk in self.chunks
                 ])
 
-            # Giá/thuộc tính là truy vấn theo một món cụ thể. Bắt buộc tên món
-            # phải phù hợp heading, thay vì để cosine similarity tự chọn một món khác.
-            if parsed_intent in {Intent.PRODUCT_PRICE, Intent.PRODUCT_DETAIL}:
-                entity_tokens = query_tokens - _PRODUCT_ATTRIBUTE_TOKENS
-                if not entity_tokens:
-                    return []
+            # Lookup fact theo món bắt buộc qua entity resolver trước semantic ranking.
+            if parsed_intent in _PRODUCT_LOOKUP_INTENTS:
+                mask &= self._product_match_mask(query_folded, query_tokens, mask)
+
+            # Menu/gợi ý chỉ lấy record sản phẩm thật, không lấy overview/FAQ.
+            if parsed_intent in {Intent.MENU_QUERY, Intent.PRODUCT_RECOMMENDATION}:
                 mask &= np.array([
-                    self._product_entity_score(entity_tokens, chunk.heading) >= 0.60
-                    for chunk in self.chunks
-                ])
+                    self._is_product_record(chunk) for chunk in self.chunks
+                ], dtype=bool)
+                catalog_browse = parsed_intent is Intent.MENU_QUERY or any(
+                    cue in query_folded
+                    for cue in ("mon gi ngon", "gi ngon", "goi y mon", "khong biet nen uong gi")
+                )
 
         if not mask.any():
             return []
@@ -424,6 +533,7 @@ class Retriever:
         )
         dense_available = (
             not lexical_fast_path
+            and not catalog_browse
             and not self._embedding_disabled
             and len(self.embeddings) == len(self.chunks)
         )
@@ -446,6 +556,11 @@ class Retriever:
             scores = np.maximum(dense_scores, blended)
         else:
             scores = lexical_scores
+
+        if catalog_browse:
+            # Truy vấn duyệt menu không có entity để chấm overlap. Mọi record ở
+            # đây đều là món thật; điểm nền chỉ giúp lấy 3–5 món ổn định.
+            scores = np.where(mask, np.maximum(scores, 0.50), scores)
 
         scores = np.where(mask, scores, -1.0)
 
