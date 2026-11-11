@@ -50,6 +50,27 @@ export interface MockOnlineCart {
   updatedAt: string;
 }
 
+/** Cashier Shift mock state. Kept separate from Workforce Shift/Schedule. */
+export interface MockCashierShift {
+  id: number;
+  branchId: number;
+  registerCode: string;
+  staffUserId: string;
+  openingTime: string;
+  closingTime: string | null;
+  openingCash: number;
+  totalOrders: number;
+  totalCashSales: number;
+  totalOnlineSales: number;
+  totalCashRefunds: number;
+  totalCashIn: number;
+  totalCashOut: number;
+  expectedCash: number | null;
+  closingCash: number | null;
+  discrepancy: number | null;
+  status: 'Open' | 'Closed';
+}
+
 /** Địa chỉ giao hàng của khách (spec "1. Identity / Địa chỉ giao hàng"). */
 export interface MockAddress {
   id: number;
@@ -77,6 +98,7 @@ export interface MockDb {
   addresses: MockAddress[];
   orders: OrderDetail[];
   payments: Payment[];
+  cashierShifts: MockCashierShift[];
   allocations: PaymentOrderAllocation[];
   invoices: MockInvoiceRecord[];
   /** Thông tin người mua khách xin lúc tạo giao dịch cổng thanh toán; dùng khi giao dịch thành công. paymentId → input. */
@@ -103,7 +125,7 @@ export interface MockDb {
   timekeepings: Timekeeping[];
   seq: {
     order: number; item: number; option: number; history: number; session: number;
-    payment: number; allocation: number; invoice: number; invoiceItem: number; inventoryLog: number;
+    payment: number; allocation: number; invoice: number; invoiceItem: number; cashierShift: number; inventoryLog: number;
     chatSession: number; chatMessage: number; timekeeping: number; cart: number; cartItem: number; onlineCart: number; address: number;
   };
 }
@@ -122,6 +144,7 @@ const createDb = (): MockDb => {
     addresses: [],
     orders: [],
     payments: [],
+    cashierShifts: [],
     allocations: [],
     invoices: [],
     invoiceRequests: {},
@@ -139,7 +162,7 @@ const createDb = (): MockDb => {
     schedules: wf.schedules,
     timekeepings: [],
     seq: {
-      order: 0, item: 0, option: 0, history: 0, session: 0, payment: 0, allocation: 0, invoice: 0, invoiceItem: 0,
+      order: 0, item: 0, option: 0, history: 0, session: 0, payment: 0, allocation: 0, invoice: 0, invoiceItem: 0, cashierShift: 0,
       inventoryLog: inv.logs.length, chatSession: 0, chatMessage: 0, timekeeping: 0, cart: 0, cartItem: 0, onlineCart: 0, address: 0,
     },
   };

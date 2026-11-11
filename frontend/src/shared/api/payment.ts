@@ -53,7 +53,9 @@ export interface CreatePaymentInput {
   branchId: number;
   paymentMethod: PaymentMethod;
   allocations: CreatePaymentAllocationInput[];
-  returnUrl: string;
+  returnUrl?: string;
+  cashierShiftId?: number;
+  tableSessionId?: number;
 }
 
 export interface CreatePaymentCtx {
@@ -139,7 +141,9 @@ export const createPayment = async (input: CreatePaymentInput, ctx: CreatePaymen
         branchId: input.branchId,
         paymentMethod: input.paymentMethod,
         allocations: input.allocations.map((a) => ({ orderId: a.orderId, allocatedAmount: a.allocatedAmount })),
-        returnUrl: input.returnUrl,
+        ...(input.returnUrl ? { returnUrl: input.returnUrl } : {}),
+        ...(input.cashierShiftId !== undefined ? { cashierShiftId: input.cashierShiftId } : {}),
+        ...(input.tableSessionId !== undefined ? { tableSessionId: input.tableSessionId } : {}),
       },
       {
         snake: true,
@@ -148,6 +152,30 @@ export const createPayment = async (input: CreatePaymentInput, ctx: CreatePaymen
       },
     ),
   );
+
+/** Gắn shift hiện hành và giữ nguyên Idempotency-Key qua mọi lần retry giao dịch cashier. */
+export async function confirmCashPayment(id: number, input: { cashierShiftId: number; cashReceived: number }, signal?: AbortSignal): Promise<PayResult> {
+  return toPayResult(await http.post<unknown>(`/payments/${id}/confirm-cash`, input, {
+    snake: true,
+    ...(signal ? { signal } : {}),
+  }));
+}
+
+export interface ListPaymentsInput {
+  orderId?: number;
+  status?: PaymentGatewayStatus;
+  signal?: AbortSignal;
+}
+
+/** GET /payments lọc danh sách; data có thể là mảng hoặc envelope summary + allocations. */
+export async function listPayments(input: ListPaymentsInput = {}): Promise<PayResult[]> {
+  const raw = await http.get<unknown>('/payments', {
+    query: { order_id: input.orderId, status: input.status },
+    ...(input.signal ? { signal: input.signal } : {}),
+  });
+  const rows = Array.isArray(raw) ? raw : isRecord(raw) && Array.isArray(raw.items) ? raw.items : [];
+  return rows.map((row) => toPayResult(row));
+}
 
 /** GET /payments/{id}: trạng thái giao dịch (dùng cho polling sau khi quay về từ cổng). */
 export const getPaymentById = async (id: number, opts?: { signal?: AbortSignal }): Promise<PayResult> =>

@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Search } from 'lucide-react';
 import { isApiError } from '@/shared/api';
 import { cn } from '@/shared/lib/cn';
 import type { OrderDetail } from '@/shared/types';
 import { Button, Skeleton } from '@/shared/ui';
 import { useCashierFeed } from '../hooks/useCashier';
+import { paymentApi } from '@/shared/api';
 import { cashierGroup, GROUP_LABEL, matchesSearch, type CashierGroup } from '../model';
 import { BillModal } from './BillModal';
 import { CashierOrderCard } from './CashierOrderCard';
@@ -24,6 +25,19 @@ export function CashierTab() {
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [openId, setOpenId] = useState<number | null>(null);
+  const [paymentResults, setPaymentResults] = useState<Awaited<ReturnType<typeof paymentApi.listPayments>>>([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!feed.data) return;
+    let live = true;
+    setPaymentsLoading(true);
+    paymentApi.listPayments({ status: 'Success' })
+      .then((rows) => { if (live) setPaymentResults(rows); })
+      .catch(() => { if (live) setPaymentResults([]); })
+      .finally(() => { if (live) setPaymentsLoading(false); });
+    return () => { live = false; };
+  }, [feed.data, feed.dataUpdatedAt]);
 
   // Mốc thời gian = lúc dữ liệu được tải (cập nhật theo polling) → render thuần.
   const now = feed.dataUpdatedAt;
@@ -32,13 +46,15 @@ export function CashierTab() {
     const byGroup: Record<CashierGroup, OrderDetail[]> = { awaiting_counter: [], paid_online: [] };
     const totals: Record<CashierGroup, number> = { awaiting_counter: 0, paid_online: 0 };
     for (const o of items) {
-      const g = cashierGroup(o);
+      const payResult = paymentResults.find((item) => item.payment.status === 'Success' && item.allocations.some((allocation) => allocation.orderId === o.id));
+      const success = payResult?.payment;
+      const g = cashierGroup(o, success ? { paymentMethod: success.paymentMethod, status: success.status } : null);
       if (!g) continue;
       totals[g] += 1;
       if (matchesSearch(o, q)) byGroup[g].push(o);
     }
     return { byGroup, totals };
-  }, [feed.data, q]);
+  }, [feed.data, paymentResults, q]);
 
   const selected = openId === null ? null : (feed.data?.items.find((o) => o.id === openId) ?? null);
   const searching = q.trim() !== '';
@@ -101,6 +117,7 @@ export function CashierTab() {
 
       {hasData &&
         visible.map((g) => (
+          g === 'paid_online' && paymentsLoading ? null :
           <section key={g} aria-label={GROUP_LABEL[g]} className="space-y-2">
             {rows.byGroup[g].length === 0 ? (
               !searching && <p role="status" className="rounded-lg border border-dashed border-gray-300 py-6 text-center text-body text-gray-500">{EMPTY[g]}</p>

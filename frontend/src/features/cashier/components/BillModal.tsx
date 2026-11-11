@@ -3,17 +3,15 @@ import { CheckCircle2, FileText, ShieldCheck } from "lucide-react";
 import { isApiError } from "@/shared/api";
 import { formatVnd, parseUtc } from "@/shared/lib";
 import type {
-  InvoiceRequestInput,
   OrderDetail,
   PayResult,
 } from "@/shared/types";
 import { Badge, Button, Modal } from "@/shared/ui";
 import { whereLabel } from "@/features/order-queue/status";
-import { useCollectCash } from "../hooks/useCashier";
+import { resetCashPaymentAttempt, useCollectCash, useCurrentCashierShift } from "../hooks/useCashier";
 import {
   canCollectAtCounter,
   cashierGroup,
-  changeDue,
   GROUP_LABEL,
   isValidOptionalEmail,
   PAYMENT_CHANNEL_LABEL,
@@ -84,6 +82,7 @@ export function BillModal({
           order={order}
           onPaid={(result) => setReceipt({ order, result })}
           onFailed={setFailure}
+          onNewCollection={() => setReceipt(null)}
         />
       ) : (
         <div className="space-y-2">
@@ -169,13 +168,17 @@ function BillBody({
   order,
   onPaid,
   onFailed,
+  onNewCollection,
 }: {
   order: OrderDetail;
   onPaid: (r: PayResult) => void;
   onFailed: (message: string) => void;
+  onNewCollection: () => void;
 }) {
+  const [newAttempt, setNewAttempt] = useState(false);
   const group = cashierGroup(order);
   const collectable = canCollectAtCounter(order);
+  const shiftQuery = useCurrentCashierShift();
   const [cash, setCash] = useState("");
   const [withBuyer, setWithBuyer] = useState(false);
   const [buyer, setBuyer] = useState({
@@ -190,11 +193,12 @@ function BillBody({
 
   const cashReceived =
     cash.trim() === "" ? null : Number(cash.replace(/\D/g, ""));
-  const change = changeDue(order.finalAmount, cashReceived);
+  const change = mutation.data?.payment.changeAmount ?? null;
   const buyerOk =
     !withBuyer ||
     (buyer.buyerName.trim() !== "" && isValidOptionalEmail(buyer.email));
-  const canSubmit = collectable && change !== null && buyerOk;
+  const hasOpenShift = !!shiftQuery.data && shiftQuery.data.status === "Open";
+  const canSubmit = collectable && hasOpenShift && cashReceived !== null && cashReceived >= order.finalAmount && buyerOk;
   const error = mutation.error
     ? isApiError(mutation.error)
       ? mutation.error.message
@@ -212,18 +216,17 @@ function BillBody({
     );
 
   const submit = () => {
-    if (submitting.current || !canSubmit) return;
+    if (submitting.current) return;
+    if (mutation.data?.payment.status === "Success") {
+      resetCashPaymentAttempt(order.id);
+      setNewAttempt(true);
+      onNewCollection();
+      return;
+    }
+    if (!canSubmit) return;
     submitting.current = true;
-    const invoice: InvoiceRequestInput | undefined = withBuyer
-      ? {
-          buyerName: buyer.buyerName.trim(),
-          email: buyer.email.trim() || undefined,
-          buyerTaxCode: buyer.buyerTaxCode.trim() || undefined,
-          buyerAddress: buyer.buyerAddress.trim() || undefined,
-        }
-      : undefined;
     mutation.mutate(
-      { cashReceived: cashReceived ?? 0, invoice },
+      { cashReceived: cashReceived ?? 0, newAttempt },
       {
         onSuccess: onPaid,
         onError: (e) =>
@@ -232,6 +235,7 @@ function BillBody({
           ),
         onSettled: () => {
           submitting.current = false;
+          setNewAttempt(false);
         },
       },
     );
@@ -380,7 +384,7 @@ function BillBody({
                 Tiền trả lại
               </span>
               <output className="flex h-10 items-center text-body font-semibold text-success-strong">
-                {change === null ? "—" : formatVnd(change)}
+          {change === null ? "Xác nhận để biết tiền trả lại" : formatVnd(change)}
               </output>
             </div>
           </div>
@@ -489,14 +493,20 @@ function BillBody({
             </p>
           )}
 
+          {!hasOpenShift && (
+            <p role="status" className="rounded-md bg-warning-soft p-2 text-caption text-warning-strong">
+              {shiftQuery.isPending ? "Đang kiểm tra ca thu ngân…" : "Chưa có ca thu ngân đang mở. Mở ca trước khi thu tiền."}
+            </p>
+          )}
+
           <Button
             fullWidth
             size="lg"
-            disabled={!canSubmit}
-            loading={mutation.isPending}
+            disabled={!canSubmit || mutation.data?.payment.status === "Success"}
+            loading={mutation.isPending || shiftQuery.isPending}
             onClick={submit}
           >
-            Xác nhận đã thu
+            {mutation.data?.payment.status === "Success" ? "Thu giao dịch mới" : "Xác nhận đã thu"}
           </Button>
         </section>
       ) : (

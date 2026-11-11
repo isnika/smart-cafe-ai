@@ -10,14 +10,16 @@ describe('cashierGroup', () => {
     expect(cashierGroup(o({ orderSource: 'POS', status: 'Served' }))).toBe('awaiting_counter');
   });
 
-  it('đơn Online đã Paid → đã trả online; Online chưa Paid thì không thuộc nhóm nào (không suy diễn)', () => {
-    expect(cashierGroup(o({ orderSource: 'Online', paymentStatus: 'Paid', status: 'Ready' }))).toBe('paid_online');
+  it('đơn Online Paid chỉ hiện đã trả online khi có payment Success VNPay/Momo', () => {
+    expect(cashierGroup(o({ orderSource: 'Online', paymentStatus: 'Paid', status: 'Ready' }))).toBeNull();
+    expect(cashierGroup(o({ orderSource: 'Online', paymentStatus: 'Paid', status: 'Ready' }), { status: 'Success', paymentMethod: 'VNPay' })).toBe('paid_online');
+    expect(cashierGroup(o({ orderSource: 'Online', paymentStatus: 'Paid', status: 'Ready' }), { status: 'Failed', paymentMethod: 'Momo' })).toBeNull();
     expect(cashierGroup(o({ orderSource: 'Online', paymentStatus: 'Unpaid', status: 'Ready' }))).toBeNull();
     expect(cashierGroup(o({ orderSource: 'Online', paymentStatus: 'Unpaid', status: 'Pending_Payment' }))).toBeNull();
   });
 
-  it('đơn Dine-in (QR) đã trả qua cổng online → đã trả online; trả tiền mặt thì không thuộc nhóm nào', () => {
-    expect(cashierGroup(o({ orderSource: 'QR', paymentStatus: 'Paid', paidOnline: true }))).toBe('paid_online');
+  it('đơn Dine-in (QR) đã trả qua cổng online chỉ hiện theo giao dịch Success', () => {
+    expect(cashierGroup(o({ orderSource: 'QR', paymentStatus: 'Paid', paidOnline: true }), { status: 'Success', paymentMethod: 'Momo' })).toBe('paid_online');
     expect(cashierGroup(o({ orderSource: 'QR', paymentStatus: 'Paid' }))).toBeNull();
     expect(cashierGroup(o({ orderSource: 'QR', paymentStatus: 'Unpaid', paidOnline: true }))).toBe('awaiting_counter');
     expect(canCollectAtCounter(o({ paymentStatus: 'Paid', paidOnline: true }))).toBe(false);

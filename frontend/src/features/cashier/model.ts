@@ -1,5 +1,5 @@
 import { isTerminalOrderStatus } from '@/shared/lib';
-import type { OrderDetail, PaymentMethod, PaymentStatus } from '@/shared/types';
+import type { OrderDetail, PaymentGatewayStatus, PaymentMethod, PaymentStatus } from '@/shared/types';
 
 /**
  * Hai nhóm hiển thị ở tab Thu ngân, suy ra CHỈ từ dữ liệu có thật của đơn (orderSource + paymentStatus):
@@ -10,12 +10,13 @@ import type { OrderDetail, PaymentMethod, PaymentStatus } from '@/shared/types';
  */
 export type CashierGroup = 'awaiting_counter' | 'paid_online';
 
-type CashierOrder = Pick<OrderDetail, 'orderSource' | 'paymentStatus' | 'status'> & Partial<Pick<OrderDetail, 'paidOnline'>>;
+type CashierOrder = Pick<OrderDetail, 'orderSource' | 'paymentStatus' | 'status'> & Partial<Pick<OrderDetail, 'id' | 'paidOnline'>> & { successfulGatewayPayment?: boolean };
 
-export function cashierGroup(order: CashierOrder): CashierGroup | null {
+export function cashierGroup(order: CashierOrder, successfulPayment?: { paymentMethod: PaymentMethod; status: PaymentGatewayStatus } | null): CashierGroup | null {
   if (isTerminalOrderStatus(order.status) || order.status === 'Pending_Payment') return null;
   if (order.orderSource !== 'Online' && order.paymentStatus === 'Unpaid') return 'awaiting_counter';
-  if (order.paymentStatus === 'Paid' && (order.orderSource === 'Online' || order.paidOnline === true)) return 'paid_online';
+  if (successfulPayment) return successfulPayment.status === 'Success' && (successfulPayment.paymentMethod === 'VNPay' || successfulPayment.paymentMethod === 'Momo') ? 'paid_online' : null;
+  if (order.successfulGatewayPayment === true && order.paymentStatus === 'Paid') return 'paid_online';
   return null;
 }
 

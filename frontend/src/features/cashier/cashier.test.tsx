@@ -4,6 +4,8 @@ import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/mocks/db';
+import { cashierShiftApi, configureHttp } from '@/shared/api';
+import { mockAccessToken } from '@/mocks/handlers/identity';
 import { handlers } from '@/mocks/handlers';
 import { seedDemoOrders } from '@/mocks/seed';
 import { url } from '@/mocks/utils';
@@ -23,15 +25,20 @@ afterEach(() => {
   cleanup();
   server.resetHandlers();
 });
-beforeEach(() => {
+beforeEach(async () => {
   resetWorld();
   seedDemoOrders();
   loginAs('Staff');
+  configureHttp({ getToken: () => mockAccessToken('u-staff') });
+  await cashierShiftApi.openCashierShift({ branchId: 1, openingCash: 300_000 });
 });
 
 const code = (id: number) => db.orders.find((o) => o.id === id)!.orderCode;
 const awaiting = () => db.orders.filter((o) => cashierGroup(o) === 'awaiting_counter');
-const paidOnline = () => db.orders.filter((o) => cashierGroup(o) === 'paid_online');
+const paidOnline = () => db.orders.filter((o) => {
+  const payment = db.payments.find((p) => p.status === 'Success' && (p.paymentMethod === 'VNPay' || p.paymentMethod === 'Momo') && db.allocations.some((a) => a.paymentId === p.id && a.orderId === o.id));
+  return cashierGroup(o, payment ? { status: payment.status, paymentMethod: payment.paymentMethod } : null) === 'paid_online';
+});
 
 describe('/staff — Dashboard', () => {
   it('Staff mở được Dashboard: thẻ thống kê khớp dữ liệu đơn, mặc định tab Tổng quan', async () => {
@@ -56,6 +63,7 @@ describe('/staff — Dashboard', () => {
     fireEvent.click(await screen.findByRole('tab', { name: 'Thu ngân' }));
     expect(router.state.location.search).toBe('?tab=cashier');
     expect(await screen.findByRole('region', { name: 'Chờ thu tại quầy' })).toBeTruthy();
+    await waitFor(() => expect(within(screen.getByRole('region', { name: 'Đã trả online' })).getAllByRole('button')).toHaveLength(paidOnline().length));
     cleanup();
     renderApp('/staff?tab=cashier');
     expect(await screen.findByRole('tab', { name: 'Thu ngân', selected: true })).toBeTruthy();
@@ -76,7 +84,7 @@ describe('Tab Thu ngân', () => {
   it('phân biệt đơn chờ thu tại quầy và đơn đã trả online, đúng theo dữ liệu', async () => {
     renderApp('/staff?tab=cashier');
     const wait = await screen.findByRole('region', { name: 'Chờ thu tại quầy' });
-    const online = screen.getByRole('region', { name: 'Đã trả online' });
+    const online = await screen.findByRole('region', { name: 'Đã trả online' });
     expect(within(wait).getAllByRole('button')).toHaveLength(awaiting().length);
     expect(within(online).getAllByRole('button')).toHaveLength(paidOnline().length);
     for (const o of awaiting()) expect(within(wait).getByText(new RegExp(`#${o.orderCode}`))).toBeTruthy();
@@ -132,7 +140,7 @@ describe('Tab Thu ngân', () => {
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Đã thanh toán')).toBeTruthy();
     expect(within(dialog).queryByRole('button', { name: 'Xác nhận đã thu' })).toBeNull();
-    expect(within(dialog).getByText(/không thu lại/)).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: 'Xem hóa đơn điện tử' })).toBeTruthy();
   });
 
   it('lỗi tải → thông báo + Thử lại; tải lại thành công', async () => {
