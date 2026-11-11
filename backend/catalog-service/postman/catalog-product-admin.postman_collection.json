@@ -1,0 +1,112 @@
+{
+  "info": {
+    "name": "Catalog - Product management",
+    "description": "Test trực tiếp cổng 8082. Điền access_token Manager/Admin (không thêm Bearer) và category_id tồn tại. Chạy theo thứ tự; collection tự lưu ID sản phẩm thử nghiệm. Request tạo sản phẩm đầy đủ sẽ giữ lại sản phẩm vì DELETE phải trả 409 khi có variants.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]
+  },
+  "variable": [
+    {"key": "base_url", "value": "http://localhost:8082/catalog"},
+    {"key": "access_token", "value": ""},
+    {"key": "category_id", "value": "1"},
+    {"key": "product_id", "value": ""},
+    {"key": "configured_product_id", "value": ""},
+    {"key": "run_id", "value": ""}
+  ],
+  "item": [
+    {
+      "name": "1 - List all products for management",
+      "request": {"method": "GET", "header": [], "url": "{{base_url}}/admin/products?sort=id,desc&page=1&size=20"},
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('200 OK', () => pm.response.to.have.status(200));",
+        "pm.test('List and pagination', () => { const body = pm.response.json(); pm.expect(body.data).to.be.an('array'); pm.expect(body.meta.page).to.eql(1); });"
+      ]}}]
+    },
+    {
+      "name": "2 - Create empty product by mistake (201)",
+      "request": {
+        "method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}],
+        "url": "{{base_url}}/products",
+        "body": {"mode": "raw", "raw": "{\n  \"category_id\": {{category_id}},\n  \"name\": \"Sản phẩm thử {{run_id}}\",\n  \"temperature\": null,\n  \"caffeine_level\": \"None\",\n  \"flavor_tags\": [],\n  \"sort_order\": 0,\n  \"status\": \"Active\"\n}", "options": {"raw": {"language": "json"}}}
+      },
+      "event": [
+        {"listen": "prerequest", "script": {"type": "text/javascript", "exec": [
+          "pm.collectionVariables.set('run_id', Date.now().toString());",
+          "pm.collectionVariables.unset('product_id');"
+        ]}},
+        {"listen": "test", "script": {"type": "text/javascript", "exec": [
+          "pm.test('201 Created', () => pm.response.to.have.status(201));",
+          "if (pm.response.code === 201) { pm.collectionVariables.set('product_id', pm.response.json().data.id); }"
+        ]}}
+      ]
+    },
+    {
+      "name": "3 - Update product metadata (200)",
+      "request": {
+        "method": "PUT", "header": [{"key": "Content-Type", "value": "application/json"}],
+        "url": "{{base_url}}/products/{{product_id}}",
+        "body": {"mode": "raw", "raw": "{\n  \"category_id\": {{category_id}},\n  \"name\": \"Sản phẩm thử đã sửa {{run_id}}\",\n  \"image\": null,\n  \"description\": \"Dữ liệu thử Postman\",\n  \"temperature\": null,\n  \"caffeine_level\": \"None\",\n  \"flavor_tags\": [\" SWEET \", \"sweet\"],\n  \"sort_order\": 20,\n  \"status\": \"Active\"\n}", "options": {"raw": {"language": "json"}}}
+      },
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('200 OK', () => pm.response.to.have.status(200));",
+        "pm.test('Tags normalized', () => pm.expect(pm.response.json().data.flavor_tags).to.eql(['sweet']));"
+      ]}}]
+    },
+    {
+      "name": "4 - Set product Inactive (200)",
+      "request": {
+        "method": "PATCH", "header": [{"key": "Content-Type", "value": "application/json"}],
+        "url": "{{base_url}}/products/{{product_id}}/status",
+        "body": {"mode": "raw", "raw": "{\n  \"status\": \"Inactive\"\n}", "options": {"raw": {"language": "json"}}}
+      },
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('200 OK', () => pm.response.to.have.status(200));",
+        "pm.test('Inactive', () => pm.expect(pm.response.json().data.status).to.eql('Inactive'));"
+      ]}}]
+    },
+    {
+      "name": "5 - Delete empty product (200)",
+      "request": {"method": "DELETE", "header": [], "url": "{{base_url}}/products/{{product_id}}"},
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('200 OK', () => pm.response.to.have.status(200));",
+        "pm.test('Friendly confirmation', () => pm.expect(pm.response.json().message).to.eql('Xóa sản phẩm thành công.'));"
+      ]}}]
+    },
+    {
+      "name": "6 - Delete same product again (404)",
+      "request": {"method": "DELETE", "header": [], "url": "{{base_url}}/products/{{product_id}}"},
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+      ]}}]
+    },
+    {
+      "name": "7 - Create product with variants and options (201)",
+      "request": {
+        "method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}],
+        "url": "{{base_url}}/products",
+        "body": {"mode": "raw", "raw": "{\n  \"category_id\": {{category_id}},\n  \"name\": \"Cà phê cấu hình thử {{run_id}}\",\n  \"temperature\": \"Hot_Or_Iced\",\n  \"caffeine_level\": \"Medium\",\n  \"variants\": [\n    {\"variant_name\": \"M\", \"price\": 35000},\n    {\"variant_name\": \"L\", \"price\": 45000}\n  ],\n  \"option_groups\": [\n    {\n      \"name\": \"Mức đường\",\n      \"selection_type\": \"Single\",\n      \"is_required\": true,\n      \"min_select\": 1,\n      \"max_select\": 1,\n      \"options\": [\n        {\"option_name\": \"Bình thường\", \"is_default\": true},\n        {\"option_name\": \"Ít đường\"}\n      ]\n    }\n  ]\n}", "options": {"raw": {"language": "json"}}}
+      },
+      "event": [
+        {"listen": "prerequest", "script": {"type": "text/javascript", "exec": [
+          "pm.collectionVariables.set('run_id', Date.now().toString());",
+          "pm.collectionVariables.unset('configured_product_id');"
+        ]}},
+        {"listen": "test", "script": {"type": "text/javascript", "exec": [
+          "pm.test('201 Created', () => pm.response.to.have.status(201));",
+          "if (pm.response.code === 201) { const product = pm.response.json().data; pm.collectionVariables.set('configured_product_id', product.id); pm.test('Price derived from variants', () => { pm.expect(product.price).to.eql(35000); pm.expect(product.max_price).to.eql(45000); }); }"
+        ]}}
+      ]
+    },
+    {
+      "name": "8 - Block deleting product with variants (409)",
+      "request": {"method": "DELETE", "header": [], "url": "{{base_url}}/products/{{configured_product_id}}"},
+      "event": [{"listen": "test", "script": {"type": "text/javascript", "exec": [
+        "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+        "pm.test('PRODUCT_IN_USE', () => pm.expect(pm.response.json().error.code).to.eql('PRODUCT_IN_USE'));"
+      ]}}]
+    }
+  ]
+}

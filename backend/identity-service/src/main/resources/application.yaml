@@ -1,0 +1,91 @@
+server:
+  port: 8081
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: method
+
+spring:
+  application:
+    name: identity-service
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:smartcafe}
+    password: ${RABBITMQ_PASSWORD:smartcafe-local}
+    virtual-host: ${RABBITMQ_VHOST:/}
+    connection-timeout: 5s
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/smart_cafe_identity_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:123456}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update # Có thể dùng 'none' hoặc 'validate' khi DB đã tạo bảng sẵn từ SQL script
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+    # Outbox polling runs every second; keep its SQL from pushing OTP logs off screen.
+    show-sql: ${SHOW_SQL:false}
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
+
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 10MB
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+    fetch-registry: true
+    register-with-eureka: true
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${spring.application.instance_id:${random.value}}
+
+# --- CẤU HÌNH JWT / MODEL / APP ---
+jwt:
+  secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+  expiration-ms: 86400000 # 1 ngày
+
+auth:
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:}
+
+# --- CẤU HÌNH CLOUDINARY (LẤY TỪ FILE .ENV) ---
+cloudinary:
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+  api-key: ${CLOUDINARY_API_KEY:}
+  api-secret: ${CLOUDINARY_API_SECRET:}
+
+app:
+  identity-events:
+    publisher-enabled: ${IDENTITY_EVENTS_PUBLISHER_ENABLED:true}
+    publish-delay-ms: ${IDENTITY_EVENTS_PUBLISH_DELAY_MS:1000}
+  internal-api-key: ${IDENTITY_INTERNAL_API_KEY:smart-cafe-internal-identity-key}
+  contact-change:
+    resend-cooldown-seconds: ${CONTACT_OTP_RESEND_COOLDOWN_SECONDS:60}
+    max-requests-per-hour: ${CONTACT_OTP_MAX_REQUESTS_PER_HOUR:5}
+  password-recovery:
+    resend-cooldown-seconds: ${PASSWORD_RESET_RESEND_COOLDOWN_SECONDS:60}
+    max-requests-per-hour: ${PASSWORD_RESET_MAX_REQUESTS_PER_HOUR:5}
+  otp:
+    log-codes: ${OTP_LOG_CODES:true}
+  otp-email:
+    publisher-enabled: ${OTP_EMAIL_PUBLISHER_ENABLED:true}
+    publish-delay-ms: ${OTP_EMAIL_PUBLISH_DELAY_MS:1000}

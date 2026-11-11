@@ -1,0 +1,157 @@
+server:
+  port: 8080
+
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    urls:
+      - name: 1. Identity Service
+        url: /v3/api-docs/identity-service
+      - name: 2. Catalog Service
+        url: /v3/api-docs/catalog-service
+      - name: 3. Store Service
+        url: /v3/api-docs/store-service
+      - name: 4. Order Service
+        url: /v3/api-docs/order-service
+      - name: 5. Payment Service
+        url: /v3/api-docs/payment-service
+      - name: 6. Inventory Service
+        url: /v3/api-docs/inventory-service
+      - name: 7. Engagement Service
+        url: /v3/api-docs/engagement-service
+      - name: 8. Intelligence Service
+        url: /v3/api-docs/intelligence-service
+
+spring:
+  application:
+    name: api-gateway
+
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+
+      routes:
+        # Swagger OpenAPI Documentation Routes
+        - id: identity-service-docs
+          uri: lb://IDENTITY-SERVICE
+          predicates:
+            - Path=/v3/api-docs/identity-service
+          filters:
+            - SetPath=/v3/api-docs
+
+        - id: catalog-service-docs
+          uri: lb://CATALOG-SERVICE
+          predicates:
+            - Path=/v3/api-docs/catalog-service
+          filters:
+            - SetPath=/v3/api-docs
+
+        - id: store-service-docs
+          uri: lb://STORE-SERVICE
+          predicates:
+            - Path=/v3/api-docs/store-service
+          filters:
+            - SetPath=/v3/api-docs
+
+        - id: order-service-docs
+          uri: lb://ORDER-SERVICE
+          predicates:
+            - Path=/v3/api-docs/order-service
+          filters:
+            - SetPath=/v3/api-docs
+
+        - id: payment-service-docs
+          uri: lb://PAYMENT-SERVICE
+          predicates:
+            - Path=/v3/api-docs/payment-service
+          filters:
+            - SetPath=/v3/api-docs
+
+        - id: inventory-service-docs
+          uri: lb://INVENTORY-SERVICE
+          predicates:
+            - Path=/v3/api-docs/inventory-service
+          filters:
+            - SetPath=/v3/api-docs
+
+        - id: engagement-service-docs
+          uri: lb://ENGAGEMENT-SERVICE
+          predicates:
+            - Path=/v3/api-docs/engagement-service
+          filters:
+            - SetPath=/v3/api-docs
+
+        - id: intelligence-service-docs
+          uri: lb://INTELLIGENCE-SERVICE
+          predicates:
+            - Path=/v3/api-docs/intelligence-service
+          filters:
+            - SetPath=/v3/api-docs
+
+        # Identity Service Routes
+        - id: identity-service
+          uri: lb://IDENTITY-SERVICE
+          predicates:
+            - Path=/api/v1/auth/**, /api/v1/users/**, /api/v1/admin/users/**, /api/v1/admin/roles/**
+
+        # Catalog Service Routes
+        - id: catalog-service
+          uri: lb://CATALOG-SERVICE
+          predicates:
+            - Path=/api/v1/catalog/**
+
+        # Store Service Routes
+        - id: store-service
+          uri: lb://STORE-SERVICE
+          predicates:
+            - Path=/api/v1/branches/**, /api/v1/tables/**, /api/v1/qr/**, /api/v1/table-sessions/**, /api/v1/staff-profiles/**, /api/v1/shifts/**, /api/v1/schedules/**, /api/v1/timekeeping/**, /api/v1/leave-requests/**
+
+        # Order Service Routes
+        - id: order-service
+          uri: lb://ORDER-SERVICE
+          predicates:
+            - Path=/api/v1/carts/**, /api/v1/orders/**
+
+        # Payment Service Routes
+        - id: payment-service
+          uri: lb://PAYMENT-SERVICE
+          predicates:
+            - Path=/api/v1/payments/**, /api/v1/refunds/**, /api/v1/invoices/**, /api/v1/cashier-shifts/**
+
+        # Inventory Service Routes
+        - id: inventory-service
+          uri: lb://INVENTORY-SERVICE
+          predicates:
+            - Path=/api/v1/inventory/**, /inventory/**
+
+        # Engagement Service Routes
+        - id: engagement-service
+          uri: lb://ENGAGEMENT-SERVICE
+          predicates:
+            - Path=/api/v1/loyalty/**, /api/v1/vouchers/**, /api/v1/reviews/**, /api/v1/notifications/**, /api/v1/device-tokens/**
+
+        # Intelligence Service Routes
+        - id: intelligence-service
+          uri: lb://INTELLIGENCE-SERVICE
+          predicates:
+            - Path=/api/v1/chat/**, /api/v1/ai/**
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+
+# Block internal routes from external access through gateway
+jwt:
+  secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}

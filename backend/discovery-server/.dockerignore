@@ -1,0 +1,11 @@
+﻿target/classes
+target/test-classes
+target/generated-sources
+target/maven-status
+target/maven-archiver
+target/*.jar.original
+src/test
+.mvn
+*.log
+.git
+.gitignore

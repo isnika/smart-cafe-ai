@@ -1,0 +1,94 @@
+server:
+  port: 8087
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: method
+
+spring:
+  application:
+    name: engagement-service
+  config:
+    # spring-boot:run uses the module directory; override for a different IDE working directory.
+    import: optional:file:${ENGAGEMENT_ENV_FILE:./.env}[.properties]
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:smartcafe}
+    password: ${RABBITMQ_PASSWORD:smartcafe-local}
+    virtual-host: ${RABBITMQ_VHOST:/}
+    connection-timeout: 5s
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+    listener:
+      simple:
+        acknowledge-mode: auto
+        concurrency: 1
+        max-concurrency: 1
+        prefetch: 1
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 2s
+          multiplier: 2
+          max-interval: 10s
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    default-encoding: UTF-8
+    properties:
+      "[mail.smtp.auth]": ${MAIL_SMTP_AUTH:true}
+      "[mail.smtp.starttls.enable]": ${MAIL_STARTTLS_ENABLE:true}
+      "[mail.smtp.starttls.required]": ${MAIL_STARTTLS_ENABLE:true}
+      "[mail.smtp.ssl.enable]": ${MAIL_SSL_ENABLE:false}
+      "[mail.smtp.connectiontimeout]": 5000
+      "[mail.smtp.timeout]": 10000
+      "[mail.smtp.writetimeout]": 10000
+  datasource:
+    url: ${ENGAGEMENT_DATASOURCE_URL:jdbc:mysql://localhost:3306/smart_cafe_engagement_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true}
+    username: ${ENGAGEMENT_DATASOURCE_USERNAME:root}
+    password: ${ENGAGEMENT_DATASOURCE_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        jdbc:
+          time_zone: UTC
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+    fetch-registry: true
+    register-with-eureka: true
+  instance:
+    prefer-ip-address: true
+
+app:
+  engagement:
+    internal-api-key: ${ENGAGEMENT_INTERNAL_API_KEY:smart-cafe-internal-engagement-key}
+    consumer-enabled: ${ENGAGEMENT_CONSUMER_ENABLED:true}
+    publisher-enabled: ${ENGAGEMENT_PUBLISHER_ENABLED:true}
+    publish-delay-ms: 1000
+  mail:
+    from: ${MAIL_FROM:${MAIL_USERNAME:no-reply@smartcafe.local}}
+  notifications:
+    internal-token: ${NOTIFICATION_INTERNAL_TOKEN:}
+
+jwt:
+  # Existing OTP delivery can start without JWT; authenticated APIs then fail closed.
+  secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}

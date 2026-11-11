@@ -1,0 +1,577 @@
+{
+  "info": {
+    "name": "Smart Cafe - Order Service (20 APIs)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Manual requests, not a sequential runner: DELETE requests abandon cart/remove items. Use a Customer token for carts/me, Staff token for operations, Manager/Admin token for reports. Store integration and database migrations must be configured first. Reuse idempotencyKey when retrying the same checkout."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080/api/v1"
+    },
+    {
+      "key": "orderInternalBaseUrl",
+      "value": "http://localhost:8084/internal/orders"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "orderServiceKey",
+      "value": ""
+    },
+    {
+      "key": "source",
+      "value": "Online"
+    },
+    {
+      "key": "cartId",
+      "value": "1"
+    },
+    {
+      "key": "itemId",
+      "value": "1"
+    },
+    {
+      "key": "orderId",
+      "value": "1"
+    },
+    {
+      "key": "version",
+      "value": "0"
+    },
+    {
+      "key": "idempotencyKey",
+      "value": "replace-with-stable-uuid-per-checkout"
+    },
+    {
+      "key": "tableSessionCode",
+      "value": ""
+    },
+    {
+      "key": "tableSessionId",
+      "value": "1"
+    },
+    {
+      "key": "clientKey",
+      "value": "replace-with-device-uuid"
+    },
+    {
+      "key": "from",
+      "value": "2026-10-01"
+    },
+    {
+      "key": "to",
+      "value": "2026-10-31"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 Create cart",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "X-Table-Session-Code",
+            "value": "{{tableSessionCode}}"
+          },
+          {
+            "key": "X-Client-Key",
+            "value": "{{clientKey}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/carts",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"cart_source\": \"Online\",\n  \"branch_id\": 1,\n  \"fulfillment_type\": \"Pickup\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 200 || pm.response.code === 201) pm.collectionVariables.set(\"cartId\", pm.response.json().data.id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Current cart",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "X-Table-Session-Code",
+            "value": "{{tableSessionCode}}"
+          },
+          {
+            "key": "X-Client-Key",
+            "value": "{{clientKey}}"
+          }
+        ],
+        "url": "{{baseUrl}}/carts/current?source={{source}}"
+      }
+    },
+    {
+      "name": "03 Add item",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "X-Table-Session-Code",
+            "value": "{{tableSessionCode}}"
+          },
+          {
+            "key": "X-Client-Key",
+            "value": "{{clientKey}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/carts/current/items?source={{source}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"variant_id\": 1,\n  \"quantity\": 2,\n  \"note\": \"\",\n  \"options\": []\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 201) { const rows = pm.response.json().data.items; pm.collectionVariables.set(\"itemId\", rows[rows.length - 1].id); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Replace item",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "X-Table-Session-Code",
+            "value": "{{tableSessionCode}}"
+          },
+          {
+            "key": "X-Client-Key",
+            "value": "{{clientKey}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/carts/current/items/{{itemId}}?source={{source}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"quantity\": 1,\n  \"note\": \"\",\n  \"options\": []\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "05 Delete item",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "X-Table-Session-Code",
+            "value": "{{tableSessionCode}}"
+          },
+          {
+            "key": "X-Client-Key",
+            "value": "{{clientKey}}"
+          }
+        ],
+        "url": "{{baseUrl}}/carts/current/items/{{itemId}}?source={{source}}"
+      }
+    },
+    {
+      "name": "06 Abandon cart",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "X-Table-Session-Code",
+            "value": "{{tableSessionCode}}"
+          },
+          {
+            "key": "X-Client-Key",
+            "value": "{{clientKey}}"
+          }
+        ],
+        "url": "{{baseUrl}}/carts/current?source={{source}}"
+      }
+    },
+    {
+      "name": "07 Create order",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "X-Table-Session-Code",
+            "value": "{{tableSessionCode}}"
+          },
+          {
+            "key": "X-Client-Key",
+            "value": "{{clientKey}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{idempotencyKey}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/orders",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"cart_id\": {{cartId}},\n  \"order_source\": \"Online\",\n  \"branch_id\": 1,\n  \"fulfillment_type\": \"Pickup\",\n  \"payment_method\": \"VNPay\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 200 || pm.response.code === 201) { const order = pm.response.json().data; pm.collectionVariables.set(\"orderId\", order.id); pm.collectionVariables.set(\"version\", order.version); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 My orders",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "X-Table-Session-Code",
+            "value": "{{tableSessionCode}}"
+          },
+          {
+            "key": "X-Client-Key",
+            "value": "{{clientKey}}"
+          }
+        ],
+        "url": "{{baseUrl}}/orders/me?page=1&size=20&sort=created_at,desc"
+      }
+    },
+    {
+      "name": "09 My order detail",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "X-Table-Session-Code",
+            "value": "{{tableSessionCode}}"
+          },
+          {
+            "key": "X-Client-Key",
+            "value": "{{clientKey}}"
+          }
+        ],
+        "url": "{{baseUrl}}/orders/me/{{orderId}}"
+      }
+    },
+    {
+      "name": "10 Table-session orders",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "X-Table-Session-Code",
+            "value": "{{tableSessionCode}}"
+          },
+          {
+            "key": "X-Client-Key",
+            "value": "{{clientKey}}"
+          }
+        ],
+        "url": "{{baseUrl}}/orders/table-session"
+      }
+    },
+    {
+      "name": "11 Table-session detail",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "X-Table-Session-Code",
+            "value": "{{tableSessionCode}}"
+          },
+          {
+            "key": "X-Client-Key",
+            "value": "{{clientKey}}"
+          }
+        ],
+        "url": "{{baseUrl}}/orders/table-session/{{orderId}}"
+      }
+    },
+    {
+      "name": "12 Staff orders",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "X-Table-Session-Code",
+            "value": "{{tableSessionCode}}"
+          },
+          {
+            "key": "X-Client-Key",
+            "value": "{{clientKey}}"
+          }
+        ],
+        "url": "{{baseUrl}}/orders?branch_id=1&page=1&size=20"
+      }
+    },
+    {
+      "name": "13 Staff order detail",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "X-Table-Session-Code",
+            "value": "{{tableSessionCode}}"
+          },
+          {
+            "key": "X-Client-Key",
+            "value": "{{clientKey}}"
+          }
+        ],
+        "url": "{{baseUrl}}/orders/{{orderId}}"
+      }
+    },
+    {
+      "name": "14 Change status",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "X-Table-Session-Code",
+            "value": "{{tableSessionCode}}"
+          },
+          {
+            "key": "X-Client-Key",
+            "value": "{{clientKey}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/orders/{{orderId}}/status",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"Confirmed\",\n  \"version\": {{version}},\n  \"note\": \"Da nhan don\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "15 Status history",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "X-Table-Session-Code",
+            "value": "{{tableSessionCode}}"
+          },
+          {
+            "key": "X-Client-Key",
+            "value": "{{clientKey}}"
+          }
+        ],
+        "url": "{{baseUrl}}/orders/{{orderId}}/history"
+      }
+    },
+    {
+      "name": "16 Summary",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "X-Table-Session-Code",
+            "value": "{{tableSessionCode}}"
+          },
+          {
+            "key": "X-Client-Key",
+            "value": "{{clientKey}}"
+          }
+        ],
+        "url": "{{baseUrl}}/orders/summary?branch_id=1"
+      }
+    },
+    {
+      "name": "17 Sales report",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "X-Table-Session-Code",
+            "value": "{{tableSessionCode}}"
+          },
+          {
+            "key": "X-Client-Key",
+            "value": "{{clientKey}}"
+          }
+        ],
+        "url": "{{baseUrl}}/orders/reports/sales?branch_id=1&from={{from}}&to={{to}}&group_by=day"
+      }
+    },
+    {
+      "name": "18 Top products",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "X-Table-Session-Code",
+            "value": "{{tableSessionCode}}"
+          },
+          {
+            "key": "X-Client-Key",
+            "value": "{{clientKey}}"
+          }
+        ],
+        "url": "{{baseUrl}}/orders/reports/top-products?branch_id=1&from={{from}}&to={{to}}&limit=10"
+      }
+    },
+    {
+      "name": "19 Internal snapshot",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Service-Key",
+            "value": "{{orderServiceKey}}"
+          }
+        ],
+        "url": "{{orderInternalBaseUrl}}/{{orderId}}"
+      }
+    },
+    {
+      "name": "20 Internal session settlement",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-Service-Key",
+            "value": "{{orderServiceKey}}"
+          }
+        ],
+        "url": "{{orderInternalBaseUrl}}/by-table-session/{{tableSessionId}}?payment_status=Unpaid"
+      }
+    }
+  ]
+}
