@@ -4,8 +4,10 @@ import { MOCK_ACCOUNTS, resetAuthMock, revokeAllTokens } from './handlers/identi
 import { MOCK_OTP, authFlowConfig, resetAuthFlowMock } from './handlers/auth-flow';
 import { bumpVersion, db, resetDb } from './db';
 import { seedDemoOrders } from './seed';
+import { seedDemoTableSessions } from './staff-table-seed';
 import { mockConfig } from './utils';
 import { workforceConfig } from './handlers/workforce';
+import { tableSessionMock } from './handlers/staff-table-v1';
 
 export const worker = setupWorker(...handlers);
 
@@ -21,6 +23,7 @@ export async function enableMocking(): Promise<void> {
   });
 
   seedDemoOrders();
+  seedDemoTableSessions();
 
   const resetAuth = () => {
     resetAuthMock();
@@ -30,6 +33,7 @@ export async function enableMocking(): Promise<void> {
     resetDb();
     resetAuth();
     seedDemoOrders();
+    seedDemoTableSessions();
   };
 
   Object.assign(window, {
@@ -38,6 +42,8 @@ export async function enableMocking(): Promise<void> {
       resetDb,
       resetWithDemoData,
       seedDemoOrders,
+      seedDemoTableSessions,
+      tableSessions: tableSessionMock, // vd: __mock.tableSessions.conflictNext = true → PATCH phiên kế tiếp trả 409
       bumpVersion,
       config: mockConfig,
       workforce: workforceConfig, // vd: __mock.workforce.enforceWindow = true

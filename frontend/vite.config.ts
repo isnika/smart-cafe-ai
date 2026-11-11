@@ -9,7 +9,7 @@ export default defineConfig({
   resolve: {
     alias: { '@': path.resolve(__dirname, './src') },
   },
-  server: { port: 5173, open: true },
+  server: { port: 5173, open: '/home' },
   // Node fetch cần URL tuyệt đối; MSW (setupServer) chặn đúng base này trong test.
   test: { env: { VITE_API_BASE_URL: 'http://localhost/api' }, maxWorkers: 1 },
 })

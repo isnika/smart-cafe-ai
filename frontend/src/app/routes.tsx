@@ -30,6 +30,7 @@ export const PATHS = {
   staffQueue: "/staff/queue",
   staffOrder: "/staff/orders/:orderId",
   staffCheckin: "/staff/checkin",
+  staffTables: "/staff/tables", // Bàn & phiên bàn (Staff)
 
   // Manager
   manager: "/manager",

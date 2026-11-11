@@ -8,6 +8,7 @@ import type {
 } from "@/shared/types";
 import { Badge, Button, Modal } from "@/shared/ui";
 import { whereLabel } from "@/features/order-queue/status";
+import { SessionCompletionPrompt } from "@/features/staff-tables/components/SessionCompletionPrompt";
 import { resetCashPaymentAttempt, useCollectCash, useCurrentCashierShift } from "../hooks/useCashier";
 import {
   canCollectAtCounter,
@@ -146,6 +147,9 @@ function PaidReceipt({
           <Row label="Hóa đơn" value={result.invoice.invoiceNumber} />
         )}
       </dl>
+      {order.tableSessionId != null && (
+        <SessionCompletionPrompt branchId={order.branchId} sessionId={order.tableSessionId} />
+      )}
       <div className="flex flex-wrap justify-end gap-2">
         <Button variant="outline" onClick={onDone}>
           Xong

@@ -3,6 +3,7 @@ import {
   ClipboardList,
   Coffee,
   LayoutDashboard,
+  LayoutGrid,
   LogOut,
   Package,
   ScanLine,
@@ -28,6 +29,7 @@ const navByRole: Record<Exclude<RoleName, "Customer">, NavItem[]> = {
   Staff: [
     { to: "/staff", label: "Tổng quan", icon: LayoutDashboard, end: true },
     { to: "/staff/queue", label: "Hàng đợi đơn", icon: ClipboardList },
+    { to: "/staff/tables", label: "Bàn & phiên", icon: LayoutGrid },
     { to: "/staff/checkin", label: "Check-in QR", icon: ScanLine },
   ],
   Manager: [

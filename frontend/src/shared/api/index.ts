@@ -9,6 +9,7 @@ export * as orderApi from './order';
 export * as myOrderApi from './order-me';
 export * as paymentApi from './payment';
 export * as cashierShiftApi from './cashier-shift';
+export * as staffTableApi from './staff-table';
 export * as inventoryApi from './inventory';
 export * as engagementApi from './engagement';
 export * as intelligenceApi from './intelligence';

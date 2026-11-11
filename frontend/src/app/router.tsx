@@ -24,13 +24,14 @@ import CartPage from "@/features/online-order/pages/CartPage";
 import OnlineCheckoutPage from "@/features/online-order/pages/OnlineCheckoutPage";
 import OrderSuccessPage from "@/features/online-order/pages/OrderSuccessPage";
 import PaymentReturnPage from "@/features/online-order/pages/PaymentReturnPage";
-import OrderHistoryPage from '@/features/orders/pages/OrderHistoryPage';
+import OrderHistoryPage from "@/features/orders/pages/OrderHistoryPage";
 import OrderTrackingPage from "@/features/online-order/pages/OrderTrackingPage";
 import ManagerDashboardPage from "@/features/manager-dashboard/pages/ManagerDashboardPage";
 import InventoryPage from "@/features/manager-inventory/pages/InventoryPage";
 import ManagerForecastPage from "@/features/manager-forecast/pages/ManagerForecastPage";
 import StaffDashboardPage from "@/features/staff-dashboard/pages/StaffDashboardPage";
 import StaffCheckinPage from "@/features/staff-checkin/pages/StaffCheckinPage";
+import StaffTablesPage from "@/features/staff-tables/pages/StaffTablesPage";
 import PlaceholderPage from "@/pages/PlaceholderPage";
 
 const P = PlaceholderPage;
@@ -42,7 +43,7 @@ function NotFound() {
   return (
     <div className="p-6">
       <h1 className="text-h2">Không tìm thấy trang</h1>
-      <Link to="/" className="text-primary-600 underline">
+      <Link to="/home" className="text-primary-600 underline">
         Về trang chủ
       </Link>
     </div>
@@ -129,6 +130,7 @@ export const routes: RouteObject[] = [
           { path: PATHS.staffQueue, element: <OrderQueuePage /> },
           { path: PATHS.staffOrder, element: <OrderDetailPage /> },
           { path: PATHS.staffCheckin, element: <StaffCheckinPage /> },
+          { path: PATHS.staffTables, element: <StaffTablesPage /> },
         ],
       },
     ],

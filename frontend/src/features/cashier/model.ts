@@ -10,13 +10,13 @@ import type { OrderDetail, PaymentGatewayStatus, PaymentMethod, PaymentStatus } 
  */
 export type CashierGroup = 'awaiting_counter' | 'paid_online';
 
-type CashierOrder = Pick<OrderDetail, 'orderSource' | 'paymentStatus' | 'status'> & Partial<Pick<OrderDetail, 'id' | 'paidOnline'>> & { successfulGatewayPayment?: boolean };
+type CashierOrder = Pick<OrderDetail, 'orderSource' | 'paymentStatus' | 'status'> & Partial<Pick<OrderDetail, 'id' | 'paidOnline'>>;
 
 export function cashierGroup(order: CashierOrder, successfulPayment?: { paymentMethod: PaymentMethod; status: PaymentGatewayStatus } | null): CashierGroup | null {
   if (isTerminalOrderStatus(order.status) || order.status === 'Pending_Payment') return null;
   if (order.orderSource !== 'Online' && order.paymentStatus === 'Unpaid') return 'awaiting_counter';
   if (successfulPayment) return successfulPayment.status === 'Success' && (successfulPayment.paymentMethod === 'VNPay' || successfulPayment.paymentMethod === 'Momo') ? 'paid_online' : null;
-  if (order.successfulGatewayPayment === true && order.paymentStatus === 'Paid') return 'paid_online';
+  if (order.paidOnline === true && order.paymentStatus === 'Paid') return 'paid_online';
   return null;
 }
 

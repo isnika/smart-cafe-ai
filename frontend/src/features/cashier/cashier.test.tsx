@@ -156,6 +156,6 @@ describe('Tab Thu ngân', () => {
     db.orders.length = 0;
     renderApp('/staff?tab=cashier');
     expect(await screen.findByText('Không có đơn nào đang chờ thu tại quầy.')).toBeTruthy();
-    expect(screen.getByText('Chưa có đơn trả online nào đang mở.')).toBeTruthy();
+    expect(await screen.findByText('Chưa có đơn trả online nào đang mở.')).toBeTruthy();
   });
 });
