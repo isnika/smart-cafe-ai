@@ -42,7 +42,7 @@ export default function StaffCheckinPage() {
               <ShiftSummary schedule={c.active} shift={c.activeShift} phase={c.phase} />
             ) : (
               <div className="flex flex-col items-center gap-2 py-4 text-center">
-                <CalendarOff className="size-8 text-gray-400" aria-hidden />
+                <CalendarOff className="size-8 text-gray-500" aria-hidden />
                 <p className="text-body font-medium text-gray-800">
                   {c.shifts.length === 0 ? 'Chi nhánh không có ca nào hôm nay' : 'Hôm nay bạn không có lịch làm việc'}
                 </p>

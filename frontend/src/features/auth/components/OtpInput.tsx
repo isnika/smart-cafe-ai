@@ -86,7 +86,7 @@ export function OtpInput({ value, onChange, length = 6, disabled, invalid, autoF
             else e.currentTarget.select();
           }}
           className={cn(
-            "h-12 w-10 rounded-md border bg-white text-center text-h3 font-semibold text-gray-900 placeholder:text-gray-300",
+            "h-12 w-10 rounded-md border bg-white text-center text-h3 font-semibold text-gray-900 placeholder:text-gray-500",
             "transition-colors focus:outline-none focus:ring-2 focus:ring-primary-200",
             "disabled:cursor-not-allowed disabled:bg-gray-100",
             invalid

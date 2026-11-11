@@ -72,7 +72,7 @@ export function CartDrawer({ open, onClose, onCheckout }: Props) {
                 {l.image ? (
                   <img src={l.image} alt="" className="size-full object-cover" />
                 ) : (
-                  <div className="flex size-full items-center justify-center text-primary-300" aria-hidden>
+                  <div className="flex size-full items-center justify-center text-primary-600" aria-hidden>
                     <Coffee className="size-6" />
                   </div>
                 )}
@@ -84,7 +84,7 @@ export function CartDrawer({ open, onClose, onCheckout }: Props) {
                     type="button"
                     onClick={() => removeLine(l.key)}
                     aria-label={`Xoá ${l.productName}`}
-                    className="rounded-sm p-1 text-gray-400 hover:bg-gray-100 hover:text-error"
+                    className="rounded-sm p-1 text-gray-500 hover:bg-gray-100 hover:text-error"
                   >
                     <Trash2 className="size-4" />
                   </button>

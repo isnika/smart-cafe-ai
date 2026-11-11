@@ -39,7 +39,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
       )}
       <div className="relative">
         {leftIcon && (
-          <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-gray-400 [&>svg]:size-4">
+          <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-gray-500 [&>svg]:size-4">
             {leftIcon}
           </span>
         )}
@@ -49,7 +49,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           aria-invalid={!!error || undefined}
           aria-describedby={describedBy}
           className={cn(
-            "h-10 w-full rounded-md border bg-white px-3 text-body text-gray-900 placeholder:text-gray-400",
+            "h-10 w-full rounded-md border bg-white px-3 text-body text-gray-900 placeholder:text-gray-500",
             "transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200",
             "disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500",
             error

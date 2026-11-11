@@ -21,7 +21,7 @@ export const PasswordInput = forwardRef<
           onClick={() => setVisible((v) => !v)}
           aria-label={visible ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
           aria-pressed={visible}
-          className="grid size-8 place-items-center rounded-sm text-gray-400 hover:text-gray-600"
+          className="grid size-8 place-items-center rounded-sm text-gray-500 hover:text-gray-700"
         >
           {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
         </button>

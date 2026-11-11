@@ -14,7 +14,7 @@ export function TableGrid({ tables }: { tables: readonly StaffTable[] }) {
           className={cn(
             'space-y-1 rounded-lg border p-3',
             t.status === 'Occupied' ? 'border-warning/40 bg-warning-soft/40' : 'border-gray-200 bg-white',
-            !t.isActive && 'opacity-60',
+            !t.isActive && 'border-dashed',
           )}
         >
           <p className="font-heading text-h4 text-gray-900">Bàn {t.tableNumber}</p>

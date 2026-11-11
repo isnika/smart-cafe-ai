@@ -134,7 +134,7 @@ export function FloatingChatBox() {
                         type="button"
                         onClick={() => submit(prompt)}
                         disabled={inputLocked}
-                        className="rounded-full border border-ai-from/30 bg-white px-3 py-1.5 text-caption text-ai-from hover:bg-ai-glow/20 disabled:opacity-50"
+                        className="rounded-full border border-ai-from/30 bg-white px-3 py-1.5 text-caption text-ai-from hover:bg-ai-glow/20 disabled:cursor-not-allowed disabled:border-gray-300 disabled:bg-gray-100 disabled:text-gray-600"
                       >
                         {prompt}
                       </button>
@@ -263,7 +263,7 @@ function MessageBubble({ message, onNavigate }: { message: ChatMessage; onNaviga
         <p
           className={cn(
             'max-w-[85%] whitespace-pre-wrap break-words rounded-lg rounded-br-sm bg-primary-600 px-3 py-2 text-body text-white',
-            isPendingMessage(message) && 'opacity-70',
+            isPendingMessage(message) && 'ring-1 ring-inset ring-white/40',
           )}
         >
           <span className="sr-only">Bạn: </span>

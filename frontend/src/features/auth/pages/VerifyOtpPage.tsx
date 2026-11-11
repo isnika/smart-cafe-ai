@@ -114,7 +114,7 @@ export default function VerifyOtpPage() {
             type="button"
             onClick={resend}
             disabled={!canResend}
-            className={`${authLinkMuted} disabled:cursor-not-allowed disabled:text-gray-400 disabled:no-underline`}
+            className={`${authLinkMuted} disabled:cursor-not-allowed disabled:text-gray-500 disabled:no-underline`}
           >
             Gửi lại mã
           </button>

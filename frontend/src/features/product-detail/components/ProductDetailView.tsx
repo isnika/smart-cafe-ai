@@ -32,7 +32,7 @@ function ProductImage({ src, alt }: { src?: string | null; alt: string }) {
       {src && !failed ? (
         <img src={src} alt={alt} onError={() => setFailed(true)} className="size-full object-cover" />
       ) : (
-        <div className="flex size-full items-center justify-center text-primary-300" aria-hidden>
+        <div className="flex size-full items-center justify-center text-primary-600" aria-hidden>
           <Coffee className="size-16" />
         </div>
       )}
@@ -111,7 +111,7 @@ export function ProductDetailView({ detail, categoryName }: Props) {
                     className={cn(
                       "cursor-pointer rounded-md border p-3 text-center text-body focus-within:ring-2 focus-within:ring-primary-500 focus-within:ring-offset-2",
                       v.id === variantId ? "border-primary-500 bg-primary-500 text-white" : "border-gray-200 bg-white text-gray-900",
-                      !v.isAvailable && "cursor-not-allowed opacity-40",
+                      !v.isAvailable && "cursor-not-allowed border-gray-300 bg-gray-100 text-gray-600",
                     )}
                   >
                     <input
@@ -147,7 +147,7 @@ export function ProductDetailView({ detail, categoryName }: Props) {
                       className={cn(
                         "flex cursor-pointer items-center justify-between rounded-md border px-3 py-2.5 text-body focus-within:ring-2 focus-within:ring-primary-500 focus-within:ring-offset-2",
                         checked ? "border-primary-500 bg-white" : "border-gray-200 bg-white",
-                        !o.isAvailable && "cursor-not-allowed opacity-40",
+                        !o.isAvailable && "cursor-not-allowed border-gray-300 bg-gray-100 text-gray-600",
                       )}
                     >
                       <span className="flex items-center gap-2">

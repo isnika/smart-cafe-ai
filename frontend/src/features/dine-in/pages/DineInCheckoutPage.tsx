@@ -97,7 +97,7 @@ export default function DineInCheckoutPage() {
                     {l.image ? (
                       <img src={l.image} alt="" className="size-full object-cover" />
                     ) : (
-                      <div className="flex size-full items-center justify-center text-primary-300" aria-hidden>
+                      <div className="flex size-full items-center justify-center text-primary-600" aria-hidden>
                         <Coffee className="size-5" />
                       </div>
                     )}
@@ -188,7 +188,7 @@ export default function DineInCheckoutPage() {
             onChange={(e) => setNote(e.target.value)}
             placeholder="Ví dụ: Ít ngọt, ít đá…"
             rows={3}
-            className="w-full resize-none rounded-lg border border-primary-100 bg-white px-4 py-3 text-body placeholder:text-gray-400 focus:border-primary-600"
+            className="w-full resize-none rounded-lg border border-primary-100 bg-white px-4 py-3 text-body placeholder:text-gray-500 focus:border-primary-600"
           />
         </div>
 

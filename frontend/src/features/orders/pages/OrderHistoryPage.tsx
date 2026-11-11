@@ -82,7 +82,7 @@ export default function OrderHistoryPage() {
 
         {!isPending && !isError && orders.length === 0 && page <= Math.max(totalPages, 1) && (
           <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
-            <ClipboardList className="size-12 text-primary-300" aria-hidden />
+            <ClipboardList className="size-12 text-primary-600" aria-hidden />
             <h2 className="text-h4">{EMPTY_TEXT[tab]}</h2>
             {tab === 'all' && <p className="text-body text-gray-600">Chọn vài món từ thực đơn để bắt đầu đặt hàng.</p>}
             <Link

@@ -234,7 +234,7 @@ export default function PaymentGatewayPage({ pollMs = PAYMENT_POLL_MS }: { pollM
       <section aria-label="Thông tin thanh toán" className="rounded-xl border border-primary-100 bg-white p-6 shadow-card">
         <p className="text-body text-gray-600">Đơn <strong className="text-gray-900">{label}</strong></p>
         <p className="mt-1 font-heading text-h1 text-primary-600">{amount}</p>
-        <div className="mx-auto mt-4 grid size-28 place-items-center rounded-lg border border-dashed border-primary-200 text-primary-400" aria-hidden>
+        <div className="mx-auto mt-4 grid size-28 place-items-center rounded-lg border border-dashed border-primary-200 text-primary-600" aria-hidden>
           <QrCode className="size-16" />
         </div>
         <p className="mt-3 inline-flex items-center gap-1.5 text-body font-medium text-gray-800">

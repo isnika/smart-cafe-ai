@@ -58,7 +58,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         aria-busy={loading || undefined}
         className={cn(
           "inline-flex items-center justify-center whitespace-nowrap font-medium transition-colors",
-          "disabled:cursor-not-allowed disabled:opacity-50",
+          "disabled:cursor-not-allowed disabled:!bg-gray-200 disabled:!bg-none disabled:!text-gray-600 disabled:!border-gray-300 disabled:!opacity-100 disabled:!shadow-none",
           variants[variant],
           sizes[size],
           fullWidth && "w-full",

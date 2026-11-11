@@ -95,13 +95,13 @@ export default function InventoryPage() {
             />
           ) : items.length === 0 ? (
             <StateCard
-              icon={<PackageSearch className="size-8 text-gray-400" />}
+              icon={<PackageSearch className="size-8 text-gray-500" />}
               title="Chưa có nguyên liệu nào trong kho"
               description="Khi chi nhánh nhập nguyên liệu đầu tiên, danh sách sẽ xuất hiện tại đây."
             />
           ) : rows.length === 0 ? (
             <StateCard
-              icon={<PackageSearch className="size-8 text-gray-400" />}
+              icon={<PackageSearch className="size-8 text-gray-500" />}
               title="Không tìm thấy nguyên liệu phù hợp"
               description={filtering ? 'Thử đổi từ khoá hoặc bỏ bộ lọc "Sắp hết".' : undefined}
               action={<Button variant="outline" onClick={clearFilters}>Xoá bộ lọc</Button>}

@@ -18,7 +18,7 @@ export function ProductCard({ product, onAdd, href }: Props) {
         {product.image ? (
           <img src={product.image} alt={product.name} loading="lazy" className="size-full object-cover" />
         ) : (
-          <div className="flex size-full items-center justify-center text-primary-300" aria-hidden>
+          <div className="flex size-full items-center justify-center text-primary-600" aria-hidden>
             <Coffee className="size-10" />
           </div>
         )}

@@ -29,7 +29,7 @@ export default function OnlineCartPage() {
 
       {lines.length === 0 ? (
         <div className="flex flex-col items-center gap-3 px-6 py-20 text-center">
-          <ShoppingBag className="size-12 text-primary-300" aria-hidden />
+          <ShoppingBag className="size-12 text-primary-600" aria-hidden />
           <h2 className="text-h4">Giỏ hàng đang trống</h2>
           <p className="text-body text-gray-600">Chọn vài món từ thực đơn để bắt đầu đặt hàng.</p>
           <Link

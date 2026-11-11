@@ -50,7 +50,7 @@ export default function OrderQueuePage() {
         </div>
         <label className="relative w-full max-w-xs">
           <span className="sr-only">Tìm mã đơn hoặc tên bàn</span>
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-400" aria-hidden />
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-500" aria-hidden />
           <input
             type="search"
             value={q}

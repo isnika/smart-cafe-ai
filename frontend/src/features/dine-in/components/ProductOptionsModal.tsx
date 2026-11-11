@@ -105,7 +105,7 @@ function OptionsForm({ detail, onAdd }: { detail: ProductDetail; onAdd: Props["o
                 className={cn(
                   "cursor-pointer rounded-md border p-2 text-center text-body",
                   v.id === variantId ? "border-primary-600 bg-primary-600 text-white" : "border-gray-200 bg-white",
-                  !v.isAvailable && "cursor-not-allowed opacity-40",
+                  !v.isAvailable && "cursor-not-allowed border-gray-300 bg-gray-100 text-gray-600",
                 )}
               >
                 <input
@@ -141,7 +141,7 @@ function OptionsForm({ detail, onAdd }: { detail: ProductDetail; onAdd: Props["o
                   className={cn(
                     "flex cursor-pointer items-center justify-between rounded-md border px-3 py-2.5 text-body",
                     checked ? "border-primary-600 bg-primary-50" : "border-gray-200 bg-white",
-                    !o.isAvailable && "cursor-not-allowed opacity-40",
+                    !o.isAvailable && "cursor-not-allowed border-gray-300 bg-gray-100 text-gray-600",
                   )}
                 >
                   <span className="flex items-center gap-2">

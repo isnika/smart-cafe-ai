@@ -40,7 +40,7 @@ export function TableCodeForm({ onDone }: { onDone?: () => void }) {
           autoCapitalize="characters"
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? "table-code-error" : undefined}
-          className="h-11 w-full rounded-md border border-gray-300 bg-white px-3 text-body-lg text-gray-900 placeholder:text-gray-400 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200"
+          className="h-11 w-full rounded-md border border-gray-300 bg-white px-3 text-body-lg text-gray-900 placeholder:text-gray-500 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200"
         />
         {error && (
           <p id="table-code-error" role="alert" className="mt-1 text-caption text-error-strong">

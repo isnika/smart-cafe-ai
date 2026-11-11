@@ -29,14 +29,14 @@ export function VoucherBox({ appliedCode, message }: { appliedCode: string | nul
       <form onSubmit={apply} className="flex gap-2">
         <label className="relative flex-1">
           <span className="sr-only">Mã khuyến mãi</span>
-          <Ticket className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-400" aria-hidden />
+          <Ticket className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-500" aria-hidden />
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Nhập mã giảm giá"
             disabled={disabled}
             autoCapitalize="characters"
-            className="h-12 w-full rounded-lg border border-primary-100 bg-white pl-9 pr-3 text-body placeholder:text-gray-400 focus:border-primary-600 focus:outline-none"
+            className="h-12 w-full rounded-lg border border-primary-100 bg-white pl-9 pr-3 text-body placeholder:text-gray-500 focus:border-primary-600 focus:outline-none"
           />
         </label>
         <Button type="submit" size="lg" className="rounded-lg" disabled={disabled}>

@@ -20,7 +20,7 @@ import { useOnlinePricing } from '../hooks/usePricing';
 import { browserRedirect, PAYMENT_OPTIONS, type PaymentChoice } from '../payment';
 import { useOnlineCartStore, type DeliveryDetails } from '../store';
 
-const field = 'w-full rounded-lg border border-primary-100 bg-white px-4 py-3 text-body placeholder:text-gray-400 focus:border-primary-600 focus:outline-none';
+const field = 'w-full rounded-lg border border-primary-100 bg-white px-4 py-3 text-body placeholder:text-gray-500 focus:border-primary-600 focus:outline-none';
 
 /** Xác nhận đơn hàng Online: nhận hàng → thanh toán → hoá đơn → ghi chú → Đặt hàng. */
 export default function OnlineCheckoutPage() {

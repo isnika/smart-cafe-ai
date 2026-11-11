@@ -27,7 +27,7 @@ export function CartLineCard({ line, actions }: { line: DineInCartLine; actions?
         {line.image ? (
           <img src={line.image} alt="" className="size-full object-cover" />
         ) : (
-          <div className="flex size-full items-center justify-center text-primary-300" aria-hidden>
+          <div className="flex size-full items-center justify-center text-primary-600" aria-hidden>
             <Coffee className="size-6" />
           </div>
         )}
@@ -39,7 +39,7 @@ export function CartLineCard({ line, actions }: { line: DineInCartLine; actions?
             type="button"
             onClick={() => removeLine(line.key)}
             aria-label={`Xoá ${line.productName}`}
-            className="rounded-sm p-1 text-gray-400 hover:bg-gray-100 hover:text-error"
+            className="rounded-sm p-1 text-gray-500 hover:bg-gray-100 hover:text-error"
           >
             <Trash2 className="size-4" />
           </button>

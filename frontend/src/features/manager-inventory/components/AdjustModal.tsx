@@ -124,7 +124,7 @@ export function AdjustModal({ branchId, item, onClose }: Props) {
             aria-invalid={!!errors.reason || undefined}
             aria-describedby={errors.reason ? 'adjust-reason-error' : undefined}
             className={cn(
-              'w-full rounded-md border bg-white px-3 py-2 text-body text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2',
+              'w-full rounded-md border bg-white px-3 py-2 text-body text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2',
               errors.reason ? 'border-error focus:border-error focus:ring-error-soft' : 'border-gray-300 focus:border-primary-500 focus:ring-primary-200',
             )}
             {...register('reason')}
