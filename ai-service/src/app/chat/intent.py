@@ -99,7 +99,7 @@ def classify_intent(query: str) -> IntentDecision:
 
     if token_count <= 4 and _contains(
         folded,
-        r"^\s*(xin\s+chao|chao|hello|hi|alo)(?:\s+(ban|quan|shop))?\s*[?.!]*$",
+        r"^\s*(xin\s+chao|chao|hello|hi|alo)(?:\s+(ban|quan|shop))?(?:\s+(nha|nhe|a))?\s*[?.!]*$",
         r"^\s*chao buoi (sang|toi)(?:\s+ban)?\s*[?.!]*$",
     ):
         return IntentDecision(Intent.GREETING, 0.99, "greeting")
@@ -124,7 +124,7 @@ def classify_intent(query: str) -> IntentDecision:
 
     if _contains(
         folded,
-        r"^\s*[?/!]{2,}\s*$",
+        r"^\s*[?/!]{2,}(?:\s+(nha|nhe|a))?\s*$",
         r"\b(tra loi kieu gi|tra loi gi vay|noi gi vay|khong hieu|bot bi sao|te qua)\b",
         r"\b(buc minh|that vong|khieu nai|phan nan)\b",
     ):
@@ -132,7 +132,7 @@ def classify_intent(query: str) -> IntentDecision:
 
     if _contains(
         folded,
-        r"^\s*(cam on|thanks|thank you|ok cam on|da cam on)\s*[?.!]*$",
+        r"^\s*(cam on|thanks|thank you|ok cam on|da cam on)(?:\s+(nha|nhe|a))?\s*[?.!]*$",
         r"^\s*(ban khoe khong|hom nay the nao)\s*[?.!]*$",
     ):
         return IntentDecision(Intent.CHITCHAT, 0.96, "light-chitchat")
@@ -152,7 +152,7 @@ def classify_intent(query: str) -> IntentDecision:
     ):
         return IntentDecision(Intent.UNKNOWN, 0.99, "out-of-scope")
 
-    if _contains(folded, r"\b(wifi|internet|mang)\b"):
+    if _contains(folded, r"\b(wifi|internet)\b"):
         return IntentDecision(Intent.WIFI_QUERY, 0.99, "wifi-synonym")
 
     if _contains(
@@ -228,6 +228,7 @@ def classify_intent(query: str) -> IntentDecision:
         r"\b(duoi|tren|tu)\s*\d+[\d.]*\s*k?\b",
         r"\bngan sach\b",
         r"\bkhong (co )?(ca phe|caffeine)\b",
+        r"\b(khong uong|tranh|khong dung duoc)\b.*\bcaffeine\b",
         r"\bgia\s*(duoi|tren|tu)\b",
         r"\b(mon gi|mon nao|co mon gi|co mon nao)\b.*\b(man\b|vi man)\b",
     ):
@@ -236,6 +237,7 @@ def classify_intent(query: str) -> IntentDecision:
     if _contains(
         folded,
         r"\b(so sanh|khac nhau|hon nhau)\b",
+        r"\bkhac\b.+\b(the nao|ra sao|gi)\b",
     ):
         return IntentDecision(Intent.PRODUCT_COMPARISON, 0.96, "product-comparison")
 
@@ -256,7 +258,20 @@ def classify_intent(query: str) -> IntentDecision:
     ):
         return IntentDecision(Intent.PRODUCT_RECOMMENDATION, 0.94, "recommendation")
 
-    if _contains(folded, r"\b(gia|bao nhieu|bao tien|may dong)\b"):
+    # "bao nhiêu" không mặc định là giá: calories, dung tích, khối
+    # lượng và caffeine là thuộc tính sản phẩm. Chỉ route PRICE khi có
+    # từ khóa tiền hoặc "bao nhiêu" không đi kèm đơn vị thuộc tính.
+    has_explicit_price_unit = _contains(folded, r"\b(gia|tien|vnd|dong)\b")
+    asks_non_price_amount = _contains(
+        folded,
+        r"\b(calo|calorie|kcal|dung tich|bao nhieu ml|bao nhieu lit|bao nhieu gram|bao nhieu g)\b",
+    ) or (
+        not has_explicit_price_unit
+        and _contains(folded, r"\b(caffeine|duong)\b.*\bbao nhieu\b")
+    )
+    if not asks_non_price_amount and _contains(
+        folded, r"\b(gia|bao nhieu|bao tien|may dong)\b"
+    ):
         return IntentDecision(Intent.PRODUCT_PRICE, 0.97, "price")
 
     if _contains(
@@ -279,12 +294,13 @@ def classify_intent(query: str) -> IntentDecision:
     if _contains(
         folded,
         r"\b(ca phe|matcha|latte|bac xiu|cold brew)\b.*\b(thi sao|the nao|co khong|con khong)\b",
-    ):
+    ) and not _contains(folded, r"\b(vi|huong vi)\s+(the nao|gi)\b"):
         return IntentDecision(Intent.PRODUCT_INFO, 0.94, "product-info")
 
     if _contains(
         folded,
-        r"\b(thanh phan|nguyen lieu|caffeine|huong vi|vi gi|do ngot|it ngot|dang khong|nong hay lanh)\b",
+        r"\b(thanh phan|nguyen lieu|caffeine|huong vi|vi gi|vi the nao|do ngot|it ngot|dang khong|nong hay lanh)\b",
+        r"\b(calo|calorie|kcal|dung tich|the tich|bao nhieu ml|bao nhieu lit|khoi luong|bao nhieu gram)\b",
         r"\b(lanh hay nong|ban nong|ban lanh)\b",
         r"\b(ngon khong|co ngon|vi the nao)\b",
         r"\bco gi\b",
@@ -308,6 +324,42 @@ def classify_intent(query: str) -> IntentDecision:
         return IntentDecision(Intent.PRODUCT_INFO, 0.85, "product-mention")
 
     return IntentDecision(Intent.UNKNOWN, 0.0, "no-rule")
+
+
+_COMPOUND_BUSINESS_INTENTS = frozenset({
+    Intent.OPENING_HOURS,
+    Intent.LOCATION_QUERY,
+    Intent.CONTACT_QUERY,
+    Intent.WIFI_QUERY,
+    Intent.SERVICE_QUERY,
+    Intent.DELIVERY_QUERY,
+    Intent.PAYMENT_QUERY,
+    Intent.PROMOTION_QUERY,
+})
+
+
+def classify_compound_intents(query: str) -> tuple[IntentDecision, ...]:
+    """Nhận diện các yêu cầu business độc lập trong cùng một câu.
+
+    Intent sản phẩm nhiều entity được resolver xử lý trên toàn query;
+    hàm này chỉ tách các vế như "địa chỉ và giờ mở cửa".
+    """
+    canonical = canonicalize_query(query)
+    clauses = [
+        clause.strip(" ?.!,")
+        for clause in re.split(r"\s+(?:và|rồi|với)\s+|[,;]", canonical, flags=re.I)
+        if clause.strip(" ?.!,")
+    ]
+    if len(clauses) < 2:
+        return ()
+    decisions: list[IntentDecision] = []
+    for clause in clauses:
+        decision = classify_intent(clause)
+        if decision.intent not in _COMPOUND_BUSINESS_INTENTS:
+            continue
+        if all(item.intent is not decision.intent for item in decisions):
+            decisions.append(decision)
+    return tuple(decisions) if len(decisions) >= 2 else ()
 
 
 def allowed_document_types(intent: Intent) -> frozenset[DocumentType]:

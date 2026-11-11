@@ -130,11 +130,45 @@ def _opening_hours_answer(answer: str, question: str) -> str:
 def _product_headings(blocks: list[tuple[str, str]]) -> list[str]:
     excluded = ("tổng quan", "quy tắc", "câu hỏi", "danh sách", "knowledge base")
     names: list[str] = []
-    for heading, _ in blocks:
+    for heading, body in blocks:
+        # FAQ có document_type=product cho mục tư vấn, nhưng không phải
+        # record menu và không được hiển thị như tên món.
+        if not (_field(body, "Mã món") or _field(body, "Giá") or _field(body, "Giá mẫu")):
+            continue
         name = _display_heading(heading)
         if name and not any(term in name.lower() for term in excluded) and name not in names:
             names.append(name)
     return names
+
+
+def _product_blocks(blocks: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    return [(heading, body) for heading, body in blocks if _field(body, "Mã món")]
+
+
+def _comparison_answer(blocks: list[tuple[str, str]]) -> str:
+    rows: list[str] = []
+    for heading, body in _product_blocks(blocks)[:4]:
+        details = list(filter(None, [
+            _field(body, "Mô tả"),
+            _field(body, "Nhiệt độ"),
+            _field(body, "Caffeine"),
+        ]))
+        price = _field(body, "Giá") or _field(body, "Giá mẫu")
+        if price:
+            details.append(re.sub(r"\s*VND\b", "đ", price, flags=re.I))
+        rows.append(f"{_display_heading(heading)}: {'; '.join(details[:4])}")
+    if len(rows) < 2:
+        return ""
+    return "So sánh theo menu hiện có: " + ". ".join(rows) + "."
+
+
+def _filter_answer(blocks: list[tuple[str, str]]) -> str:
+    rows: list[str] = []
+    for heading, body in _product_blocks(blocks)[:6]:
+        price = _field(body, "Giá") or _field(body, "Giá mẫu")
+        display_price = re.sub(r"\s*VND\b", "đ", price, flags=re.I) if price else "chưa có giá"
+        rows.append(f"{_display_heading(heading)} ({display_price})")
+    return "Các món phù hợp: " + "; ".join(rows) + "." if rows else ""
 
 
 def _plain_excerpt(body: str) -> str:
@@ -206,13 +240,14 @@ def build_extractive_answer(prompt_content: str) -> str:
         names = _product_headings(blocks)[:5]
         if len(names) == 1:
             return (
-                f"Dạ có nha! Quán hiện có {names[0]}. "
-                "Bạn muốn mình xem giá món này không?"
+                f"Dạ có nha! Ý mình là {names[0]} có trong menu; mình chưa "
+                "có dữ liệu tồn món theo chi nhánh. Bạn muốn mình xem giá "
+                "món này hay chọn chi nhánh để kiểm tra tình trạng còn món?"
             )
         if names:
             return (
-                f"Dạ có nha! Quán hiện có {', '.join(names)}. "
-                "Bạn muốn mình xem giá món nào?"
+                f"{', '.join(names)} có trong menu. Tình trạng còn món cần "
+                "được kiểm tra theo chi nhánh nhé!"
             )
 
     if intent in {
@@ -232,6 +267,16 @@ def build_extractive_answer(prompt_content: str) -> str:
         query_tokens = set(search_tokens(question))
         folded_question = fold_text(question)
         fields: list[str] = []
+        if {"calo", "calorie", "kcal"} & query_tokens:
+            return (
+                f"Catalog hiện chưa có thông tin calories được xác nhận cho "
+                f"{_display_heading(heading)}; mình không muốn đoán sai cho bạn."
+            )
+        if {"dung", "tich", "ml", "lit", "gram", "khoi", "luong"} & query_tokens:
+            return (
+                f"Catalog hiện chưa có dung tích hoặc khối lượng được xác nhận cho "
+                f"{_display_heading(heading)}; bạn hỏi nhân viên giúp mình nhé!"
+            )
         if {"ngot", "duong"} & query_tokens:
             sweetness = _field(body, "Độ ngọt")
             customization = _field(body, "Tùy chỉnh")
@@ -350,6 +395,10 @@ def build_extractive_answer(prompt_content: str) -> str:
         Intent.PRODUCT_RECOMMENDATION,
         Intent.PRODUCT_FILTER,
     }:
+        if intent is Intent.PRODUCT_COMPARISON:
+            return _comparison_answer(blocks)
+        if intent is Intent.PRODUCT_FILTER:
+            return _filter_answer(blocks)
         if intent is Intent.PRODUCT_RECOMMENDATION:
             recommendation = _recommendation_answer(blocks)
             if recommendation:

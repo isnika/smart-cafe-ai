@@ -49,3 +49,29 @@ python -m pytest -q tests/chat src/app/chat/test_rag.py
 
 Các test không gọi provider/model thật; chúng kiểm tra follow-up, typo/vùng miền,
 out-of-scope, history dài, session isolation, lexical fallback, retry và provider timeout.
+
+## Production hardening v1.2
+
+- `GET /health` là liveness; `GET /ready` chỉ trả 200 khi knowledge index đã nạp.
+- Startup preload index/embedding theo `PRELOAD_CHAT` và `RAG_WARM_EMBEDDING_MODEL`.
+- `POST /chat/reindex` bắt buộc `X-Reindex-Key` khớp `CHAT_REINDEX_API_KEY`.
+- `/chat` có sliding-window rate limit theo IP. Production nhiều replica nên đặt
+  thêm distributed rate limit ở API gateway/Redis.
+- `CHAT_SOURCE_MODE=metadata` giữ citation nhưng xóa raw chunk và similarity score;
+  dùng `off` để không trả source hoặc `full` chỉ cho tester nội bộ.
+- `Authorization` chỉ được forward tới Order Service; không được đưa
+  vào prompt/log. `X-Branch-Id` chọn chi nhánh cho availability thời gian thực.
+- Tên/mô tả/giá/menu/tồn món lấy từ Backend khi `DATA_API_BASE_URL`
+  được cấu hình; chính sách ship, hoàn hủy, Wi-Fi và giờ mở cửa
+  tiếp tục lấy từ knowledge base đã duyệt.
+- Contract dữ liệu nghiệp vụ: `docs/OPERATIONAL_DATA_API.md`.
+
+Evaluation offline:
+
+```powershell
+python scripts/build_chat_eval_dataset.py
+python scripts/evaluate_chat.py --top-k 4 --output evaluation/latest_metrics.json
+```
+
+Seed set có 320 câu. Log thật phải được import, ẩn danh và human-label
+theo hướng dẫn trong `evaluation/README.md`; không coi seed set là production benchmark.

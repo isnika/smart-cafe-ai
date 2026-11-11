@@ -19,11 +19,39 @@ services:
       LLM_RETRY_BASE_SECONDS: ${LLM_RETRY_BASE_SECONDS:-0.4}
       LLM_RETRY_MAX_SECONDS: ${LLM_RETRY_MAX_SECONDS:-4}
       LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.1}
+      LLM_WARMUP: ${LLM_WARMUP:-false}
       RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-intfloat/multilingual-e5-small}
       RAG_TOP_K: ${RAG_TOP_K:-4}
       RAG_MIN_SCORE: ${RAG_MIN_SCORE:-0.68}
       RAG_LEXICAL_WEIGHT: ${RAG_LEXICAL_WEIGHT:-0.30}
       RAG_ALLOW_MODEL_DOWNLOAD: ${RAG_ALLOW_MODEL_DOWNLOAD:-true}
       RAG_DISABLE_EMBEDDINGS: ${RAG_DISABLE_EMBEDDINGS:-false}
+      RAG_WARM_EMBEDDING_MODEL: ${RAG_WARM_EMBEDDING_MODEL:-true}
+      DATA_API_BASE_URL: ${DATA_API_BASE_URL:-}
+      DATA_API_KEY: ${DATA_API_KEY:-}
+      DATA_API_TIMEOUT_SECONDS: ${DATA_API_TIMEOUT_SECONDS:-3}
+      DATA_API_CATALOG_PATH: ${DATA_API_CATALOG_PATH:-/api/ai/catalog/search}
+      DATA_API_ORDER_PATH: ${DATA_API_ORDER_PATH:-/api/ai/orders/:order_code}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      CHAT_RATE_LIMIT_ENABLED: ${CHAT_RATE_LIMIT_ENABLED:-true}
+      CHAT_RATE_LIMIT_PER_MINUTE: ${CHAT_RATE_LIMIT_PER_MINUTE:-60}
+      TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-false}
+      CHAT_REINDEX_API_KEY: ${CHAT_REINDEX_API_KEY:-}
+      CHAT_SOURCE_MODE: ${CHAT_SOURCE_MODE:-metadata}
+      PRELOAD_CHAT: ${PRELOAD_CHAT:-true}
+      HF_HOME: /app/.cache/huggingface
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+
+    volumes:
+      - huggingface-cache:/app/.cache/huggingface
 
     restart: unless-stopped
+
+volumes:
+  huggingface-cache:

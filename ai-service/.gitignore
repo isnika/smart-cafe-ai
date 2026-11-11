@@ -1,1 +1,10 @@
 chroma_db/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.env
+.env.*
+!.env.example
+src/app/chat/.rag_cache/
+frontend-test-chatbot/dist/
+frontend-test-chatbot/node_modules/

@@ -2,13 +2,22 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import os
 import re
 from typing import Protocol
 
 from .context import build_conversation_context
-from .intent import PRODUCT_INTENTS, Intent, classify_intent, fallback_for_intent
+from .intent import (
+    PRODUCT_INTENTS,
+    Intent,
+    IntentDecision,
+    classify_compound_intents,
+    classify_intent,
+    fallback_for_intent,
+)
+from .live_data import OperationalDataClient, format_catalog_answer, format_order_answer
 from .llm import ExtractiveLLM, get_llm
 from .normalize import (
     canonicalize_query,
@@ -37,8 +46,8 @@ from .schemas import ChatMessage, SourceChunk
 
 logger = logging.getLogger(__name__)
 
-TOP_K = max(1, min(int(os.getenv("RAG_TOP_K", "5")), 8))
-MIN_SCORE = float(os.getenv("RAG_MIN_SCORE", "0.58"))
+TOP_K = max(1, min(int(os.getenv("RAG_TOP_K", "4")), 8))
+MIN_SCORE = float(os.getenv("RAG_MIN_SCORE", "0.68"))
 MAX_HISTORY_MESSAGES = 10
 MAX_HISTORY_CHARS = 3200
 MAX_STANDALONE_QUERY_CHARS = 500
@@ -70,7 +79,19 @@ DIRECT_ANSWER_INTENTS = frozenset({
     Intent.MENU_QUERY,
     Intent.PRODUCT_RECOMMENDATION,
     Intent.PRODUCT_FILTER,
+    Intent.PRODUCT_COMPARISON,
 })
+
+_COMPOUND_FOCUS_QUERIES = {
+    Intent.OPENING_HOURS: "Quán mở cửa và đóng cửa lúc mấy giờ?",
+    Intent.LOCATION_QUERY: "Địa chỉ quán ở đâu?",
+    Intent.CONTACT_QUERY: "Hotline và cách liên hệ quán là gì?",
+    Intent.WIFI_QUERY: "Quán có Wi-Fi không?",
+    Intent.SERVICE_QUERY: "Quán có dịch vụ hoặc tiện ích này không?",
+    Intent.DELIVERY_QUERY: "Quán có giao hàng không?",
+    Intent.PAYMENT_QUERY: "Quán hỗ trợ thanh toán thế nào?",
+    Intent.PROMOTION_QUERY: "Quán có khuyến mãi không?",
+}
 
 
 class LLMClient(Protocol):
@@ -178,6 +199,19 @@ def _looks_like_order_code(value: str) -> bool:
     )
 
 
+def _extract_order_code(value: str) -> str | None:
+    if _looks_like_order_code(value):
+        return value.strip()
+    for candidate in re.findall(r"(?<!\w)[A-Za-z0-9-]{6,24}(?!\w)", value):
+        if re.search(r"\d", candidate) and re.search(r"[A-Za-z]", candidate):
+            return candidate
+    return None
+
+
+def _query_fingerprint(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8", errors="ignore")).hexdigest()[:12]
+
+
 def _order_code_answer(order_code: str) -> str:
     return (
         f"Mình đã nhận mã đơn {order_code.strip()}. Tuy nhiên chatbot chưa kết nối hệ thống "
@@ -196,12 +230,14 @@ class RAGPipeline:
         retriever: Retriever | None = None,
         llm: LLMClient | None = None,
         fallback_llm: LLMClient | None = None,
+        live_data: OperationalDataClient | None = None,
         top_k: int = TOP_K,
         min_score: float = MIN_SCORE,
     ):
         self.retriever = retriever or get_retriever()
         self.llm = llm or get_llm()
         self.fallback_llm = fallback_llm or ExtractiveLLM()
+        self.live_data = live_data or OperationalDataClient()
         self.top_k = max(1, min(int(top_k), 8))
         self.min_score = float(min_score)
         self.product_names = tuple(sorted({
@@ -209,6 +245,77 @@ class RAGPipeline:
             for chunk in getattr(self.retriever, "chunks", [])
             if chunk.document_type == "product" and "Mã món:" in chunk.text
         }, key=len, reverse=True))
+
+    async def preload(self, warm_embeddings: bool = True, warm_llm: bool = False) -> None:
+        """Nạp index/model trước khi readiness chuyển sang ready."""
+        if warm_embeddings and not getattr(self.retriever, "_embedding_disabled", True):
+            embed = getattr(self.retriever, "_embed", None)
+            if callable(embed):
+                await asyncio.to_thread(embed, ["kiểm tra sẵn sàng"], "query: ")
+        if warm_llm and not isinstance(self.llm, ExtractiveLLM):
+            await self.llm.generate(
+                "Chỉ trả lời OK.",
+                [{"role": "user", "content": "OK"}],
+                max_tokens=1,
+            )
+
+    @staticmethod
+    def _source_chunks(hits: list[SearchHit]) -> list[SourceChunk]:
+        return [
+            SourceChunk(
+                source=hit.chunk.source,
+                category=hit.chunk.category,
+                heading=hit.chunk.heading,
+                score=round(hit.score, 4),
+                content=hit.chunk.text,
+            )
+            for hit in hits
+        ]
+
+    async def _answer_compound_business(
+        self,
+        question: str,
+        decisions: tuple[IntentDecision, ...],
+        category: str | None,
+    ) -> tuple[str, list[SourceChunk]] | None:
+        answers: list[str] = []
+        collected: list[SearchHit] = []
+        for decision in decisions:
+            focused_question = _COMPOUND_FOCUS_QUERIES.get(decision.intent, question)
+            hits = await asyncio.to_thread(
+                self.retriever.search,
+                focused_question,
+                self.top_k,
+                self.min_score,
+                category,
+                decision.intent,
+            )
+            hits = _deduplicate_hits(hits)
+            if not hits:
+                continue
+            context = _format_context(hits)
+            prompt = USER_TEMPLATE.format(
+                intent=decision.intent.value,
+                context=context,
+                question=focused_question,
+            )
+            answer = await self.fallback_llm.generate(
+                SYSTEM_PROMPT, [{"role": "user", "content": prompt}], max_tokens=180
+            )
+            answer = sanitize_generated_answer(answer or "")
+            if answer:
+                answers.append(answer.rstrip(".! "))
+                collected.extend(hits)
+        if len(answers) < 2:
+            return None
+        unique_hits: list[SearchHit] = []
+        seen: set[tuple[str, str]] = set()
+        for hit in collected:
+            key = (hit.chunk.source, hit.chunk.heading)
+            if key not in seen:
+                unique_hits.append(hit)
+                seen.add(key)
+        return ". ".join(answers) + ".", self._source_chunks(unique_hits)
 
     async def _condense(self, question: str, history: list[dict]) -> str:
         """Viết lại câu hỏi nối tiếp; nếu model lỗi thì vẫn tiếp tục bằng câu hỏi gốc."""
@@ -247,6 +354,8 @@ class RAGPipeline:
         question: str,
         history: list[ChatMessage] | None = None,
         category: str | None = None,
+        branch_id: int | None = None,
+        authorization: str | None = None,
     ) -> tuple[str, list[SourceChunk]]:
         question = question.strip()
         if not question:
@@ -255,14 +364,16 @@ class RAGPipeline:
         hist = _clean_history(history or [])
         conversation = build_conversation_context(hist, question, self.product_names)
         decision = classify_intent(question)
+        compound_decisions = classify_compound_intents(question)
         confirming_previous = False
         normalized_question = canonicalize_query(question)
         logger.info(
-            "Phân loại chat (intent=%s, confidence=%.2f, rule=%s, normalized_query=%r)",
+            "Phân loại chat (intent=%s, confidence=%.2f, rule=%s, query_id=%s, query_chars=%d)",
             decision.intent.value,
             decision.confidence,
             decision.matched_rule,
-            normalized_question[:200],
+            _query_fingerprint(normalized_question),
+            len(normalized_question),
         )
         if decision.intent is Intent.GREETING:
             return GREETING_ANSWER, []
@@ -277,15 +388,39 @@ class RAGPipeline:
         if decision.intent is Intent.UNKNOWN and decision.matched_rule == "out-of-scope":
             return OUT_OF_SCOPE_ANSWER, []
 
-        if (
-            conversation.pending_intent in {Intent.ORDER_STATUS, Intent.POLICY_QUERY}
-            and _looks_like_order_code(question)
-        ):
-            logger.info(
-                "Đã nhận slot mã đơn (pending_intent=%s); không gọi retrieval/LLM",
-                conversation.pending_intent.value,
+        if compound_decisions:
+            compound = await self._answer_compound_business(
+                question, compound_decisions, category
             )
-            return _order_code_answer(question), []
+            if compound:
+                return compound
+
+        order_code = _extract_order_code(question)
+        order_context = decision.intent is Intent.ORDER_STATUS or (
+            conversation.pending_intent in {Intent.ORDER_STATUS, Intent.POLICY_QUERY}
+        )
+        if order_context and order_code:
+            logger.info(
+                "Đã nhận slot mã đơn (pending_intent=%s, order_code_hash=%s)",
+                conversation.pending_intent.value if conversation.pending_intent else None,
+                _query_fingerprint(order_code),
+            )
+            if self.live_data.enabled:
+                if not authorization:
+                    return (
+                        "Để bảo vệ đơn hàng, bạn vui lòng đăng nhập hoặc dùng lại "
+                        "kênh đã đặt đơn để mình xác minh trước khi tra cứu nhé.",
+                        [],
+                    )
+                order = await self.live_data.lookup_order(order_code, authorization)
+                if order:
+                    return format_order_answer(order), []
+                return (
+                    "Mình chưa xác minh được đơn này. Bạn kiểm tra lại mã đơn "
+                    "hoặc liên hệ qua kênh đã đặt đơn nhé.",
+                    [],
+                )
+            return _order_code_answer(order_code), []
 
         if decision.intent is Intent.AFFIRMATION:
             if (
@@ -364,17 +499,17 @@ class RAGPipeline:
             )
         if decision.intent in {Intent.UNKNOWN, Intent.FOLLOW_UP}:
             logger.info(
-                "Query rewrite (original=%r, normalized=%r, rewritten=%r, intent=%s)",
-                question[:200], normalized_question[:200], standalone[:300], decision.intent.value,
+                "Query rewrite (query_id=%s, rewritten_chars=%d, intent=%s)",
+                _query_fingerprint(normalized_question), len(standalone), decision.intent.value,
             )
             logger.info(
-                "Không nhận diện được intent phù hợp; fallback_reason=missing_context, normalized_query=%r",
-                normalized_question[:200],
+                "Không nhận diện được intent phù hợp; fallback_reason=missing_context, query_id=%s",
+                _query_fingerprint(normalized_question),
             )
             return _intent_fallback(decision.intent, hist), []
         logger.info(
-            "Query rewrite (original=%r, normalized=%r, rewritten=%r, intent=%s)",
-            question[:200], normalized_question[:200], standalone[:300], decision.intent.value,
+            "Query rewrite (query_id=%s, rewritten_chars=%d, intent=%s)",
+            _query_fingerprint(normalized_question), len(standalone), decision.intent.value,
         )
         logger.info(
             "Bắt đầu truy xuất chat (intent=%s, query_chars=%d, history_messages=%d, current_product=%s)",
@@ -383,6 +518,32 @@ class RAGPipeline:
             len(hist),
             conversation.current_product,
         )
+
+        if decision.intent in {
+            Intent.PRODUCT_PRICE,
+            Intent.PRODUCT_AVAILABILITY,
+            Intent.PRODUCT_COMPARISON,
+            Intent.PRODUCT_FILTER,
+            Intent.PRODUCT_DETAIL,
+            Intent.PRODUCT_INFO,
+            Intent.PRODUCT_INTEREST,
+            Intent.MENU_QUERY,
+            Intent.PRODUCT_RECOMMENDATION,
+        }:
+            live_catalog = await self.live_data.search_catalog(
+                standalone, decision.intent, branch_id
+            )
+            if live_catalog is not None:
+                return format_catalog_answer(
+                    decision.intent, live_catalog.products, branch_id
+                )
+            if self.live_data.enabled:
+                return (
+                    "Mình chưa truy cập được menu và tình trạng hiện hành, "
+                    "nên không dùng dữ liệu cũ để trả lời. Bạn vui lòng thử lại "
+                    "sau hoặc hỏi nhân viên nhé!",
+                    [],
+                )
 
         try:
             hits = await asyncio.to_thread(
@@ -469,14 +630,5 @@ class RAGPipeline:
         if not answer:
             answer = _intent_fallback(decision.intent, hist) or FALLBACK_ANSWER
 
-        sources = [
-            SourceChunk(
-                source=hit.chunk.source,
-                category=hit.chunk.category,
-                heading=hit.chunk.heading,
-                score=round(hit.score, 4),
-                content=hit.chunk.text,
-            )
-            for hit in hits
-        ]
+        sources = self._source_chunks(hits)
         return answer, sources

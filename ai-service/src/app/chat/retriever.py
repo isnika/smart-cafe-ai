@@ -61,6 +61,7 @@ _PRODUCT_LOOKUP_INTENTS = frozenset({
     Intent.PRODUCT_INFO,
     Intent.PRODUCT_INTEREST,
     Intent.CUSTOMIZE_DRINK,
+    Intent.PRODUCT_COMPARISON,
 })
 _LEXICAL_FAST_PATH_INTENTS = frozenset({
     Intent.PRODUCT_AVAILABILITY,
@@ -363,6 +364,7 @@ class Retriever:
         self.model_name = model_name
         self._model = None
         self._lock = threading.Lock()
+        self._index_lock = threading.RLock()
         self._embedding_disabled = DISABLE_EMBEDDINGS
         self.chunks: list[Chunk] = []
         self.embeddings: np.ndarray = np.zeros((0, 1), dtype=np.float32)
@@ -498,6 +500,32 @@ class Retriever:
     def _is_product_record(chunk: Chunk) -> bool:
         return chunk.document_type == DocumentType.PRODUCT.value and "Mã món:" in chunk.text
 
+    @staticmethod
+    def _product_price(chunk: Chunk) -> int | None:
+        match = re.search(r"^\s*[-*]\s*Giá(?: mẫu)?:\s*([\d.,]+)", chunk.text, re.I | re.M)
+        if not match:
+            return None
+        digits = re.sub(r"\D", "", match.group(1))
+        return int(digits) if digits else None
+
+    @staticmethod
+    def _budget_filter(query_folded: str) -> tuple[str, int] | None:
+        match = re.search(
+            r"\b(duoi|tren|tu|ngan sach)\s*(?:gia\s*)?([0-9][0-9.,]*)\s*(k|nghin|vnd|d|dong)?\b",
+            query_folded,
+        )
+        if not match:
+            return None
+        raw = match.group(2)
+        digits = re.sub(r"\D", "", raw)
+        if not digits:
+            return None
+        amount = int(digits)
+        suffix = match.group(3) or ""
+        if suffix in {"k", "nghin"} or (amount < 1000 and "." not in raw and "," not in raw):
+            amount *= 1000
+        return match.group(1), amount
+
     def _product_match_mask(
         self,
         query_canonical: str,
@@ -518,23 +546,31 @@ class Retriever:
         if not candidates.any():
             return np.zeros(len(self.chunks), dtype=bool)
 
-        exact_indices: list[int] = []
-        exact_lengths: list[int] = []
+        exact_occurrences: list[tuple[int, int, int, int]] = []
         for index, chunk in enumerate(self.chunks):
             if not candidates[index]:
                 continue
             name = fold_text(chunk.heading.split(" > ")[-1])
-            if re.search(rf"(?<!\w){re.escape(name)}(?!\w)", query_folded):
-                exact_indices.append(index)
-                exact_lengths.append(len(search_tokens(name)))
+            for match in re.finditer(rf"(?<!\w){re.escape(name)}(?!\w)", query_folded):
+                exact_occurrences.append(
+                    (match.start(), match.end(), index, len(search_tokens(name)))
+                )
 
-        if exact_indices:
-            # "Matcha Latte" cũng chứa tên món "Latte"; luôn giữ tên đầy đủ nhất.
-            longest = max(exact_lengths)
+        if exact_occurrences:
+            # Chọn tên dài nhất trên các span chồng nhau như "Latte" bên
+            # trong "Matcha Latte", nhưng vẫn giữ entity Latte độc lập ở vế sau.
+            selected: list[tuple[int, int, int, int]] = []
+            for occurrence in sorted(
+                exact_occurrences,
+                key=lambda item: (-(item[1] - item[0]), item[0]),
+            ):
+                start, end, _, _ = occurrence
+                if any(other_start <= start and end <= other_end for other_start, other_end, _, _ in selected):
+                    continue
+                selected.append(occurrence)
             resolved = np.zeros(len(self.chunks), dtype=bool)
-            for index, length in zip(exact_indices, exact_lengths):
-                if length == longest:
-                    resolved[index] = True
+            for _, _, index, _ in selected:
+                resolved[index] = True
             return resolved
 
         entity_tokens = query_tokens - _PRODUCT_ATTRIBUTE_TOKENS
@@ -596,6 +632,13 @@ class Retriever:
         )
 
     def build_index(self, force: bool = False) -> None:
+        lock = getattr(self, "_index_lock", None)
+        if lock is None:
+            lock = self._index_lock = threading.RLock()
+        with lock:
+            self._build_index_unlocked(force=force)
+
+    def _build_index_unlocked(self, force: bool = False) -> None:
         """Tạo index; dùng cache nếu knowledge_base không đổi."""
         chunks = load_chunks(self.kb_dir)
         if not chunks:
@@ -651,6 +694,20 @@ class Retriever:
         category: str | None = None,
         intent: Intent | str | None = None,
     ) -> list[SearchHit]:
+        lock = getattr(self, "_index_lock", None)
+        if lock is None:
+            lock = self._index_lock = threading.RLock()
+        with lock:
+            return self._search_unlocked(query, top_k, min_score, category, intent)
+
+    def _search_unlocked(
+        self,
+        query: str,
+        top_k: int = 5,
+        min_score: float = 0.0,
+        category: str | None = None,
+        intent: Intent | str | None = None,
+    ) -> list[SearchHit]:
         if not self.chunks:
             return []
 
@@ -670,6 +727,7 @@ class Retriever:
 
         parsed_intent = Intent.UNKNOWN
         catalog_browse = False
+        entity_mask: np.ndarray | None = None
         if intent:
             intent_value = intent.value if isinstance(intent, Intent) else str(intent)
             try:
@@ -685,24 +743,48 @@ class Retriever:
 
             # Lookup fact theo món bắt buộc qua entity resolver trước semantic ranking.
             if parsed_intent in _PRODUCT_LOOKUP_INTENTS:
-                mask &= self._product_match_mask(
+                entity_mask = self._product_match_mask(
                     canonical_query, query_folded, query_tokens, mask
                 )
+                mask &= entity_mask
 
             # Với bộ lọc vị mặn, không để token chung "món" hay fuzzy mon/man kéo
             # về các đồ uống bất kỳ. Chỉ giữ record thật sự khai báo mặn/salty.
-            if parsed_intent is Intent.PRODUCT_FILTER and "man" in query_tokens:
-                mask &= np.array([
-                    bool({"man", "salty"} & tokens)
-                    for tokens in self._chunk_tokens
-                ], dtype=bool)
-
-            # Menu/gợi ý chỉ lấy record sản phẩm thật, không lấy overview/FAQ.
-            if parsed_intent in {Intent.MENU_QUERY, Intent.PRODUCT_RECOMMENDATION}:
+            if parsed_intent is Intent.PRODUCT_FILTER:
                 mask &= np.array([
                     self._is_product_record(chunk) for chunk in self.chunks
                 ], dtype=bool)
-                catalog_browse = parsed_intent is Intent.MENU_QUERY or any(
+                if "man" in query_tokens:
+                    mask &= np.array([
+                        bool({"man", "salty"} & tokens)
+                        for tokens in self._chunk_tokens
+                    ], dtype=bool)
+                if "caffeine" in query_tokens and "khong" in fold_text(query):
+                    mask &= np.array([
+                        bool(re.search(r"^\s*[-*]\s*Caffeine:\s*(Không|None)\b", chunk.text, re.I | re.M))
+                        for chunk in self.chunks
+                    ], dtype=bool)
+                budget = self._budget_filter(query_folded)
+                if budget:
+                    operator, amount = budget
+                    prices = [self._product_price(chunk) for chunk in self.chunks]
+                    if operator in {"duoi", "ngan sach"}:
+                        mask &= np.array([price is not None and price < amount for price in prices])
+                    elif operator == "tren":
+                        mask &= np.array([price is not None and price > amount for price in prices])
+                    else:
+                        mask &= np.array([price is not None and price >= amount for price in prices])
+
+            # Menu/gợi ý chỉ lấy record sản phẩm thật, không lấy overview/FAQ.
+            if parsed_intent in {
+                Intent.MENU_QUERY,
+                Intent.PRODUCT_RECOMMENDATION,
+                Intent.PRODUCT_FILTER,
+            }:
+                mask &= np.array([
+                    self._is_product_record(chunk) for chunk in self.chunks
+                ], dtype=bool)
+                catalog_browse = parsed_intent in {Intent.MENU_QUERY, Intent.PRODUCT_FILTER} or any(
                     cue in query_folded
                     for cue in ("mon gi ngon", "gi ngon", "goi y mon", "khong biet nen uong gi")
                 )
@@ -742,6 +824,12 @@ class Retriever:
             scores = np.maximum(dense_scores, blended)
         else:
             scores = lexical_scores
+
+        if entity_mask is not None:
+            # Entity resolver đã xác nhận chính xác tên món. Không để các
+            # từ nối trong query nhiều sản phẩm làm một entity rơi dưới
+            # ngưỡng retrieval.
+            scores = np.where(entity_mask, np.maximum(scores, 0.70), scores)
 
         if catalog_browse:
             # Truy vấn duyệt menu không có entity để chấm overlap. Mọi record ở

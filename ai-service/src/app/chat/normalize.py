@@ -29,7 +29,10 @@ _QUERY_REPLACEMENTS = (
     (re.compile(r"\b(?:dat|đặt)\s*(?:don|đơn)\b", re.I), "đặt hàng"),
     (re.compile(r"\b(?:bao\s*nhiu|bao\s*nhieu|bi\s*nhiu|bn|bnh)\b", re.I), "bao nhiêu"),
     (re.compile(r"\b(?:mấy\s*đồng|bao\s*nhiêu\s*tiền)\b", re.I), "giá bao nhiêu"),
-    (re.compile(r"\b(?:wi[\s-]?fi|wf|wife|internet|mạng|mang)\b", re.I), "wifi"),
+    (re.compile(r"\b(?:wi[\s-]?fi|wf|wife|internet|mạng)\b", re.I), "wifi"),
+    # "mang" không dấu chỉ là mạng khi có ngữ cảnh; không sửa
+    # trong "sinh to mang cau" (sinh tố mãng cầu).
+    (re.compile(r"\b(?:co|quan co)\s+mang\b|\bmang\s+(?:khong|k)\b", re.I), "wifi"),
     (re.compile(r"\b(?:ship|shipping)\b", re.I), "giao hàng"),
     (re.compile(r"\b(?:hot\s*(?:or|/)?\s*(?:ice|iced|cold)|(?:ice|iced|cold)\s*(?:or|/)?\s*hot)\b", re.I), "nóng hay lạnh"),
     (re.compile(r"\bhạy\b", re.I), "hay"),
