@@ -137,6 +137,15 @@ def classify_intent(query: str) -> IntentDecision:
     ):
         return IntentDecision(Intent.CHITCHAT, 0.96, "light-chitchat")
 
+    # Prompt injection không phải câu hỏi menu; chặn trước các rule giá/sản phẩm.
+    if _contains(
+        folded,
+        r"\bbo qua\b.*\b(quy tac|huong dan|system|prompt)\b",
+        r"\b(tu bia|bia gia|gia mao)\b",
+        r"\b(api key|mat khau|system prompt|thong tin noi bo)\b",
+    ):
+        return IntentDecision(Intent.UNKNOWN, 0.99, "out-of-scope")
+
     if token_count <= 3 and _contains(
         folded,
         r"^\s*(tai sao|vi sao|sao vay|the thi sao|con mon kia)\s*[?.!]*$",
@@ -202,6 +211,7 @@ def classify_intent(query: str) -> IntentDecision:
         folded,
         r"\b(dat hang|dat mon|don hang)\b.*\b(online|truc tuyen|app|web)\b",
         r"\b(online|truc tuyen)\b.*\b(dat hang|dat mon|don hang)\b",
+        r"\b(dat|mua|goi)\b.*\b(online|truc tuyen)\b",
     ):
         return IntentDecision(Intent.ORDER_ONLINE, 0.98, "order-online")
 
@@ -211,7 +221,11 @@ def classify_intent(query: str) -> IntentDecision:
     ):
         return IntentDecision(Intent.DELIVERY_QUERY, 0.97, "delivery")
 
-    if _contains(folded, r"\b(dat hang|dat mon|muon dat|goi mon)\b"):
+    if _contains(
+        folded,
+        r"\b(dat hang|dat mon|muon dat|goi mon)\b",
+        r"\bdat\b.*\b(cho minh|mot ly|mot mon)\b",
+    ):
         return IntentDecision(Intent.ORDER_INTENT, 0.96, "order-intent")
 
     # Dịch vụ phải được định tuyến trước rule "có ... không" của sản phẩm.
@@ -229,6 +243,7 @@ def classify_intent(query: str) -> IntentDecision:
         r"\bngan sach\b",
         r"\bkhong (co )?(ca phe|caffeine)\b",
         r"\b(khong uong|tranh|khong dung duoc)\b.*\bcaffeine\b",
+        r"\b(khong uong|khong dung|khong dung duoc|tranh)\b.*\b(sua|dairy|milk)\b",
         r"\bgia\s*(duoi|tren|tu)\b",
         r"\b(mon gi|mon nao|co mon gi|co mon nao)\b.*\b(man\b|vi man)\b",
     ):
@@ -240,6 +255,12 @@ def classify_intent(query: str) -> IntentDecision:
         r"\bkhac\b.+\b(the nao|ra sao|gi)\b",
     ):
         return IntentDecision(Intent.PRODUCT_COMPARISON, 0.96, "product-comparison")
+
+    if _contains(
+        folded,
+        r"\b(di ung|chat gay di ung|allergen|allergy)\b",
+    ):
+        return IntentDecision(Intent.PRODUCT_DETAIL, 0.96, "allergy-safety")
 
     if _contains(
         folded,

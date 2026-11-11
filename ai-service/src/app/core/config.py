@@ -52,6 +52,7 @@ class Settings:
     preload_chat: bool
     warm_embedding_model: bool
     llm_warmup: bool
+    naturalize_responses: bool
     data_api_base_url: str
     data_api_key: str
     data_api_timeout_seconds: float
@@ -73,6 +74,7 @@ class Settings:
             preload_chat=_bool("PRELOAD_CHAT", True),
             warm_embedding_model=_bool("RAG_WARM_EMBEDDING_MODEL", True),
             llm_warmup=_bool("LLM_WARMUP", False),
+            naturalize_responses=_bool("CHAT_NATURALIZE_RESPONSES", True),
             data_api_base_url=os.getenv("DATA_API_BASE_URL", "").strip().rstrip("/"),
             data_api_key=os.getenv("DATA_API_KEY", "").strip(),
             data_api_timeout_seconds=_float("DATA_API_TIMEOUT_SECONDS", 3.0, 0.2, 30.0),

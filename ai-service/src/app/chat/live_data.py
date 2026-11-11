@@ -155,6 +155,10 @@ def _catalog_source(product: LiveProduct) -> SourceChunk:
     details = [f"Mã sản phẩm: {product.id}", f"Tên: {product.name}"]
     if product.description:
         details.append(f"Mô tả: {product.description}")
+    if product.temperature:
+        details.append(f"Nhiệt độ: {product.temperature}")
+    if product.caffeine_level:
+        details.append(f"Caffeine: {product.caffeine_level}")
     for variant in product.variants:
         details.append(
             f"Biến thể {variant.name}: "

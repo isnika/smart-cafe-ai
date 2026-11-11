@@ -8,6 +8,8 @@ import os
 import re
 from typing import Protocol
 
+from src.app.core.config import get_settings
+
 from .context import build_conversation_context
 from .intent import (
     PRODUCT_INTENTS,
@@ -36,6 +38,8 @@ from .prompts import (
     FALLBACK_ANSWER,
     GREETING_ANSWER,
     NEGATION_ANSWER,
+    NATURALIZE_SYSTEM,
+    NATURALIZE_USER,
     OUT_OF_SCOPE_ANSWER,
     SYSTEM_PROMPT,
     USER_TEMPLATE,
@@ -82,6 +86,16 @@ DIRECT_ANSWER_INTENTS = frozenset({
     Intent.PRODUCT_COMPARISON,
 })
 
+NATURALIZE_INTENTS = frozenset({
+    Intent.PRODUCT_DETAIL,
+    Intent.PRODUCT_INFO,
+    Intent.PRODUCT_INTEREST,
+    Intent.CUSTOMIZE_DRINK,
+    Intent.PRODUCT_RECOMMENDATION,
+    Intent.PRODUCT_FILTER,
+    Intent.PRODUCT_COMPARISON,
+})
+
 _COMPOUND_FOCUS_QUERIES = {
     Intent.OPENING_HOURS: "Quán mở cửa và đóng cửa lúc mấy giờ?",
     Intent.LOCATION_QUERY: "Địa chỉ quán ở đâu?",
@@ -92,6 +106,31 @@ _COMPOUND_FOCUS_QUERIES = {
     Intent.PAYMENT_QUERY: "Quán hỗ trợ thanh toán thế nào?",
     Intent.PROMOTION_QUERY: "Quán có khuyến mãi không?",
 }
+
+
+def _product_compound_clauses(question: str) -> tuple[tuple[str, IntentDecision], ...]:
+    """Tách các ý sản phẩm độc lập khi một câu hỏi có nhiều thuộc tính."""
+    canonical = canonicalize_query(question)
+    clauses = [
+        clause.strip(" ?.!,")
+        for clause in re.split(r"\s+(?:và|va|voi|với|rồi)\s+|[,;]", canonical, flags=re.I)
+        if clause.strip(" ?.!,")
+    ]
+    if len(clauses) < 2:
+        return ()
+    decisions = tuple((clause, classify_intent(clause)) for clause in clauses)
+    if not all(decision.intent in PRODUCT_INTENTS for _, decision in decisions):
+        return ()
+    # Một câu "giá Matcha và Cà phê sữa" chỉ là một intent giá cho hai entity;
+    # để resolver hiện có xử lý cả hai, không biến vế trần thành intent info.
+    explicit = {
+        decision.intent
+        for _, decision in decisions
+        if decision.intent not in {Intent.PRODUCT_INFO}
+    }
+    if len(explicit) < 2:
+        return ()
+    return decisions
 
 
 class LLMClient(Protocol):
@@ -212,6 +251,63 @@ def _query_fingerprint(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8", errors="ignore")).hexdigest()[:12]
 
 
+def _fact_numbers(value: str) -> set[str]:
+    return {
+        re.sub(r"[.,]", "", match)
+        for match in re.findall(r"(?<!\w)\d[\d.,]*", value)
+    }
+
+
+def _naturalization_is_safe(
+    draft: str,
+    rewritten: str,
+    protected_phrases: tuple[str, ...],
+    required_fact_phrases: tuple[str, ...] = (),
+) -> bool:
+    """Chặn rewrite làm thay đổi fact, sản phẩm hoặc mức độ chắc chắn."""
+    if not rewritten or len(rewritten) > max(700, len(draft) * 3):
+        return False
+    if _fact_numbers(draft) != _fact_numbers(rewritten):
+        return False
+    folded_draft = fold_text(draft)
+    folded_rewritten = fold_text(rewritten)
+    uncertainty_groups = (
+        ("chua",),
+        ("khong the", "chua the"),
+        ("tham khao",),
+        ("xac nhan", "kiem tra"),
+    )
+    for group in uncertainty_groups:
+        if any(cue in folded_draft for cue in group) and not any(
+            cue in folded_rewritten for cue in group
+        ):
+            return False
+    for phrase in protected_phrases:
+        folded_phrase = fold_text(phrase)
+        if folded_phrase in folded_draft and folded_phrase not in folded_rewritten:
+            return False
+    for phrase in required_fact_phrases:
+        if fold_text(phrase) not in folded_rewritten:
+            return False
+    return True
+
+
+def _required_source_facts(draft: str, sources: list[SourceChunk]) -> tuple[str, ...]:
+    """Các field đã xuất hiện trong draft phải còn nguyên sau rewrite."""
+    folded_draft = fold_text(draft)
+    facts: list[str] = []
+    field_pattern = re.compile(
+        r"^\s*[-*]?\s*(?:Mô tả|Nhiệt độ|Caffeine|Giá(?: mẫu)?):\s*(.+)$",
+        re.I | re.M,
+    )
+    for source in sources:
+        for match in field_pattern.finditer(source.content):
+            value = match.group(1).strip().rstrip(".")
+            if len(value) >= 2 and fold_text(value) in folded_draft and value not in facts:
+                facts.append(value)
+    return tuple(facts)
+
+
 def _order_code_answer(order_code: str) -> str:
     return (
         f"Mình đã nhận mã đơn {order_code.strip()}. Tuy nhiên chatbot chưa kết nối hệ thống "
@@ -224,6 +320,63 @@ def _intent_fallback(intent: Intent, history: list[dict]) -> str:
     return fallback_for_intent(intent, _last_assistant_answer(history))
 
 
+def _is_why_followup(question: str) -> bool:
+    folded = fold_text(question).strip(" ?!.\t")
+    return folded in {"tai sao", "vi sao", "sao vay", "the thi sao"}
+
+
+def _explain_previous_limit(
+    question: str,
+    previous_answer: str,
+    current_product: str | None,
+) -> str | None:
+    """Giải thích giới hạn của lượt trước thay vì retrieval lại một câu "tại sao?"."""
+    if not _is_why_followup(question) or not previous_answer:
+        return None
+    folded = fold_text(previous_answer)
+    limitation_cues = (
+        "chua co du lieu",
+        "chua duoc xac nhan",
+        "khong muon doan sai",
+        "chua truy cap",
+        "chua ket noi",
+    )
+    if not any(cue in folded for cue in limitation_cues):
+        return None
+    subject = current_product or "thông tin này"
+    detail = (
+        ", đặc biệt là mức ngọt hoặc khả năng giảm đường"
+        if "ngot" in folded or "duong" in folded
+        else ""
+    )
+    return (
+        f"Vì hiện mình chưa có dữ liệu được xác nhận về {subject}{detail}, nên mình không muốn "
+        "đoán sai hoặc khẳng định thay cho quán. Bạn có thể hỏi nhân viên để xác nhận "
+        "thông tin này nhé!"
+    )
+
+
+def _looks_like_unknown_product_request(question: str) -> bool:
+    """Nhận diện câu nhắc một món lạ để trả fallback phạm vi dữ liệu, không bịa."""
+    folded = fold_text(question)
+    if not re.search(r"\b(mon|loai)\b", folded):
+        return False
+    if re.search(r"\b(mon|loai)\s+(nao|gi|nay|do|kia|ngon)\b", folded):
+        return False
+    return bool(
+        re.search(r"\b(mon|loai)\b.*\b(khong co|khong thay|ten la)\b", folded)
+        or re.search(r"\b(mon|loai)\s+[a-z0-9]{3,}", folded)
+    )
+
+
+def _unknown_product_answer() -> str:
+    return (
+        "Mình chưa tìm thấy món này trong danh mục dữ liệu hiện có. Điều đó chưa đủ "
+        "để kết luận quán không bán; bạn cho mình tên món đầy đủ hoặc hỏi nhân viên "
+        "để xác nhận nhé!"
+    )
+
+
 class RAGPipeline:
     def __init__(
         self,
@@ -231,20 +384,72 @@ class RAGPipeline:
         llm: LLMClient | None = None,
         fallback_llm: LLMClient | None = None,
         live_data: OperationalDataClient | None = None,
+        naturalize_responses: bool | None = None,
         top_k: int = TOP_K,
         min_score: float = MIN_SCORE,
     ):
         self.retriever = retriever or get_retriever()
+        explicit_llm = llm is not None
         self.llm = llm or get_llm()
         self.fallback_llm = fallback_llm or ExtractiveLLM()
         self.live_data = live_data or OperationalDataClient()
         self.top_k = max(1, min(int(top_k), 8))
         self.min_score = float(min_score)
+        self.naturalize_responses = (
+            get_settings().naturalize_responses and not explicit_llm
+            if naturalize_responses is None
+            else bool(naturalize_responses)
+        )
         self.product_names = tuple(sorted({
             chunk.heading.split(" > ")[-1]
             for chunk in getattr(self.retriever, "chunks", [])
             if chunk.document_type == "product" and "Mã món:" in chunk.text
         }, key=len, reverse=True))
+
+    async def _naturalize(
+        self,
+        draft: str,
+        intent: Intent,
+        context: str,
+        sources: list[SourceChunk],
+    ) -> str:
+        if (
+            not self.naturalize_responses
+            or intent not in NATURALIZE_INTENTS
+            or isinstance(self.llm, ExtractiveLLM)
+            or not draft
+        ):
+            return draft
+        protected = tuple(
+            source.heading.split(" > ")[-1].strip()
+            for source in sources
+            if source.heading
+        )
+        required_facts = _required_source_facts(draft, sources)
+        try:
+            rewritten = await self.llm.generate(
+                NATURALIZE_SYSTEM,
+                [{
+                    "role": "user",
+                    "content": NATURALIZE_USER.format(intent=intent.value, draft=draft),
+                }],
+                max_tokens=240,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Naturalizer không khả dụng; giữ câu grounded (error_type=%s)",
+                type(exc).__name__,
+            )
+            return draft
+        rewritten = sanitize_generated_answer(rewritten or "")
+        if not _naturalization_is_safe(draft, rewritten, protected, required_facts):
+            logger.warning("Naturalizer thay đổi fact; giữ câu grounded ban đầu")
+            return draft
+        if not answer_prices_are_grounded(rewritten, context):
+            logger.warning("Naturalizer sinh giá không grounded; giữ câu ban đầu")
+            return draft
+        logger.info("Naturalizer được chấp nhận (intent=%s)", intent.value)
+        return rewritten
 
     async def preload(self, warm_embeddings: bool = True, warm_llm: bool = False) -> None:
         """Nạp index/model trước khi readiness chuyển sang ready."""
@@ -304,9 +509,9 @@ class RAGPipeline:
             )
             answer = sanitize_generated_answer(answer or "")
             if answer:
-                answers.append(answer.rstrip(".! "))
+                answers.append(answer.rstrip(".!? "))
                 collected.extend(hits)
-        if len(answers) < 2:
+        if len(answers) < 2:  # business compound
             return None
         unique_hits: list[SearchHit] = []
         seen: set[tuple[str, str]] = set()
@@ -316,6 +521,79 @@ class RAGPipeline:
                 unique_hits.append(hit)
                 seen.add(key)
         return ". ".join(answers) + ".", self._source_chunks(unique_hits)
+
+    async def _answer_compound_product(
+        self,
+        clauses: tuple[tuple[str, IntentDecision], ...],
+        category: str | None,
+        branch_id: int | None = None,
+    ) -> tuple[str, list[SourceChunk]] | None:
+        """Trả đủ các ý sản phẩm, mỗi ý có context và nguồn riêng."""
+        answers: list[str] = []
+        collected: list[SearchHit] = []
+        collected_sources: list[SourceChunk] = []
+        for focused_question, decision in clauses:
+            if self.live_data.enabled:
+                live_catalog = await self.live_data.search_catalog(
+                    focused_question, decision.intent, branch_id
+                )
+                if live_catalog is None:
+                    continue
+                live_answer, live_sources = format_catalog_answer(
+                    decision.intent, live_catalog.products, branch_id
+                )
+                if live_answer:
+                    answers.append(live_answer.rstrip(".!? "))
+                    collected_sources.extend(live_sources)
+                continue
+            hits = await asyncio.to_thread(
+                self.retriever.search,
+                focused_question,
+                self.top_k,
+                self.min_score,
+                category,
+                decision.intent,
+            )
+            hits = _deduplicate_hits(hits)
+            if not hits:
+                continue
+            context = _format_context(hits)
+            prompt = USER_TEMPLATE.format(
+                intent=decision.intent.value,
+                context=context,
+                question=focused_question,
+            )
+            answer = await self.fallback_llm.generate(
+                SYSTEM_PROMPT,
+                [{"role": "user", "content": prompt}],
+                max_tokens=220,
+            )
+            answer = sanitize_generated_answer(answer or "")
+            if answer:
+                answers.append(answer.rstrip(".! "))
+                collected.extend(hits)
+        if len(answers) < 2:
+            return None
+        if collected_sources:
+            unique_sources: list[SourceChunk] = []
+            seen_sources: set[tuple[str, str]] = set()
+            for source in collected_sources:
+                key = (source.source, source.heading)
+                if key not in seen_sources:
+                    unique_sources.append(source)
+                    seen_sources.add(key)
+            return (
+                "Mình trả lời từng ý nhé: " + ". ".join(answers) + ".",
+                unique_sources,
+            )
+        unique_hits: list[SearchHit] = []
+        seen: set[tuple[str, str]] = set()
+        for hit in collected:
+            key = (hit.chunk.source, hit.chunk.heading)
+            if key not in seen:
+                unique_hits.append(hit)
+                seen.add(key)
+        return "Mình trả lời từng ý nhé: " + ". ".join(answers) + ".", self._source_chunks(unique_hits)
 
     async def _condense(self, question: str, history: list[dict]) -> str:
         """Viết lại câu hỏi nối tiếp; nếu model lỗi thì vẫn tiếp tục bằng câu hỏi gốc."""
@@ -367,6 +645,8 @@ class RAGPipeline:
         compound_decisions = classify_compound_intents(question)
         confirming_previous = False
         normalized_question = canonicalize_query(question)
+        resolver = getattr(self.retriever, "resolve_product_names", None)
+        explicit_question_products = resolver(question) if callable(resolver) else ()
         logger.info(
             "Phân loại chat (intent=%s, confidence=%.2f, rule=%s, query_id=%s, query_chars=%d)",
             decision.intent.value,
@@ -388,9 +668,39 @@ class RAGPipeline:
         if decision.intent is Intent.UNKNOWN and decision.matched_rule == "out-of-scope":
             return OUT_OF_SCOPE_ANSWER, []
 
+        explanation = _explain_previous_limit(
+            question,
+            conversation.last_assistant_message or "",
+            conversation.current_product,
+        )
+        if explanation:
+            logger.info("Follow-up giải thích giới hạn lượt trước (intent=FOLLOW_UP)")
+            explanation_sources: list[SourceChunk] = []
+            previous_question = _last_meaningful_user_question(hist)
+            if conversation.current_product and previous_question:
+                focus = f"{conversation.current_product} {previous_question}"
+                previous_hits = await asyncio.to_thread(
+                    self.retriever.search,
+                    focus,
+                    self.top_k,
+                    self.min_score,
+                    category,
+                    Intent.PRODUCT_DETAIL,
+                )
+                explanation_sources = self._source_chunks(_deduplicate_hits(previous_hits))
+            return explanation, explanation_sources
+
         if compound_decisions:
             compound = await self._answer_compound_business(
                 question, compound_decisions, category
+            )
+            if compound:
+                return compound
+
+        product_clauses = _product_compound_clauses(question)
+        if product_clauses:
+            compound = await self._answer_compound_product(
+                product_clauses, category, branch_id
             )
             if compound:
                 return compound
@@ -469,13 +779,21 @@ class RAGPipeline:
             # Intent business/policy rõ ràng là một chuyển chủ đề độc lập. Chỉ dùng
             # history để rewrite câu về sản phẩm hoặc câu thật sự mơ hồ/follow-up.
             if decision.intent in PRODUCT_INTENTS or decision.intent in {Intent.UNKNOWN, Intent.FOLLOW_UP}:
-                standalone = await self._condense(question, hist)
+                standalone = (
+                    question
+                    if explicit_question_products
+                    else await self._condense(question, hist)
+                )
             else:
                 standalone = question
+        explicit_products = ()
+        if callable(resolver):
+            explicit_products = resolver(standalone)
         if (
             decision.intent in PRODUCT_INTENTS
             and conversation.current_product
             and conversation.pending_question
+            and not explicit_products
             and fold_text(conversation.current_product) not in fold_text(standalone)
         ):
             standalone = f"{conversation.current_product} {standalone}"[:MAX_STANDALONE_QUERY_CHARS]
@@ -484,7 +802,6 @@ class RAGPipeline:
             if contextual_decision.intent not in {Intent.UNKNOWN, Intent.FOLLOW_UP}:
                 decision = contextual_decision
         if decision.intent is Intent.UNKNOWN and decision.matched_rule == "no-rule":
-            resolver = getattr(self.retriever, "resolve_product_names", None)
             resolved_products = resolver(standalone) if callable(resolver) else ()
             if resolved_products:
                 decision = type(decision)(Intent.PRODUCT_INFO, 0.85, "catalog-product-match")
@@ -506,6 +823,8 @@ class RAGPipeline:
                 "Không nhận diện được intent phù hợp; fallback_reason=missing_context, query_id=%s",
                 _query_fingerprint(normalized_question),
             )
+            if decision.intent is Intent.UNKNOWN and _looks_like_unknown_product_request(standalone):
+                return _unknown_product_answer(), []
             return _intent_fallback(decision.intent, hist), []
         logger.info(
             "Query rewrite (query_id=%s, rewritten_chars=%d, intent=%s)",
@@ -518,6 +837,27 @@ class RAGPipeline:
             len(hist),
             conversation.current_product,
         )
+
+        folded_standalone = fold_text(standalone)
+        if decision.intent is Intent.PRODUCT_FILTER and re.search(
+            r"\b(khong uong|khong dung|khong dung duoc|tranh)\b.*\b(sua|dairy|milk)\b",
+            folded_standalone,
+        ):
+            return (
+                "Mình chưa có dữ liệu thành phần đủ chi tiết để xác nhận món không sữa. "
+                "Mình không muốn suy đoán về thành phần; bạn hỏi nhân viên để kiểm tra "
+                "chính xác giúp mình nhé!",
+                [],
+            )
+        if decision.intent is Intent.PRODUCT_DETAIL and re.search(
+            r"\b(di ung|chat gay di ung|allergen|allergy)\b",
+            folded_standalone,
+        ):
+            return (
+                "Mình chưa có dữ liệu thành phần gây dị ứng đủ tin cậy để xác nhận món này "
+                "an toàn. Bạn vui lòng xác nhận trực tiếp với quán trước khi dùng nhé!",
+                [],
+            )
 
         if decision.intent in {
             Intent.PRODUCT_PRICE,
@@ -534,9 +874,17 @@ class RAGPipeline:
                 standalone, decision.intent, branch_id
             )
             if live_catalog is not None:
-                return format_catalog_answer(
+                live_answer, live_sources = format_catalog_answer(
                     decision.intent, live_catalog.products, branch_id
                 )
+                live_context = "\n".join(source.content for source in live_sources)
+                live_answer = await self._naturalize(
+                    live_answer,
+                    decision.intent,
+                    live_context,
+                    live_sources,
+                )
+                return live_answer, live_sources
             if self.live_data.enabled:
                 return (
                     "Mình chưa truy cập được menu và tình trạng hiện hành, "
@@ -631,4 +979,11 @@ class RAGPipeline:
             answer = _intent_fallback(decision.intent, hist) or FALLBACK_ANSWER
 
         sources = self._source_chunks(hits)
+        if decision.intent in DIRECT_ANSWER_INTENTS:
+            answer = await self._naturalize(
+                answer,
+                decision.intent,
+                context,
+                sources,
+            )
         return answer, sources

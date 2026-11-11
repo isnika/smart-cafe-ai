@@ -51,7 +51,8 @@ _PRODUCT_ATTRIBUTE_TOKENS = {
     "thanh", "phan", "nguyen", "lieu", "caffeine", "huong", "vi", "ngot",
     "duong", "it", "dang", "beo", "nong", "lanh", "tuy", "chinh",
     "them", "bot", "nhieu", "topping", "size", "xem", "kiem", "tra",
-    "thi", "sao", "the", "nao", "ngon",
+    "thi", "sao", "the", "nao", "ngon", "chao", "xin", "hello", "hi", "alo",
+    "calo", "calorie", "kcal", "ml", "lit", "gram", "dung", "tich", "the", "khoi", "luong",
 }
 _GENERIC_SINGLE_PRODUCT_TOKENS = {"da", "sua", "xay", "nong", "lanh"}
 _PRODUCT_LOOKUP_INTENTS = frozenset({
@@ -556,6 +557,8 @@ class Retriever:
                     (match.start(), match.end(), index, len(search_tokens(name)))
                 )
 
+        resolved_exact = np.zeros(len(self.chunks), dtype=bool)
+        exact_name_tokens: set[str] = set()
         if exact_occurrences:
             # Chọn tên dài nhất trên các span chồng nhau như "Latte" bên
             # trong "Matcha Latte", nhưng vẫn giữ entity Latte độc lập ở vế sau.
@@ -568,12 +571,13 @@ class Retriever:
                 if any(other_start <= start and end <= other_end for other_start, other_end, _, _ in selected):
                     continue
                 selected.append(occurrence)
-            resolved = np.zeros(len(self.chunks), dtype=bool)
             for _, _, index, _ in selected:
-                resolved[index] = True
-            return resolved
+                resolved_exact[index] = True
+                exact_name_tokens.update(
+                    search_tokens(self.chunks[index].heading.split(" > ")[-1])
+                )
 
-        entity_tokens = query_tokens - _PRODUCT_ATTRIBUTE_TOKENS
+        entity_tokens = query_tokens - _PRODUCT_ATTRIBUTE_TOKENS - exact_name_tokens
         # Sau khi bỏ dấu, "trà" trùng với động từ trong "kiểm tra" và "môn"
         # trùng với từ chung "món". Giữ lại chúng khi bản query có dấu cho thấy
         # đây thực sự là một phần tên món, nếu không "Trà sữa khoai môn" có thể
@@ -584,7 +588,7 @@ class Retriever:
         if "môn" in canonical_words:
             entity_tokens.add("mon")
         if not entity_tokens:
-            return np.zeros(len(self.chunks), dtype=bool)
+            return resolved_exact
         if len(entity_tokens) == 1 and next(iter(entity_tokens)) in _GENERIC_SINGLE_PRODUCT_TOKENS:
             return np.zeros(len(self.chunks), dtype=bool)
 
@@ -613,7 +617,7 @@ class Retriever:
         if resolved.sum() > 1:
             best_specificity = float(np.max(specificity[resolved]))
             resolved &= specificity >= best_specificity
-        return resolved
+        return resolved_exact | resolved
 
     def resolve_product_names(self, query: str) -> tuple[str, ...]:
         """Resolve catalog entity mà không embedding hoặc gọi LLM."""
