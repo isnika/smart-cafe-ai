@@ -67,6 +67,7 @@ Sau khi hệ thống khởi động thành công, các dịch vụ sẵn sàng t
 
 | Tên Dịch Vụ | Cổng (Port) | Đường Dẫn Truy Cập / Ghi Chú |
 |---|:---:|---|
+| **Swagger UI (Tập trung)** | `8080` | `http://localhost:8080/swagger-ui.html` (Xem & test API toàn bộ microservices) |
 | **API Gateway** | `8080` | `http://localhost:8080` (Điểm vào duy nhất cho Client/Frontend) |
 | **Eureka Server** | `8761` | `http://localhost:8761` (Dashboard quản lý trạng thái các microservice) |
 | **RabbitMQ Management** | `15672` | `http://localhost:15672` (User: `smartcafe` / Pass: `smartcafe-local`) |
