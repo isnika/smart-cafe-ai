@@ -82,7 +82,8 @@ public class SecurityConfig {
                 .requestMatchers(
                     "/auth/**", "/api/v1/auth/**", "/api/auth/**",
                     "/internal/**", "/api/v1/internal/**", "/api/internal/**",
-                    "/actuator/**", "/api/health/**", "/error"
+                    "/actuator/**", "/api/health/**", "/error",
+                    "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/swagger-resources/**", "/webjars/**"
                 ).permitAll()
                 // Manager endpoints
                 .requestMatchers("/manager/**", "/api/v1/manager/**", "/api/manager/**").hasAnyAuthority("ROLE_MANAGER", "ROLE_ADMIN")

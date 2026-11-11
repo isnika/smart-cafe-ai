@@ -32,6 +32,9 @@ public class SecurityConfig {
                 // Actuator endpoints
                 .requestMatchers("/actuator/**").permitAll()
 
+                // Swagger / OpenAPI documentation
+                .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/swagger-resources/**", "/webjars/**").permitAll()
+
                 // Internal APIs - no auth required (inter-service communication)
                 .requestMatchers("/internal/**", "/inventory/internal/**", "/api/v1/internal/**").permitAll()
 

@@ -1,6 +1,14 @@
 server:
   port: 8083
 
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: method
+
 app:
   internal-api-key: ${STORE_INTERNAL_API_KEY:smart-cafe-internal-store-key}
 
