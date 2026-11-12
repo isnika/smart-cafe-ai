@@ -145,10 +145,10 @@ async def evaluate(dataset: Path, top_k: int) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", type=Path, default=DEFAULT_DATASET)
-    parser.add_argument("--top-k", type=int, default=4)
+    parser.add_argument("--top-k", type=int, default=12)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
-    result = asyncio.run(evaluate(args.dataset, max(1, min(args.top_k, 8))))
+    result = asyncio.run(evaluate(args.dataset, max(1, min(args.top_k, 15))))
     rendered = json.dumps(result, ensure_ascii=False, indent=2)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

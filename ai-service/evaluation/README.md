@@ -23,3 +23,14 @@ trước khi evaluator sử dụng. Không commit log thô hoặc PII.
 
 Metrics hiện có: intent macro-F1, retrieval Recall@K, groundedness, task
 success, latency p50/p95 và confusion pairs.
+
+Benchmark retrieval riêng theo nhóm menu, price, policy và follow-up:
+
+```powershell
+python scripts/evaluate_retrieval.py --output evaluation/retrieval_metrics.json
+python scripts/evaluate_retrieval.py --lexical-only --output evaluation/retrieval_metrics.lexical.json
+```
+
+Benchmark này báo cáo Recall@1/3/5/10/12 và MRR cho toàn bộ dataset và từng nhóm.
+`retrieval_eval.jsonl` là bộ case nhỏ có history thật cho follow-up; có thể mở rộng
+thêm case khi có log production đã ẩn danh.

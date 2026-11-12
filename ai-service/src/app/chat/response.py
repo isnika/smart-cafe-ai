@@ -17,7 +17,10 @@ _PRICE_RE = re.compile(r"(?<!\w)(\d{1,3}(?:[.,]\d{3})+|\d+)\s*(?:vnd|đ|đồng)
 def _prompt_parts(content: str) -> tuple[Intent, str, str]:
     intent_match = re.search(r"<intent>\s*([^<]+)\s*</intent>", content)
     context_match = re.search(r"<context>\s*(.*?)\s*</context>", content, re.S)
+    question_tag_match = re.search(r"<question>\s*(.*?)\s*</question>", content, re.S)
     question_match = re.search(r"Câu hỏi hiện tại:\s*(.*?)(?:\n|$)", content)
+    if question_match is None:
+        question_match = question_tag_match
     try:
         intent = Intent(intent_match.group(1).strip()) if intent_match else Intent.UNKNOWN
     except ValueError:

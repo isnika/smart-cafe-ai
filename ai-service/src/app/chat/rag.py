@@ -50,7 +50,7 @@ from .schemas import ChatMessage, SourceChunk
 
 logger = logging.getLogger(__name__)
 
-TOP_K = max(1, min(int(os.getenv("RAG_TOP_K", "4")), 8))
+TOP_K = max(1, min(int(os.getenv("RAG_TOP_K", "12")), 15))
 MIN_SCORE = float(os.getenv("RAG_MIN_SCORE", "0.68"))
 MAX_HISTORY_MESSAGES = 10
 MAX_HISTORY_CHARS = 3200
@@ -155,6 +155,36 @@ def _format_context(hits: list[SearchHit], max_chars: int = MAX_CONTEXT_CHARS) -
         blocks.append(block)
         used += len(block) + 7
     return "\n\n---\n\n".join(blocks)
+
+
+def _format_prompt_history(history: list[dict]) -> str:
+    """Đưa lịch sử đã làm sạch vào prompt mới mà không làm đổi contract messages."""
+    return "\n".join(
+        f"{item.get('role', 'user')}: {item.get('content', '').strip()}"
+        for item in history
+        if item.get("content", "").strip()
+    )
+
+
+def _render_user_prompt(
+    *,
+    intent: Intent | str,
+    context: str,
+    question: str,
+    history: list[dict] | None = None,
+    conversation_state: str = "",
+    operation_result: str = "",
+) -> str:
+    """Render cả prompt schema cũ lẫn schema có state/history mở rộng."""
+    return USER_TEMPLATE.format(
+        intent=intent.value if isinstance(intent, Intent) else intent,
+        history=_format_prompt_history(history or []),
+        conversation_state=conversation_state,
+        context=context,
+        operation_result=operation_result,
+        resolved_question=question,
+        question=question,
+    )
 
 
 def _deduplicate_hits(hits: list[SearchHit]) -> list[SearchHit]:
@@ -393,7 +423,7 @@ class RAGPipeline:
         self.llm = llm or get_llm()
         self.fallback_llm = fallback_llm or ExtractiveLLM()
         self.live_data = live_data or OperationalDataClient()
-        self.top_k = max(1, min(int(top_k), 8))
+        self.top_k = max(1, min(int(top_k), 15))
         self.min_score = float(min_score)
         self.naturalize_responses = (
             get_settings().naturalize_responses and not explicit_llm
@@ -499,8 +529,8 @@ class RAGPipeline:
             if not hits:
                 continue
             context = _format_context(hits)
-            prompt = USER_TEMPLATE.format(
-                intent=decision.intent.value,
+            prompt = _render_user_prompt(
+                intent=decision.intent,
                 context=context,
                 question=focused_question,
             )
@@ -558,8 +588,8 @@ class RAGPipeline:
             if not hits:
                 continue
             context = _format_context(hits)
-            prompt = USER_TEMPLATE.format(
-                intent=decision.intent.value,
+            prompt = _render_user_prompt(
+                intent=decision.intent,
                 context=context,
                 question=focused_question,
             )
@@ -923,10 +953,27 @@ class RAGPipeline:
             [hit.chunk.heading.split(" > ")[-1] for hit in hits[:5]],
         )
         context = _format_context(hits)
-        user_msg = USER_TEMPLATE.format(
-            intent=decision.intent.value,
+        conversation_state = "\n".join(
+            value
+            for value in (
+                f"current_product: {conversation.current_product}"
+                if conversation.current_product
+                else "",
+                f"pending_intent: {conversation.pending_intent.value}"
+                if conversation.pending_intent
+                else "",
+                f"candidate_products: {', '.join(conversation.candidate_products)}"
+                if conversation.candidate_products
+                else "",
+            )
+            if value
+        )
+        user_msg = _render_user_prompt(
+            intent=decision.intent,
             context=context,
             question=standalone,
+            history=hist,
+            conversation_state=conversation_state,
         )
         messages = hist + [{"role": "user", "content": user_msg}]
         answer = ""

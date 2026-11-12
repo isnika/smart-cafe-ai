@@ -43,6 +43,23 @@ LEXICAL_WEIGHT = max(0.0, min(float(os.getenv("RAG_LEXICAL_WEIGHT", "0.30")), 1.
 MAX_CHUNK_CHARS = 900
 SUPPORTED_EXT = {".md", ".txt"}
 HEADING_RE = re.compile(r"^(#{1,4})\s+(.*\S)\s*$")
+QA_PAIR_RE = re.compile(
+    r"(?ims)^\s*Q:\s*(?P<question>.*?)\s*\n\s*A:\s*(?P<answer>.*?)(?=^\s*Q:\s*|\Z)"
+)
+
+# Các nhóm từ đồng nghĩa dùng riêng cho rerank. Không thay thế intent classifier;
+# mục tiêu là giúp các cách hỏi khác nhau cùng trỏ về đúng chunk kiến thức.
+_RERANK_SYNONYM_GROUPS = (
+    ("wifi", "internet", "mang", "wf"),
+    ("hoan don", "hoan tien", "refund", "tra lai"),
+    ("huy don", "cancel", "cancellation"),
+    ("gia", "bao nhieu", "bao tien", "tien"),
+    ("mo cua", "gio hoat dong", "gio lam viec"),
+    ("dong cua", "gio dong cua"),
+    ("giao hang", "ship", "shipping", "mang di", "take away"),
+    ("khuyen mai", "giam gia", "voucher", "uu dai"),
+    ("thanh toan", "chuyen khoan", "tien mat", "vi dien tu"),
+)
 
 # Các từ mô tả thuộc tính không phải là tên sản phẩm. Loại chúng ra khỏi
 # entity guard để "trà sữa khoai môn giá bao nhiêu" không match một món chỉ vì có từ "sữa".
@@ -53,6 +70,11 @@ _PRODUCT_ATTRIBUTE_TOKENS = {
     "them", "bot", "nhieu", "topping", "size", "xem", "kiem", "tra",
     "thi", "sao", "the", "nao", "ngon", "chao", "xin", "hello", "hi", "alo",
     "calo", "calorie", "kcal", "ml", "lit", "gram", "dung", "tich", "the", "khoi", "luong",
+}
+# Từ nối/cụm hỏi phổ biến không phải một phần danh tính món. Tách riêng khỏi
+# attribute tokens để entity guard vẫn dễ đọc và các tên món thật không bị lọc nhầm.
+_PRODUCT_QUERY_STOPWORDS = {
+    "cac", "loai", "nhung", "cho", "minh", "quan", "co", "nao", "thuc", "don",
 }
 _GENERIC_SINGLE_PRODUCT_TOKENS = {"da", "sua", "xay", "nong", "lanh"}
 _PRODUCT_LOOKUP_INTENTS = frozenset({
@@ -157,6 +179,53 @@ def _split_long(body: str, max_chars: int = MAX_CHUNK_CHARS) -> list[str]:
     if cur.strip():
         chunks.append(cur.strip())
     return chunks
+
+
+def _split_qa_pairs(body: str) -> list[str]:
+    """Tách FAQ/policy thành từng cặp Q/A để retrieval không lấy cả section dài."""
+    matches = list(QA_PAIR_RE.finditer(body))
+    if not matches:
+        return []
+    return [
+        f"Q: {match.group('question').strip()}\nA: {match.group('answer').strip()}"
+        for match in matches
+        if match.group("question").strip() and match.group("answer").strip()
+    ]
+
+
+def _contains_phrase(text: str, phrase: str) -> bool:
+    folded_phrase = fold_text(phrase)
+    return bool(
+        folded_phrase
+        and re.search(rf"(?<!\w){re.escape(folded_phrase)}(?!\w)", text)
+    )
+
+
+def _active_synonym_groups(query_folded: str) -> tuple[tuple[str, ...], ...]:
+    return tuple(
+        group
+        for group in _RERANK_SYNONYM_GROUPS
+        if any(_contains_phrase(query_folded, phrase) for phrase in group)
+    )
+
+
+def _synonym_coverage(query_folded: str, chunk_folded: str) -> float:
+    active_groups = _active_synonym_groups(query_folded)
+    if not active_groups:
+        return 0.0
+    matched_groups = sum(
+        any(_contains_phrase(chunk_folded, phrase) for phrase in group)
+        for group in active_groups
+    )
+    return matched_groups / len(active_groups)
+
+
+def _qa_questions(text: str) -> tuple[str, ...]:
+    return tuple(
+        match.group("question").strip()
+        for match in QA_PAIR_RE.finditer(text)
+        if match.group("question").strip()
+    )
 
 
 def _section_metadata(source: str, heading: str) -> tuple[str, list[str], bool]:
@@ -337,7 +406,10 @@ def load_chunks(kb_dir: Path = KB_DIR) -> list[Chunk]:
             # nhưng không index record món cũ để tránh hai mức giá cho một món.
             if has_primary_catalog and source.startswith("menu/") and "Mã món:" in body:
                 continue
-            for piece in _split_long(body):
+            # Tách từng cặp Q/A để câu hỏi FAQ/policy không bị chìm trong section dài.
+            qa_pieces = _split_qa_pairs(body)
+            pieces = qa_pieces or _split_long(body)
+            for piece in pieces:
                 head = heading or file_title
                 document_type, intents, retrievable = _section_metadata(source, head)
                 chunks.append(
@@ -577,7 +649,12 @@ class Retriever:
                     search_tokens(self.chunks[index].heading.split(" > ")[-1])
                 )
 
-        entity_tokens = query_tokens - _PRODUCT_ATTRIBUTE_TOKENS - exact_name_tokens
+        entity_tokens = (
+            query_tokens
+            - _PRODUCT_ATTRIBUTE_TOKENS
+            - _PRODUCT_QUERY_STOPWORDS
+            - exact_name_tokens
+        )
         # Sau khi bỏ dấu, "trà" trùng với động từ trong "kiểm tra" và "môn"
         # trùng với từ chung "món". Giữ lại chúng khi bản query có dấu cho thấy
         # đây thực sự là một phần tên món, nếu không "Trà sữa khoai môn" có thể
@@ -633,6 +710,54 @@ class Retriever:
             chunk.heading.split(" > ")[-1]
             for index, chunk in enumerate(self.chunks)
             if resolved[index]
+        )
+
+    @classmethod
+    def _rerank_score(
+        cls,
+        query_folded: str,
+        query_tokens: set[str],
+        chunk: Chunk,
+        base_score: float,
+    ) -> float:
+        """Xếp hạng lại candidate bằng tín hiệu lexical dễ giải thích."""
+        chunk_folded = fold_text(chunk.text)
+        exact_phrase = float(
+            len(query_folded) >= 4 and _contains_phrase(chunk_folded, query_folded)
+        )
+        heading_tokens = set(search_tokens(chunk.heading))
+        heading_score = (
+            len(query_tokens & heading_tokens) / len(query_tokens)
+            if query_tokens
+            else 0.0
+        )
+
+        qa_score = 0.0
+        for question in _qa_questions(chunk.text):
+            question_folded = fold_text(question)
+            question_tokens = set(search_tokens(question))
+            overlap = (
+                len(query_tokens & question_tokens) / len(query_tokens)
+                if query_tokens
+                else 0.0
+            )
+            question_exact = float(
+                query_folded == question_folded
+                or _contains_phrase(question_folded, query_folded)
+                or _contains_phrase(query_folded, question_folded)
+            )
+            qa_score = max(qa_score, overlap, question_exact)
+
+        synonym_score = _synonym_coverage(query_folded, chunk_folded)
+
+        # Base lexical score vẫn chiếm trọng số cao; các tín hiệu còn lại phá tie
+        # và đẩy đúng Q/A lên trước chunk tổng quát cùng điểm.
+        return (
+            0.55 * base_score
+            + 0.22 * qa_score
+            + 0.10 * exact_phrase
+            + 0.08 * heading_score
+            + 0.05 * synonym_score
         )
 
     def build_index(self, force: bool = False) -> None:
@@ -693,7 +818,7 @@ class Retriever:
     def search(
         self,
         query: str,
-        top_k: int = 5,
+        top_k: int = 12,
         min_score: float = 0.0,
         category: str | None = None,
         intent: Intent | str | None = None,
@@ -707,7 +832,7 @@ class Retriever:
     def _search_unlocked(
         self,
         query: str,
-        top_k: int = 5,
+        top_k: int = 12,
         min_score: float = 0.0,
         category: str | None = None,
         intent: Intent | str | None = None,
@@ -724,6 +849,20 @@ class Retriever:
         ], dtype=np.float32)
         bm25_scores = self._bm25_scores(query_tokens)
         lexical_scores = np.maximum(lexical_scores, bm25_scores)
+        synonym_scores = np.asarray([
+            _synonym_coverage(query_folded, folded)
+            for folded in self._chunk_folded
+        ], dtype=np.float32)
+        allow_synonym_expansion = len(query_tokens) <= 3
+        # Synonym chỉ là lexical expansion: nó giúp fallback không embedding vẫn
+        # tìm được "mạng" -> "Wi-Fi" hoặc "mở cửa" -> "giờ hoạt động". Chỉ
+        # dùng boost khi chunk không có lexical overlap nào; query có nhiều từ
+        # nhiễu như "wifi zyxwv abcdef" không được biến thành match chắc chắn.
+        lexical_scores = np.where(
+            allow_synonym_expansion & (lexical_scores <= 0) & (synonym_scores > 0),
+            0.65 * synonym_scores,
+            lexical_scores,
+        )
 
         mask = np.array([chunk.retrievable for chunk in self.chunks], dtype=bool)
         if category:
@@ -799,12 +938,15 @@ class Retriever:
         # Fact lookup có lexical match mạnh và đã được metadata-filter không cần
         # nạp model embedding. Fast path này loại cold-start và không ảnh hưởng
         # các truy vấn tư vấn/lọc phức tạp vẫn dùng hybrid retrieval.
-        lexical_fast_path = (
-            parsed_intent in _LEXICAL_FAST_PATH_INTENTS
-            and float(np.max(lexical_scores[mask])) >= 0.34
+        max_lexical = float(np.max(lexical_scores[mask]))
+        # Chỉ dùng dense embedding khi lexical/entity match chưa đủ chắc chắn.
+        lexical_confident = max_lexical >= 0.78 or (
+            allow_synonym_expansion and bool(np.max(synonym_scores[mask]))
+        ) or (
+            entity_mask is not None and bool(entity_mask.any())
         )
         dense_available = (
-            not lexical_fast_path
+            not lexical_confident
             and not catalog_browse
             and not self._embedding_disabled
             and len(self.embeddings) == len(self.chunks)
@@ -823,9 +965,8 @@ class Retriever:
             dense_scores = np.zeros(len(self.chunks), dtype=np.float32)
 
         if dense_available:
-            blended = (1.0 - LEXICAL_WEIGHT) * dense_scores + LEXICAL_WEIGHT * lexical_scores
             # Giữ tương thích với ngưỡng cosine cũ, lexical chỉ được phép tăng điểm.
-            scores = np.maximum(dense_scores, blended)
+            scores = np.maximum(lexical_scores, dense_scores)
         else:
             scores = lexical_scores
 
@@ -840,13 +981,49 @@ class Retriever:
             # đây đều là món thật; điểm nền chỉ giúp lấy 3–5 món ổn định.
             scores = np.where(mask, np.maximum(scores, 0.50), scores)
 
-        scores = np.where(mask, scores, -1.0)
+        candidate_pool = min(max(int(top_k) * 2, 12), 24)
+        candidate_mask = np.zeros(len(self.chunks), dtype=bool)
+
+        def add_top_candidates(values: np.ndarray) -> None:
+            ranked = np.argsort(
+                -np.where(mask, values, -1.0),
+                kind="stable",
+            )
+            candidate_mask[ranked[:candidate_pool]] = True
+
+        add_top_candidates(lexical_scores)
+        if dense_available:
+            add_top_candidates(dense_scores)
+
+        # Giữ exact phrase và exact FAQ question dù chunk nằm sau các section có
+        # điểm bằng nhau.
+        for index, chunk in enumerate(self.chunks):
+            if not mask[index]:
+                continue
+            chunk_folded = self._chunk_folded[index]
+            if _contains_phrase(chunk_folded, query_folded) or any(
+                _contains_phrase(fold_text(question), query_folded)
+                or _contains_phrase(query_folded, fold_text(question))
+                for question in _qa_questions(chunk.text)
+            ) or (allow_synonym_expansion and synonym_scores[index] > 0):
+                candidate_mask[index] = True
+
+        rank_scores = np.full(len(self.chunks), -1.0, dtype=np.float32)
+        for index in np.flatnonzero(candidate_mask & mask):
+            rank_scores[index] = self._rerank_score(
+                query_folded,
+                query_tokens,
+                self.chunks[index],
+                float(lexical_scores[index]),
+            )
+
+        scores = np.where(candidate_mask & mask, scores, -1.0)
 
         # RAG_MIN_SCORE là ngưỡng cosine. Khi model embedding không sẵn sàng,
         # lexical overlap có thang điểm khác; dùng ngưỡng bảo thủ hơn nhưng vẫn
         # giữ intent/document mask và product entity guard phía trên.
         effective_min_score = min_score if dense_available else min(min_score, 0.34)
-        order = np.argsort(-scores, kind="stable")[:top_k]
+        order = np.argsort(-rank_scores, kind="stable")[:top_k]
         return [
             SearchHit(self.chunks[i], float(scores[i]))
             for i in order

@@ -7,7 +7,7 @@ services:
     container_name: smart-cafe-ai
 
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8000}:8000"
 
     environment:
       LLM_PROVIDER: ${LLM_PROVIDER:-openai_compatible}
@@ -51,6 +51,28 @@ services:
 
     volumes:
       - huggingface-cache:/app/.cache/huggingface
+
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend-test-chatbot
+      dockerfile: Dockerfile
+
+    container_name: smart-cafe-frontend
+
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+
+    environment:
+      # The browser calls the host-published backend port.
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+      VITE_CHAT_ENDPOINT: ${VITE_CHAT_ENDPOINT:-/chat}
+      VITE_REQUEST_TIMEOUT_MS: ${VITE_REQUEST_TIMEOUT_MS:-45000}
+
+    depends_on:
+      ai-service:
+        condition: service_started
 
     restart: unless-stopped
 
