@@ -12,7 +12,7 @@ Thông điệp của quán: **“Một chút cà phê, thêm nhiều cảm hứn
 - Tên thương hiệu: Smart Café.
 - Website: website Smart Café mà khách đang sử dụng.
 - Kênh hỗ trợ trực tuyến: mục **Hỗ trợ** trên website.
-- Hotline, số điện thoại:028 7300 9797 (07:00–21:30 hằng ngày)
+- Hotline, số điện thoại: 028 7300 9797 (07:00–21:30 hằng ngày)
 - Kênh liên hệ tại quán: quầy thu ngân.
 - Email tiếp nhận góp ý: `support@smartcafe.example`.
 - Quán hiện có một chi nhánh tại địa chỉ trên.
