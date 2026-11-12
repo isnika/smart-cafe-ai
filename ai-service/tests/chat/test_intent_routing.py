@@ -52,6 +52,7 @@ from src.app.main import app
         ("Đơn hàng của mình giao chưa", Intent.ORDER_STATUS),
         ("Trả lời kiểu gì vậy?", Intent.COMPLAINT),
         ("Quán nhận chuyển khoản không?", Intent.PAYMENT_QUERY),
+        ("Quán có nhận MoMo không?", Intent.PAYMENT_QUERY),
         ("Có ship không?", Intent.DELIVERY_QUERY),
         ("Hotline của quán là gì?", Intent.CONTACT_QUERY),
         ("Quán có khuyến mãi không?", Intent.PROMOTION_QUERY),
@@ -96,7 +97,7 @@ def test_kb_metadata_separates_business_product_and_internal_instructions():
     assert all(Intent.WIFI_QUERY.value in chunk.intents for chunk in business)
     assert catalog and all(chunk.document_type == DocumentType.PRODUCT.value for chunk in catalog)
     assert all(Intent.WIFI_QUERY.value not in chunk.intents for chunk in catalog)
-    assert internal and all(not chunk.retrievable for chunk in internal)
+    assert not internal
 
 
 def test_wifi_regression_cannot_retrieve_matcha_even_when_dense_score_is_higher():
@@ -250,7 +251,6 @@ def test_natural_chat_sequence_keeps_product_context_and_handles_service_switch(
     assert why_sources and {source.source for source in why_sources} == {"products.csv"}
     assert "đặt" in service.lower()
     assert service_sources and {source.source for source in service_sources} == {"faq/faq.md"}
-    assert all("3. Đặt hàng" in source.heading for source in service_sources)
 
 
 @pytest.mark.parametrize(
@@ -295,8 +295,8 @@ def test_new_opening_hours_topic_does_not_reuse_old_menu_entity():
 
     answer, sources = asyncio.run(_offline_pipeline().answer("Quán mấy giờ đóng cửa?", history))
 
-    assert "đóng cửa lúc 22h" in answer
-    assert "từ 7h đến 22h" in answer
+    assert "đóng cửa lúc 22:00" in answer
+    assert "07:00 đến 22:00" in answer
     assert sources and {source.source for source in sources} == {"faq/faq.md"}
 
 
@@ -306,8 +306,8 @@ def test_opening_hours_typo_answers_the_requested_boundary():
     opening, _ = asyncio.run(pipeline.answer("quán mấy giờ mở cừa"))
     closing, _ = asyncio.run(pipeline.answer("quán mấy giờ đóng cửa"))
 
-    assert "mở cửa lúc 7h" in opening and "đóng cửa lúc 22h" in opening
-    assert "đóng cửa lúc 22h" in closing and "từ 7h đến 22h" in closing
+    assert "mở cửa từ 07:00 đến 22:00" in opening
+    assert "đóng cửa lúc 22:00" in closing and "07:00 đến 22:00" in closing
 
 
 def test_unknown_product_and_low_similarity_do_not_return_another_product():
@@ -678,10 +678,9 @@ def test_punctuation_complaints_offer_a_realistic_handoff_channel(query):
     assert sources == []
 
 
-def test_missing_hotline_fallback_still_provides_a_verified_contact_channel():
+def test_hotline_faq_returns_the_verified_contact_channel():
     answer, sources = asyncio.run(_offline_pipeline().answer("Hotline của quán là gì?"))
 
-    assert "chưa có hotline" in answer.lower()
-    assert "97 Man Thiện" in answer
-    assert "nhân viên tại quầy" in answer.lower()
+    assert "028 7300 9797" in answer
+    assert "07:00" in answer and "21:30" in answer
     assert sources and all(source.category != "menu" for source in sources)

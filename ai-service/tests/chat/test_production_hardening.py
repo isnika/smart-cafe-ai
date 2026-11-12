@@ -99,7 +99,7 @@ def test_compound_business_query_answers_both_intents():
     answer, sources = asyncio.run(
         _pipeline().answer("Địa chỉ và giờ mở cửa của quán")
     )
-    assert "97 Man Thiện" in answer and "7h" in answer and "22h" in answer
+    assert "97 Man Thiện" in answer and "07:00" in answer and "22:00" in answer
     assert len(sources) >= 2
 
 
@@ -350,7 +350,7 @@ def test_explicit_product_in_current_turn_wins_over_stale_product_history():
     )
     assert "Bạc xỉu" not in answer
     assert "Matcha" in answer
-    assert sources and all("Matcha" in source.heading for source in sources)
+    assert sources and all("matcha" in source.heading.lower() for source in sources)
 
 
 def test_unknown_product_and_prompt_injection_use_safe_fallbacks():

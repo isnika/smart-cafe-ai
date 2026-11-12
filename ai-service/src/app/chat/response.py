@@ -112,6 +112,12 @@ def _opening_hours_answer(answer: str, question: str) -> str:
     if len(times) < 2:
         return _clean_business_answer(answer)
 
+    # Q/A đã có câu trả lời hoàn chỉnh. Không lấy mốc nhận đơn cuối ngày
+    # làm giờ đóng cửa của quán (ví dụ 22:00, 21:30, 21:00).
+    folded_answer = fold_text(answer)
+    if "mo cua tu" in folded_answer or "dong cua luc" in folded_answer:
+        return _clean_business_answer(answer)
+
     def display(value: tuple[str, str]) -> str:
         hour, minute = value
         return f"{int(hour):02d}:{minute}" if minute else f"{int(hour)}h"

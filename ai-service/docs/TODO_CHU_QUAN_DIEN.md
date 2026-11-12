@@ -1,4 +1,9 @@
-# SMART CAFÉ — THÔNG TIN DỊCH VỤ
+# SMART CAFÉ — TÀI LIỆU NỘI BỘ / TODO CHỦ QUÁN ĐIỀN
+
+Tài liệu này chỉ dùng để theo dõi và xác nhận nội bộ. Không đưa file này vào
+knowledge base truy xuất cho khách hàng. Khi có thay đổi chính thức, cập nhật
+đồng bộ vào `src/app/chat/knowledge_base/faq/faq.md`,
+`policies/payment.md` hoặc `policies/refund.md`.
 
 ## Hotline
 
@@ -76,11 +81,7 @@
 ## Xuất hóa đơn
 
 - Quán hỗ trợ xuất hóa đơn điện tử.
-- Khách vui lòng yêu cầu khi thanh toán và cung cấp thông tin xuất hóa đơn phù hợp:
-    - Tên đơn vị hoặc người mua.
-    - Mã số thuế nếu có.
-    - Địa chỉ xuất hóa đơn.
-    - Email nhận hóa đơn.
+- Khách vui lòng yêu cầu khi thanh toán và cung cấp thông tin xuất hóa đơn phù hợp.
 - Nhân viên kiểm tra và xác nhận thông tin trước khi lập hóa đơn.
 - Hóa đơn được gửi qua email sau khi phát hành; nếu chưa nhận được, khách kiểm tra thư rác hoặc liên hệ hotline.
 - Yêu cầu điều chỉnh hóa đơn được tiếp nhận qua hotline và xử lý theo tình trạng hóa đơn.
@@ -93,8 +94,7 @@
 - Áp dụng từ ngày 01/11/2026 đến hết ngày 30/11/2026.
 - Thời điểm xét ưu đãi là thời điểm đơn được xác nhận tại quầy.
 - Áp dụng cho khách dùng tại chỗ hoặc mua mang đi trực tiếp tại quán.
-- Không áp dụng cho đơn giao hàng.
-- Không áp dụng cho bánh, topping, phần bổ sung và phí giao hàng.
+- Không áp dụng cho đơn giao hàng, bánh, topping, phần bổ sung và phí giao hàng.
 - Không cộng dồn với ưu đãi khác hoặc ưu đãi đổi điểm thành viên.
 - Khách vẫn được tích điểm trên tiền sản phẩm thực trả sau giảm giá.
 - Sau ngày 30/11/2026, chương trình hết hiệu lực.
@@ -111,8 +111,6 @@
 - Điểm được cộng sau khi đơn hoàn tất.
 - Đơn bị hủy không được tích điểm; đơn hoàn tiền được điều chỉnh điểm tương ứng.
 - Điểm có hiệu lực 12 tháng kể từ ngày được tích.
-
-Ví dụ: Hóa đơn có tiền sản phẩm sau giảm giá là 95.000đ và phí giao hàng 15.000đ được tích 9 điểm.
 
 ### Đổi điểm
 

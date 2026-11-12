@@ -190,7 +190,7 @@ def classify_intent(query: str) -> IntentDecision:
 
     if _contains(
         folded,
-        r"\b(thanh toan|chuyen khoan|tien mat|the ngan hang|vi dien tu|otp)\b",
+        r"\b(thanh toan|chuyen khoan|tien mat|the ngan hang|the atm|visa|mastercard|momo|zalopay|vi dien tu|otp)\b",
         r"\b(xuat hoa don|hoa don vat|hoa don do)\b",
     ):
         return IntentDecision(Intent.PAYMENT_QUERY, 0.98, "payment")

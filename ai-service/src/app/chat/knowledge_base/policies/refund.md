@@ -238,6 +238,11 @@ Khi gửi biên nhận, khách nên che dữ liệu không liên quan.
 
 ## 11. Câu hỏi thường gặp
 
+Q: Quán có hoàn đơn không?
+A: Dạ có thể hoàn trong các trường hợp đủ điều kiện, chẳng hạn đơn được hủy
+trước khi bắt đầu chuẩn bị, giao sai, giao thiếu hoặc có lỗi chất lượng đã xác minh.
+Bạn cung cấp mã đơn qua mục Hỗ trợ để nhân viên kiểm tra trước khi xác nhận nhé.
+
 Q: Quán có cho hủy đơn không?
 A: Dạ có. Đơn chưa bắt đầu chuẩn bị có thể yêu cầu hủy miễn phí.
 Nếu đơn đang pha chế hoặc đã giao, quán không hỗ trợ hủy vì đổi ý.

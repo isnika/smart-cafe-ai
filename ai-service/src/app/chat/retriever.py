@@ -230,7 +230,6 @@ def _qa_questions(text: str) -> tuple[str, ...]:
 
 def _section_metadata(source: str, heading: str) -> tuple[str, list[str], bool]:
     """Ánh xạ metadata từ cấu trúc KB; không chứa dữ liệu trả lời nghiệp vụ."""
-    normalized_heading = fold_text(heading)
     if source.startswith("menu/"):
         return (
             DocumentType.PRODUCT.value,
@@ -251,58 +250,24 @@ def _section_metadata(source: str, heading: str) -> tuple[str, list[str], bool]:
         )
 
     if source.startswith("faq/"):
-        if "thong tin quan" in normalized_heading:
-            return (
-                DocumentType.BUSINESS.value,
-                [
-                    Intent.OPENING_HOURS.value,
-                    Intent.WIFI_QUERY.value,
-                    Intent.LOCATION_QUERY.value,
-                    Intent.CONTACT_QUERY.value,
-                    Intent.STORE_INFO.value,
-                    Intent.SERVICE_QUERY.value,
-                    Intent.DELIVERY_QUERY.value,
-                ],
-                True,
-            )
-        if "tu van do uong" in normalized_heading or "di ung" in normalized_heading:
-            return (
-                DocumentType.PRODUCT.value,
-                [
-                    Intent.PRODUCT_DETAIL.value,
-                    Intent.PRODUCT_INFO.value,
-                    Intent.PRODUCT_INTEREST.value,
-                    Intent.PRODUCT_COMPARISON.value,
-                    Intent.CUSTOMIZE_DRINK.value,
-                    Intent.PRODUCT_FILTER.value,
-                    Intent.PRODUCT_RECOMMENDATION.value,
-                ],
-                True,
-            )
-        if "menu va gia" in normalized_heading:
-            return (
-                DocumentType.PRODUCT.value,
-                [Intent.MENU_QUERY.value, Intent.PRODUCT_PRICE.value],
-                True,
-            )
-        if "dat hang" in normalized_heading:
-            return (
-                DocumentType.BUSINESS.value,
-                [
-                    Intent.SERVICE_QUERY.value,
-                    Intent.ORDER_INTENT.value,
-                    Intent.ORDER_ONLINE.value,
-                    Intent.ORDER_STATUS.value,
-                    Intent.DELIVERY_QUERY.value,
-                ],
-                True,
-            )
-        if "khuyen mai" in normalized_heading or "thanh vien" in normalized_heading:
-            return (
-                DocumentType.BUSINESS.value,
-                [Intent.PROMOTION_QUERY.value],
-                True,
-            )
+        # FAQ chỉ chứa thông tin quán/dịch vụ. Menu, thanh toán và hoàn/hủy
+        # đã có nguồn riêng nên không gán FAQ vào product/policy intent.
+        return (
+            DocumentType.BUSINESS.value,
+            [
+                Intent.OPENING_HOURS.value,
+                Intent.WIFI_QUERY.value,
+                Intent.LOCATION_QUERY.value,
+                Intent.CONTACT_QUERY.value,
+                Intent.STORE_INFO.value,
+                Intent.SERVICE_QUERY.value,
+                Intent.DELIVERY_QUERY.value,
+                Intent.ORDER_ONLINE.value,
+                Intent.ORDER_STATUS.value,
+                Intent.PROMOTION_QUERY.value,
+            ],
+            True,
+        )
 
     # Các section hướng dẫn nội bộ không được đưa vào context trả lời khách.
     return DocumentType.INTERNAL.value, [], False

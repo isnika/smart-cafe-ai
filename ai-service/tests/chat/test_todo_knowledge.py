@@ -1,10 +1,13 @@
+from pathlib import Path
+
 import numpy as np
 
-from src.app.chat.intent import DocumentType, Intent
+from src.app.chat.intent import Intent
 from src.app.chat.retriever import Retriever, load_chunks
 
 
 TODO_SOURCE = "TODO_CHU_QUAN_DIEN.md"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _lexical_retriever() -> Retriever:
@@ -18,12 +21,9 @@ def _lexical_retriever() -> Retriever:
     return retriever
 
 
-def test_owner_todo_file_is_internal_and_not_retrievable():
-    todo_chunks = [chunk for chunk in load_chunks() if chunk.source == TODO_SOURCE]
-
-    assert todo_chunks
-    assert all(chunk.document_type == DocumentType.INTERNAL.value for chunk in todo_chunks)
-    assert all(not chunk.retrievable for chunk in todo_chunks)
+def test_owner_todo_is_outside_the_retrievable_knowledge_base():
+    assert (PROJECT_ROOT / "docs" / TODO_SOURCE).is_file()
+    assert all(chunk.source != TODO_SOURCE for chunk in load_chunks())
 
 
 def test_contact_query_never_returns_owner_todo_data():

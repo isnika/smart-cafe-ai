@@ -359,10 +359,10 @@ response.py và RAGPipeline áp dụng các lớp bảo vệ:
 | Path | Vai trò hiện tại |
 |---|---|
 | knowledge_base/products.csv | Catalog tĩnh chính. Mỗi sản phẩm được tạo thành một chunk; giá, nhiệt độ, caffeine, tag và ngày mở bán được đọc từ đây. |
-| knowledge_base/faq/faq.md | FAQ về tư vấn đồ uống, menu/giá, đặt hàng, thông tin quán, khuyến mãi và thành viên. |
+| knowledge_base/faq/faq.md | FAQ về thông tin quán, dịch vụ, hotline, giờ hoạt động, đặt bàn, giao hàng và hỗ trợ. |
 | knowledge_base/policies/payment.md | Tài liệu mẫu về thanh toán; được gán POLICY và PAYMENT_QUERY. |
 | knowledge_base/policies/refund.md | Tài liệu mẫu về hủy, đổi, hoàn tiền; được gán POLICY và POLICY_QUERY. |
-| knowledge_base/TODO_CHU_QUAN_DIEN.md | Danh sách thông tin cần chủ quán xác nhận. Retriever đánh dấu là internal, không đưa vào context trả khách. |
+| docs/TODO_CHU_QUAN_DIEN.md | Danh sách thông tin nội bộ cần chủ quán xác nhận; nằm ngoài knowledge_base nên không được index. |
 | knowledge_base/intent.py | Hiện là file rỗng, không được import trong pipeline. Logic intent thực tế nằm ở chat/intent.py. |
 | effective_knowledge/effective_knowledge.txt | Hiện rỗng và không được retriever.py đọc. |
 | effective_knowledge/*.png | Ảnh tài nguyên hiện chưa có đường đi xử lý trong chatbot hiện tại. |

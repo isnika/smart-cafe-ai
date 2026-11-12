@@ -65,7 +65,7 @@ def test_required_real_chat_scenarios():
             pipeline, "quán ở cửa lúc mấy giờ"
         )
         assert intent is Intent.OPENING_HOURS
-        assert "7h" in typo_hours and "22h" in typo_hours
+        assert "07:00" in typo_hours and "22:00" in typo_hours
 
         opening_query = "quán mở cửa lúc mấy giờ"
         opening, _, _, _ = await _ask(pipeline, opening_query)
@@ -75,7 +75,7 @@ def test_required_real_chat_scenarios():
         ]
         closing, _, rewritten, intent = await _ask(pipeline, "đóng cửa", history)
         assert intent is Intent.OPENING_HOURS and "mở cửa" in rewritten.lower()
-        assert "22h" in closing
+        assert "22:00" in closing
 
         refund, refund_sources, _, intent = await _ask(
             pipeline, "quán có hoàn đơn không"
@@ -88,7 +88,7 @@ def test_required_real_chat_scenarios():
             pipeline, "đơn của mình chưa được giao"
         )
         assert intent is Intent.ORDER_STATUS
-        assert "xin lỗi" in missing_order.lower() and "mã đơn" in missing_order.lower()
+        assert "chưa thể tra cứu" in missing_order.lower() and "mã đơn" in missing_order.lower()
         assert "menu" not in missing_order.lower()
 
         confused, _, _, intent = await _ask(pipeline, "??")
@@ -106,7 +106,7 @@ def test_required_real_chat_scenarios():
         no_accent_hours, _, _, intent = await _ask(
             pipeline, "quan mo cua may gio"
         )
-        assert intent is Intent.OPENING_HOURS and "22h" in no_accent_hours
+        assert intent is Intent.OPENING_HOURS and "22:00" in no_accent_hours
 
         no_accent_wifi, _, _, intent = await _ask(pipeline, "co wifi k")
         assert intent is Intent.WIFI_QUERY and "Wi-Fi" in no_accent_wifi
