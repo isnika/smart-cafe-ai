@@ -1,8 +1,5 @@
 # SMART CAFÉ — THÔNG TIN DỊCH VỤ GIẢ LẬP
 
-> Dữ liệu mock phục vụ phát triển và kiểm thử.
-> Cần chủ quán xác nhận trước khi sử dụng thực tế.
-
 ## Hotline
 - Hotline giả lập: 0900 000 000.
 - Tiếp nhận cuộc gọi từ 07:00 đến 22:00 hằng ngày.
