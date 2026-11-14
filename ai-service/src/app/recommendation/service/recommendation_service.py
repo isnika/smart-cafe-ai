@@ -61,6 +61,7 @@ class RecommendationService:
 
         snapshot = repository.load_snapshot(branch_id=branch_id)
         self.source_version = snapshot.version
+        self.snapshot_generated_at = snapshot.generated_at
         self.model_version = model_version
         self.products = self._available_products(snapshot.products)
         self.interactions = snapshot.interactions.copy()
