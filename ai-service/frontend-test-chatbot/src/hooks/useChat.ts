@@ -20,7 +20,9 @@ import type {
 } from '../types/chat'
 
 const CONVERSATIONS_KEY = 'smart-cafe-chat-tester:conversations:v1'
-const CONFIG_KEY = 'smart-cafe-chat-tester:api-config:v1'
+// v2 switches the browser to the same-origin /api proxy. Keeping the version
+// in the key prevents an old localhost/tunnel URL from overriding the fix.
+const CONFIG_KEY = 'smart-cafe-chat-tester:api-config:v2'
 const EVALUATIONS_KEY = 'smart-cafe-chat-tester:evaluations:v1'
 
 const configuredTimeout = Number(import.meta.env.VITE_REQUEST_TIMEOUT_MS)

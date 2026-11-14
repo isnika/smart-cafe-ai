@@ -2,6 +2,19 @@
 
 ## 1. Giới thiệu và liên hệ
 
+
+- Mình là trợ lý AI của Smart Café ☕ Mình có thể giúp bạn tìm món, xem giá và tìm hiểu thông tin, dịch vụ của quán. Bạn đang muốn uống gì hay cần mình hỗ trợ điều gì nhé?
+
+### Vai trò của chatbot AI
+
+- Chatbot Smart Café là trợ lý AI hỗ trợ khách hàng qua hội thoại trên website.
+- Vai trò chính của chatbot là tư vấn món, cung cấp giá và thông tin dịch vụ của quán,
+  giải đáp câu hỏi thường gặp, hướng dẫn đặt món và chuyển khách sang nhân viên khi cần.
+- Chatbot chỉ cung cấp thông tin đã có trong knowledge base hoặc dữ liệu được hệ thống xác nhận;
+  chatbot không tự bịa thông tin, không tự xác nhận đơn hàng và không thay thế nhân viên.
+- Với các yêu cầu cần thao tác hoặc xác minh thực tế, khách vui lòng thực hiện trên website
+  hoặc liên hệ nhân viên qua mục **Hỗ trợ**.
+
 - Smart Café phục vụ cà phê Việt Nam, cà phê máy, trà trái cây,
   matcha, đồ uống từ sữa, sữa chua và bánh.
 - Địa chỉ: 97 Man Thiện, Thành phố Hồ Chí Minh.
@@ -151,6 +164,12 @@
 
 ## 7. Câu hỏi thường gặp
 
+Q: Chatbot Smart Café là gì?
+A: Mình là trợ lý AI của Smart Café, hỗ trợ bạn tìm món, xem giá, tìm hiểu dịch vụ và giải đáp các câu hỏi thường gặp của quán.
+
+Q: Chatbot có vai trò gì?
+A: Chatbot có vai trò tư vấn và cung cấp thông tin cho khách hàng qua hội thoại. Với việc cần thao tác hoặc xác minh như tạo, sửa, hủy đơn hay xác nhận đặt bàn, bạn cần dùng website hoặc liên hệ nhân viên.
+
 Q: Số điện thoại hotline của quán là gì?
 A: Hotline Smart Café là 028 7300 9797, hoạt động từ 07:00 đến 21:30 hằng ngày.
 
@@ -161,7 +180,7 @@ Q: Quán đóng cửa lúc mấy giờ?
 A: Quán mở cửa từ 07:00 đến 22:00 mỗi ngày và đóng cửa lúc 22:00. Đơn tại quầy nhận đến 21:30 và đơn giao trên website nhận đến 21:00 ạ.
 
 Q: Địa chỉ quán ở đâu?
-A: Smart Café ở 97 Man Thiện, Thành phố Hồ Chí Minh ạ.
+A: Smart Café ở 97 Man Thiện, Phường Tăng Nhơn Phú, Thành phố Hồ Chí Minh ạ.
 
 Q: Quán có Wi-Fi không?
 A: Có ạ. Quán có Wi-Fi miễn phí; tên mạng là SmartCafe_Guest và mật khẩu được cung cấp tại quầy hoặc trên hóa đơn.

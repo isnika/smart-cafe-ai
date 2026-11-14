@@ -65,8 +65,9 @@ services:
       - "${FRONTEND_PORT:-5173}:5173"
 
     environment:
-      # The browser calls the host-published backend port.
-      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+      # The browser calls the frontend origin. Vite proxies /api to FastAPI.
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+      VITE_DEV_BACKEND_URL: ${VITE_DEV_BACKEND_URL:-http://ai-service:8000}
       VITE_CHAT_ENDPOINT: ${VITE_CHAT_ENDPOINT:-/chat}
       VITE_REQUEST_TIMEOUT_MS: ${VITE_REQUEST_TIMEOUT_MS:-45000}
 
