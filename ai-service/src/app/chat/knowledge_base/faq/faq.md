@@ -184,6 +184,11 @@ A: Có bạn nhé. Quán có bàn cá nhân, Wi-Fi miễn phí và một số b�
 Q: Quán có nhận đặt bàn không?
 A: Quán nhận yêu cầu đặt bàn cho nhóm 2–6 người. Bàn chỉ được giữ sau khi có xác nhận từ hệ thống hoặc nhân viên ạ.
 
+Q: Mình có thể đặt bàn online không?
+A: Bạn có thể gửi yêu cầu qua mục **Đặt bàn** hoặc **Hỗ trợ** trên website nếu
+website hiển thị chức năng này. Chatbot chưa tự gửi yêu cầu đặt bàn trong cuộc
+chat; bàn chỉ được giữ sau khi hệ thống hoặc nhân viên xác nhận.
+
 Q: Có đặt hàng online được không?
 A: Có ạ. Website Smart Café hỗ trợ đặt món dùng tại chỗ, mang đi và giao hàng. Chatbot chưa thể tự tạo đơn nếu chưa có kết nối thao tác đặt hàng; bạn hãy xác nhận đơn trên website nhé.
 

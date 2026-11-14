@@ -312,6 +312,22 @@ def _section_metadata(source: str, heading: str) -> tuple[str, list[str], bool, 
     return DocumentType.INTERNAL.value, [], False, INTERNAL_RULE
 
 
+def _faq_piece_intents(piece: str, base_intents: list[str]) -> list[str]:
+    """Keep FAQ chunks for ordering, booking and service questions separate."""
+    folded = fold_text(piece)
+    if re.search(r"\b(dat ban|giu ban|cho ngoi)\b", folded):
+        return [Intent.SERVICE_QUERY.value]
+    if re.search(
+        r"\b(dat hang|dat mon|goi mon)\b.*\b(online|truc tuyen|website|web)\b",
+        folded,
+    ) or re.search(
+        r"\b(online|truc tuyen|website|web)\b.*\b(dat hang|dat mon|goi mon)\b",
+        folded,
+    ):
+        return [Intent.ORDER_ONLINE.value, Intent.ORDER_INTENT.value]
+    return base_intents
+
+
 def _menu_advisory_fields(menu_dir: Path) -> dict[str, dict[str, str]]:
     """Giữ mô tả/tư vấn giàu thông tin từ Markdown, không lấy giá cũ."""
     result: dict[str, dict[str, str]] = {}
@@ -416,6 +432,8 @@ def load_chunks(kb_dir: Path = KB_DIR) -> list[Chunk]:
             for piece in pieces:
                 head = heading or file_title
                 document_type, intents, retrievable, content_kind = _section_metadata(source, head)
+                if source.startswith("faq/"):
+                    intents = _faq_piece_intents(piece, intents)
                 chunks.append(
                     Chunk(
                         id=len(chunks),

@@ -54,6 +54,11 @@ def _pending_intent(last_assistant_message: str | None, last_intent: Intent) -> 
         if last_intent is Intent.POLICY_QUERY:
             return Intent.POLICY_QUERY
         return Intent.ORDER_STATUS
+    if last_intent is Intent.POLICY_QUERY and any(
+        phrase in folded
+        for phrase in ("website", "tai quay", "ung dung giao do an", "qua ung dung")
+    ):
+        return Intent.POLICY_QUERY
     return None
 
 

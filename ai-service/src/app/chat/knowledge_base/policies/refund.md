@@ -224,6 +224,12 @@ Q: Mình muốn hủy đơn.
 A: Bạn đặt tại quầy, trên website hay qua ứng dụng giao đồ ăn?
 Đơn chưa bắt đầu chuẩn bị có thể yêu cầu hủy miễn phí.
 
+Q: Mình đặt trên website và muốn hủy đơn thì làm sao?
+A: Bạn mở chi tiết đơn trên website và chọn **Yêu cầu hủy** nếu tùy chọn này
+hiển thị. Nếu không thấy tùy chọn, bạn dùng mục **Hỗ trợ** của đơn.
+Gửi yêu cầu chưa đồng nghĩa đơn đã được hủy; chỉ xem là đã hủy khi hệ thống
+hoặc nhân viên xác nhận.
+
 Q: Mình đã trả tiền rồi, hủy có được hoàn không?
 A: Nếu đơn chưa bắt đầu chuẩn bị và được xác nhận hủy,
 bạn được hoàn toàn bộ số tiền thực thu. Thời gian nhận tiền

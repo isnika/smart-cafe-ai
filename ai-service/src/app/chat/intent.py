@@ -229,7 +229,7 @@ def classify_intent(query: str) -> IntentDecision:
         r"\b(dat hang|dat mon|don hang)\b.*\b(online|truc tuyen|app|web)\b",
         r"\b(online|truc tuyen)\b.*\b(dat hang|dat mon|don hang)\b",
         r"\b(dat|mua|goi)\b.*\b(online|truc tuyen)\b",
-    ):
+    ) and not _contains(folded, r"\b(dat ban|giu ban)\b"):
         return IntentDecision(Intent.ORDER_ONLINE, 0.98, "order-online")
 
     if _contains(

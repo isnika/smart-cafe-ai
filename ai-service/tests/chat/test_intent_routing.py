@@ -105,7 +105,11 @@ def test_kb_metadata_separates_business_product_and_internal_instructions():
     internal = [chunk for chunk in chunks if "Nguyên tắc trả lời" in chunk.heading]
 
     assert business and all(chunk.document_type == DocumentType.BUSINESS.value for chunk in business)
-    assert all(Intent.WIFI_QUERY.value in chunk.intents for chunk in business)
+    wifi_chunks = [
+        chunk for chunk in business
+        if "wifi" in chunk.text.lower() or "wi-fi" in chunk.text.lower()
+    ]
+    assert wifi_chunks and all(Intent.WIFI_QUERY.value in chunk.intents for chunk in wifi_chunks)
     assert catalog and all(chunk.document_type == DocumentType.PRODUCT.value for chunk in catalog)
     assert all(Intent.WIFI_QUERY.value not in chunk.intents for chunk in catalog)
     assert not internal
@@ -735,6 +739,46 @@ def test_out_of_scope_java_skips_retrieval():
     assert retriever.calls == []
     assert sources == []
     assert "Smart Café" in answer
+
+
+def test_booking_online_is_not_misrouted_to_online_food_ordering():
+    pipeline = _offline_pipeline()
+
+    assert classify_intent("Mình có thể đặt bàn onl không?").intent is Intent.SERVICE_QUERY
+    answer, sources = asyncio.run(pipeline.answer("Mình có thể đặt bàn onl không?"))
+
+    assert "đặt bàn" in answer.lower()
+    assert "đặt món" not in answer.lower()
+    assert sources and any("đặt bàn" in source.content.lower() for source in sources)
+
+
+def test_policy_channel_followup_uses_history_instead_of_unknown_fallback():
+    pipeline = _offline_pipeline()
+    first_question = "Mình muốn hủy đơn"
+    first_answer, _ = asyncio.run(pipeline.answer(first_question))
+    history = [
+        ChatMessage(role="user", content=first_question),
+        ChatMessage(role="assistant", content=first_answer),
+    ]
+
+    answer, sources = asyncio.run(pipeline.answer("đặt ở website", history))
+
+    assert "chưa hiểu rõ câu hỏi" not in answer.lower()
+    assert "chi tiết đơn" in answer.lower()
+    assert "yêu cầu hủy" in answer.lower()
+    assert sources and any("refund.md" in source.source for source in sources)
+
+
+def test_payment_methods_question_returns_payment_methods_not_transaction_status():
+    answer, sources = asyncio.run(
+        _offline_pipeline().answer("Các phương thức quán chấp nhận thanh toán")
+    )
+
+    assert "tiền mặt" in answer.lower()
+    assert "chuyển khoản" in answer.lower()
+    assert "momo" in answer.lower()
+    assert "xác nhận giao dịch" not in answer.lower()
+    assert sources and all("payment.md" in source.source for source in sources)
 
 
 def test_internal_policy_rules_are_not_customer_visible_but_policy_facts_are():

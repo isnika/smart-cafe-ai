@@ -469,6 +469,20 @@ def _is_mutating_request(question: str, intent: Intent) -> bool:
     ))
 
 
+def _is_channel_selection(question: str) -> bool:
+    folded = fold_text(question)
+    return bool(
+        re.search(
+            r"\b(dat|mua|goi)\b.*\b(website|quay|ung dung|app)\b",
+            folded,
+        )
+        or re.search(
+            r"\b(tai|o|tren|qua)\s+(website|quay|ung dung|app)\b",
+            folded,
+        )
+    )
+
+
 def _contains_internal_guidance(text: str) -> bool:
     folded = fold_text(text)
     return any(marker in folded for marker in (
@@ -920,6 +934,20 @@ class RAGPipeline:
             and fold_text(conversation.current_product) not in fold_text(standalone)
         ):
             standalone = f"{conversation.current_product} {standalone}"[:MAX_STANDALONE_QUERY_CHARS]
+        if (
+            decision.intent is Intent.UNKNOWN
+            and conversation.pending_intent is not None
+            and hist
+            and _is_channel_selection(question)
+        ):
+            previous_question = _last_meaningful_user_question(hist)
+            if previous_question:
+                standalone = f"{previous_question} {question}"[:MAX_STANDALONE_QUERY_CHARS]
+                decision = type(decision)(
+                    conversation.pending_intent,
+                    0.88,
+                    "inherited-pending-intent",
+                )
         if decision.intent in {Intent.UNKNOWN, Intent.FOLLOW_UP} and standalone != question:
             contextual_decision = classify_intent(standalone)
             if contextual_decision.intent not in {Intent.UNKNOWN, Intent.FOLLOW_UP}:

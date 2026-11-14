@@ -163,6 +163,11 @@ và che số dư, thông tin tài khoản cùng các dữ liệu không liên qu
 
 ## 8. Câu hỏi thường gặp
 
+Q: Quán chấp nhận những phương thức thanh toán nào?
+A: Quán chấp nhận tiền mặt, chuyển khoản qua mã QR, MoMo tại quầy và trên
+website, cùng thẻ ATM nội địa, Visa hoặc Mastercard tại quầy. Website hiện
+chưa hỗ trợ nhập thông tin thẻ để thanh toán trực tiếp.
+
 Q: Quán có nhận tiền mặt không?
 A: Dạ có, bạn có thể thanh toán tiền mặt tại quầy. Với đơn giao
 hàng, bạn kiểm tra tùy chọn thanh toán khi nhận hàng ở bước đặt đơn nhé.
