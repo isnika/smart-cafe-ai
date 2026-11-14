@@ -87,6 +87,40 @@ class OrderApiTest {
         long id=cart();call(post("/api/v1/carts"),customer,"{\"cart_source\":\"Online\",\"branch_id\":1,\"fulfillment_type\":\"Pickup\"}").andExpect(status().isOk()).andExpect(jsonPath("$.data.id").value(id));
         call(post("/api/v1/carts"),customer,"{\"cart_source\":\"Online\",\"branch_id\":2,\"fulfillment_type\":\"Pickup\"}").andExpect(status().isConflict());
     }
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"Online,Pickup", "QR,Dine_In"})
+    void addingIdenticalItemTwiceCreatesSeparateLines(String source,String fulfillment) throws Exception {
+        String auth=source.equals("Online")?customer:null;
+        var created=data(call(post("/api/v1/carts")
+                .header("X-Table-Session-Code","session").header("X-Client-Key","duplicate-item-test"),auth,
+                "{\"cart_source\":\""+source+"\",\"branch_id\":1,\"fulfillment_type\":\""+fulfillment+"\"}")
+                .andExpect(status().isCreated()).andReturn());
+        long cartId=created.path("id").asLong();
+        String body="{\"variant_id\":1,\"quantity\":1,\"note\":\"same note\",\"options\":[{\"option_id\":5,\"quantity\":1}]}";
+        for(int count=1;count<=2;count++) {
+            call(post("/api/v1/carts/current/items?source="+source)
+                    .header("X-Table-Session-Code","session").header("X-Client-Key","duplicate-item-test"),auth,body)
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.data.id").value(cartId))
+                    .andExpect(jsonPath("$.data.items.length()").value(count));
+        }
+        var current=data(call(get("/api/v1/carts/current?source="+source)
+                .header("X-Table-Session-Code","session").header("X-Client-Key","duplicate-item-test"),auth,null)
+                .andExpect(status().isOk()).andReturn());
+        var items=current.path("items");
+        assertThat(items.size()).isEqualTo(2);
+        assertThat(items.get(0).path("id").asLong()).isNotEqualTo(items.get(1).path("id").asLong());
+        for(var item:items) {
+            assertThat(item.path("variant_id").asInt()).isEqualTo(1);
+            assertThat(item.path("quantity").asInt()).isEqualTo(1);
+            assertThat(item.path("note").asText()).isEqualTo("same note");
+        }
+        assertThat(current.path("pricing").path("sub_total").asInt()).isEqualTo(70000);
+        assertThat(jdbc.queryForObject("select count(*) from Cart_Items where cart_id=?",Long.class,cartId)).isEqualTo(2);
+        assertThat(jdbc.queryForList("select quantity from Cart_Items where cart_id=? order by id",Integer.class,cartId))
+                .containsExactly(1,1);
+        System.out.println("Duplicate item verification ["+source+"]: "+current);
+    }
     @Test void orderSnapshotIdempotencyAndAtomicConversion() throws Exception {
         long cart=cart();String body=orderBody(cart,null),key="checkout-key";
         var order=data(call(post("/api/v1/orders").header("Idempotency-Key",key),customer,body).andExpect(status().isCreated()).andExpect(jsonPath("$.data.final_amount").value(80000)).andExpect(jsonPath("$.data.items[0].line_total").value(80000)).andReturn());
