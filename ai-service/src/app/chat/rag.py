@@ -32,11 +32,13 @@ from .prompts import (
     ACKNOWLEDGEMENT_ANSWER,
     CONDENSE_SYSTEM,
     CONDENSE_USER,
+    CAPABILITIES_ANSWER,
     CHITCHAT_ANSWER,
     COMPLAINT_ANSWER,
     COMPLAINT_REPEAT_ANSWER,
     FALLBACK_ANSWER,
     GREETING_ANSWER,
+    IDENTITY_ANSWER,
     NEGATION_ANSWER,
     NATURALIZE_SYSTEM,
     NATURALIZE_USER,
@@ -44,7 +46,12 @@ from .prompts import (
     SYSTEM_PROMPT,
     USER_TEMPLATE,
 )
-from .retriever import Retriever, SearchHit, get_retriever
+from .retriever import (
+    Retriever,
+    SearchHit,
+    get_retriever,
+    is_customer_visible_chunk,
+)
 from .response import answer_prices_are_grounded, sanitize_generated_answer
 from .schemas import ChatMessage, SourceChunk
 
@@ -56,6 +63,14 @@ MAX_HISTORY_MESSAGES = 10
 MAX_HISTORY_CHARS = 3200
 MAX_STANDALONE_QUERY_CHARS = 500
 MAX_CONTEXT_CHARS = 4800
+LIVE_STATUS_UNAVAILABLE = (
+    "Mình chưa kết nối được dữ liệu hiện tại để xác nhận trạng thái này. "
+    "Bạn vui lòng kiểm tra trên website hoặc hỏi nhân viên Smart Café nhé."
+)
+ACTION_UNAVAILABLE = (
+    "Mình chưa thể thực hiện thao tác này trong cuộc chat vì chưa có kết nối "
+    "hệ thống tương ứng. Bạn vui lòng thực hiện trên website hoặc liên hệ nhân viên nhé."
+)
 
 # Các intent fact lookup có thể format trực tiếp từ context. Việc không gọi
 # model sinh cho nhóm này giảm latency/token và giữ nguyên các điều kiện như
@@ -141,6 +156,7 @@ class LLMClient(Protocol):
 
 def _format_context(hits: list[SearchHit], max_chars: int = MAX_CONTEXT_CHARS) -> str:
     """Giới hạn context để giảm độ trễ và tránh gửi quá nhiều dữ liệu cho LLM."""
+    hits = _customer_visible_hits(hits)
     blocks: list[str] = []
     used = 0
     for hit in hits:
@@ -407,6 +423,64 @@ def _unknown_product_answer() -> str:
     )
 
 
+def _is_ordering_source(hit: SearchHit) -> bool:
+    """Keep ORDER_INTENT context focused on ordering, not table reservations."""
+    heading = fold_text(hit.chunk.heading.split(" > ")[-1])
+    text = fold_text(hit.chunk.text)
+    if "kenh dat hang" in heading:
+        return True
+    return bool(
+        "q:" in text
+        and re.search(r"\bdat\s+(?:mon|hang)\b", text)
+    )
+
+
+def _customer_visible_hits(hits: list[SearchHit]) -> list[SearchHit]:
+    return [hit for hit in hits if is_customer_visible_chunk(hit.chunk)]
+
+
+def _is_live_status_query(question: str, intent: Intent) -> bool:
+    folded = fold_text(question)
+    if re.search(r"\b(nhan tien|chuyen tien roi|xac nhan giao dich|da nhan)\b", folded):
+        return True
+    if re.search(
+        r"\b(da|chua)\b.*\b(hoan tien|huy don|doi mon|thanh toan)\b",
+        folded,
+    ):
+        return True
+    if intent is Intent.PRODUCT_AVAILABILITY:
+        return bool(re.search(r"\b(con|ton|het|so luong)\b", folded))
+    if re.search(r"\b(bao nhieu diem|so diem|diem cua toi|diem tich luy)\b", folded):
+        return True
+    return False
+
+
+def _is_mutating_request(question: str, intent: Intent) -> bool:
+    folded = fold_text(question)
+    if re.search(
+        r"\b(dat ban|tao don|sua don|huy don|doi mon|hoan tien|hoan don)\b.*"
+        r"\b(giup|cho minh|cho toi|thuc hien)\b",
+        folded,
+    ):
+        return True
+    return intent is Intent.POLICY_QUERY and bool(re.search(
+        r"\b(huy don|doi mon|hoan tien|hoan don)\b.*\b(giup|cho minh|cho toi|thuc hien)\b",
+        folded,
+    ))
+
+
+def _contains_internal_guidance(text: str) -> bool:
+    folded = fold_text(text)
+    return any(marker in folded for marker in (
+        "quy tac danh cho chatbot",
+        "quy tac tra loi danh cho chatbot",
+        "nguyen tac su dung du lieu",
+        "products.csv",
+        "policies/payment.md",
+        "policies/refund.md",
+    ))
+
+
 class RAGPipeline:
     def __init__(
         self,
@@ -496,6 +570,7 @@ class RAGPipeline:
 
     @staticmethod
     def _source_chunks(hits: list[SearchHit]) -> list[SourceChunk]:
+        hits = _customer_visible_hits(hits)
         return [
             SourceChunk(
                 source=hit.chunk.source,
@@ -538,7 +613,7 @@ class RAGPipeline:
                 SYSTEM_PROMPT, [{"role": "user", "content": prompt}], max_tokens=180
             )
             answer = sanitize_generated_answer(answer or "")
-            if answer:
+            if answer and not _contains_internal_guidance(answer):
                 answers.append(answer.rstrip(".!? "))
                 collected.extend(hits)
         if len(answers) < 2:  # business compound
@@ -697,6 +772,24 @@ class RAGPipeline:
             return answer, []
         if decision.intent is Intent.UNKNOWN and decision.matched_rule == "out-of-scope":
             return OUT_OF_SCOPE_ANSWER, []
+        if decision.intent is Intent.IDENTITY:
+            logger.info("Chat shortcut intent=IDENTITY branch=identity_no_retrieval")
+            return IDENTITY_ANSWER, []
+        if decision.intent is Intent.CAPABILITIES:
+            logger.info("Chat shortcut intent=CAPABILITIES branch=capabilities_no_retrieval")
+            return CAPABILITIES_ANSWER, []
+        if _is_live_status_query(question, decision.intent):
+            logger.info(
+                "Chat guard intent=%s branch=live_status_unavailable",
+                decision.intent.value,
+            )
+            return LIVE_STATUS_UNAVAILABLE, []
+        if _is_mutating_request(question, decision.intent):
+            logger.info(
+                "Chat guard intent=%s branch=mutation_without_tool",
+                decision.intent.value,
+            )
+            return ACTION_UNAVAILABLE, []
 
         explanation = _explain_previous_limit(
             question,
@@ -835,6 +928,17 @@ class RAGPipeline:
             resolved_products = resolver(standalone) if callable(resolver) else ()
             if resolved_products:
                 decision = type(decision)(Intent.PRODUCT_INFO, 0.85, "catalog-product-match")
+        if decision.intent is Intent.UNKNOWN:
+            branch = "fallback_unknown_product" if _looks_like_unknown_product_request(standalone) else "fallback_clarify"
+            logger.info(
+                "Chat retrieval branch intent=%s matched_rule=%s chunks=0 top_score=0.0000 branch=%s",
+                decision.intent.value,
+                decision.matched_rule,
+                branch,
+            )
+            if branch == "fallback_unknown_product":
+                return _unknown_product_answer(), []
+            return _intent_fallback(decision.intent, hist), []
         if (
             decision.intent is Intent.FOLLOW_UP
             and conversation.last_intent not in {Intent.UNKNOWN, Intent.FOLLOW_UP}
@@ -844,18 +948,21 @@ class RAGPipeline:
                 0.80,
                 "inherited-last-intent",
             )
-        if decision.intent in {Intent.UNKNOWN, Intent.FOLLOW_UP}:
+        if decision.intent is Intent.FOLLOW_UP and not hist:
             logger.info(
-                "Query rewrite (query_id=%s, rewritten_chars=%d, intent=%s)",
-                _query_fingerprint(normalized_question), len(standalone), decision.intent.value,
+                "Chat retrieval branch intent=%s matched_rule=%s chunks=0 top_score=0.0000 branch=fallback_no_history",
+                decision.intent.value,
+                decision.matched_rule,
             )
-            logger.info(
-                "Không nhận diện được intent phù hợp; fallback_reason=missing_context, query_id=%s",
-                _query_fingerprint(normalized_question),
-            )
-            if decision.intent is Intent.UNKNOWN and _looks_like_unknown_product_request(standalone):
-                return _unknown_product_answer(), []
             return _intent_fallback(decision.intent, hist), []
+
+        if decision.intent is Intent.FOLLOW_UP:
+            # A follow-up that could not inherit a concrete previous intent is
+            # still allowed to search the full retrievable KB after condense.
+            retrieval_intent = Intent.UNKNOWN
+        else:
+            retrieval_intent = decision.intent
+
         logger.info(
             "Query rewrite (query_id=%s, rewritten_chars=%d, intent=%s)",
             _query_fingerprint(normalized_question), len(standalone), decision.intent.value,
@@ -930,23 +1037,33 @@ class RAGPipeline:
                 self.top_k,
                 self.min_score,
                 category,
-                decision.intent,
+                retrieval_intent,
             )
         except Exception:
             logger.exception("Truy xuất knowledge base thất bại")
             raise
 
+        hits = _customer_visible_hits(hits)
+        if decision.intent is Intent.ORDER_INTENT:
+            # ORDER_INTENT metadata is shared by business FAQ chunks. Keep
+            # booking-only answers out of an order request's context.
+            hits = [hit for hit in hits if _is_ordering_source(hit)]
+
         if not hits:
             logger.info(
-                "Không tìm thấy nguồn đủ liên quan (intent=%s, fallback_reason=no_relevant_document)",
+                "Chat retrieval branch intent=%s matched_rule=%s chunks=0 top_score=0.0000 branch=fallback_no_hits",
                 decision.intent.value,
+                decision.matched_rule,
             )
+            if decision.intent is Intent.UNKNOWN and _looks_like_unknown_product_request(standalone):
+                return _unknown_product_answer(), []
             return _intent_fallback(decision.intent, hist), []
 
         hits = _deduplicate_hits(hits)
         logger.info(
-            "Retrieval hoàn tất (intent=%s, hits=%d, top_score=%.4f, categories=%s, headings=%s)",
+            "Retrieval hoàn tất (intent=%s, matched_rule=%s, hits=%d, top_score=%.4f, categories=%s, headings=%s)",
             decision.intent.value,
+            decision.matched_rule,
             len(hits),
             hits[0].score if hits else 0.0,
             sorted({hit.chunk.document_type for hit in hits}),
@@ -1022,6 +1139,9 @@ class RAGPipeline:
                 max_tokens=280,
             )
             answer = sanitize_generated_answer(answer or "")
+        if _contains_internal_guidance(answer):
+            logger.warning("Loại câu trả lời chứa hướng dẫn nội bộ")
+            return _intent_fallback(decision.intent, hist), []
         if not answer:
             answer = _intent_fallback(decision.intent, hist) or FALLBACK_ANSWER
 
@@ -1033,4 +1153,11 @@ class RAGPipeline:
                 context,
                 sources,
             )
+        logger.info(
+            "Chat retrieval branch intent=%s matched_rule=%s chunks=%d top_score=%.4f branch=answered_from_retrieval",
+            decision.intent.value,
+            decision.matched_rule,
+            len(hits),
+            hits[0].score if hits else 0.0,
+        )
         return answer, sources

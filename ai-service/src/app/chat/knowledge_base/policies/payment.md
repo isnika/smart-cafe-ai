@@ -19,7 +19,6 @@ và xuất hóa đơn. Các yêu cầu hủy đơn, đổi món, trả hàng và
 - Với đơn giao hàng, khách có thể chọn thanh toán khi nhận hàng
   nếu tùy chọn này xuất hiện ở bước đặt hàng.
 - Nhân viên xác nhận số tiền nhận và trả lại tiền thừa nếu có.
-- Chatbot không có quyền xác nhận quán đã nhận tiền.
 
 ### 2.2. Chuyển khoản ngân hàng qua mã QR
 
@@ -28,7 +27,6 @@ và xuất hóa đơn. Các yêu cầu hủy đơn, đổi món, trả hàng và
 - Trên website, khách sử dụng mã QR hiển thị ở bước thanh toán.
 - Khách kiểm tra tên người nhận, số tiền và mã đơn trước khi chuyển.
 - Khách giữ nguyên nội dung chuyển khoản được hệ thống hướng dẫn.
-- Chatbot không cung cấp số tài khoản hoặc tự tạo mã QR thanh toán.
 - Ảnh biên nhận là thông tin để đối chiếu, không tự động chứng minh
   đơn đã được hệ thống xác nhận thanh toán.
 
@@ -38,8 +36,7 @@ và xuất hóa đơn. Các yêu cầu hủy đơn, đổi món, trả hàng và
 - Tại quầy, khách quét mã thanh toán do nhân viên cung cấp.
 - Trên website, khách chọn MoMo và thực hiện theo hướng dẫn.
 - Khách tự xác nhận giao dịch trong ứng dụng MoMo.
-- Nhân viên và chatbot không yêu cầu khách cung cấp mã OTP,
-  mật khẩu hoặc mã PIN của ví.
+- Không chia sẻ mã OTP, mật khẩu hoặc mã PIN của ví qua chat.
 
 ### 2.4. Thẻ ngân hàng
 
@@ -68,8 +65,6 @@ và xuất hóa đơn. Các yêu cầu hủy đơn, đổi món, trả hàng và
   chính sách của họ.
 - Số tiền cần thanh toán là tổng tiền cuối cùng trên hóa đơn
   hoặc màn hình xác nhận đơn.
-- Chatbot không tự tính ưu đãi hoặc cam kết miễn phí giao hàng
-  khi chưa có dữ liệu của đơn.
 
 ## 4. Xác nhận thanh toán
 
@@ -79,10 +74,6 @@ và xuất hóa đơn. Các yêu cầu hủy đơn, đổi món, trả hàng và
   với việc đơn hàng đã được quán xác nhận.
 - Khi đơn đã được xác nhận thanh toán, khách không cần trả tiền
   lần nữa cho cùng đơn đó.
-- Chatbot chỉ báo trạng thái thanh toán khi có kết quả tra cứu
-  từ hệ thống.
-- Nếu chưa có kết nối tra cứu, chatbot phải nói rõ chưa thể
-  kiểm tra giao dịch và hướng dẫn khách liên hệ nhân viên.
 
 ## 5. Xử lý sự cố thanh toán
 
@@ -121,8 +112,6 @@ và che số dư, thông tin tài khoản cùng các dữ liệu không liên qu
 - Quán kiểm tra để xác định khoản thanh toán trùng.
 - Khoản tiền trùng được xử lý theo chính sách hoàn tiền sau khi
   kết quả đối chiếu được xác nhận.
-- Chatbot không tự xác nhận đã hoàn tiền hoặc cam kết thời điểm
-  tiền về khi chưa có kết quả xử lý.
 
 ### 5.4. Chuyển sai số tiền hoặc sai nội dung
 
@@ -162,7 +151,6 @@ và che số dư, thông tin tài khoản cùng các dữ liệu không liên qu
 - Hóa đơn được gửi qua email sau khi nhân viên hoàn tất xử lý.
 - Nếu chưa nhận được hoặc phát hiện sai thông tin, khách liên hệ
   nhân viên kèm mã đơn.
-- Chatbot không tự phát hành, sửa hoặc xác nhận đã gửi hóa đơn.
 
 ## 7. Kênh hỗ trợ
 
@@ -173,28 +161,7 @@ và che số dư, thông tin tài khoản cùng các dữ liệu không liên qu
 - Không cung cấp số điện thoại, email hoặc đường dẫn hỗ trợ
   chưa được cấu hình trong hệ thống.
 
-## 8. Quy tắc trả lời dành cho chatbot
-
-- Dùng chính sách trong tài liệu để trả lời câu hỏi thanh toán.
-- Phân biệt câu hỏi về chính sách với yêu cầu tra cứu giao dịch.
-- Có thể xác nhận quán hỗ trợ một phương thức được liệt kê,
-  nhưng không được suy ra giao dịch cụ thể đã thành công.
-- Không nói “đã kiểm tra”, “đã nhận tiền”, “đã hoàn tiền”
-  hoặc “đã gửi hóa đơn” nếu chưa có kết quả từ hệ thống.
-- Không yêu cầu OTP, mật khẩu, mã PIN hoặc mã CVV/CVC.
-- Không yêu cầu khách gửi thông tin thẻ đầy đủ qua chat.
-- Nếu khách gửi thông tin nhạy cảm, không lặp lại thông tin đó;
-  nhắc khách không chia sẻ và hướng dẫn xử lý qua kênh chính thức.
-- Khi chưa kết nối hệ thống đơn hàng, không yêu cầu khách gửi
-  mã đơn chỉ để sau đó thông báo không tra cứu được.
-  Hãy hướng dẫn khách cung cấp mã đơn trực tiếp cho kênh hỗ trợ.
-- Không lấy thông tin thanh toán để trả lời về điều kiện đổi trả,
-  hủy đơn hoặc thời hạn hoàn tiền khi tài liệu này không quy định.
-- “Chưa nhận được đơn” thuộc hỗ trợ giao hàng.
-- “Hoàn hàng”, “trả hàng”, “hoàn tiền” thuộc chính sách đổi trả
-  và hoàn tiền; không chuyển sang luồng báo giá.
-
-## 9. Câu hỏi thường gặp
+## 8. Câu hỏi thường gặp
 
 Q: Quán có nhận tiền mặt không?
 A: Dạ có, bạn có thể thanh toán tiền mặt tại quầy. Với đơn giao
@@ -240,7 +207,7 @@ và xử lý khoản thanh toán trùng.
 
 Q: Mình gửi OTP cho bạn nhé?
 A: Bạn đừng gửi OTP nhé. Hãy tự nhập mã trong ứng dụng hoặc
-giao diện thanh toán chính thức; nhân viên và chatbot không cần mã này.
+giao diện thanh toán chính thức; không chia sẻ mã này qua chat.
 
 Q: Có xuất hóa đơn đỏ không?
 A: Dạ, quán có hỗ trợ hóa đơn điện tử VAT. Bạn báo nhân viên

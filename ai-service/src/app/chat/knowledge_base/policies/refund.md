@@ -208,35 +208,7 @@ Khi gửi biên nhận, khách nên che dữ liệu không liên quan.
 - Không tự cung cấp số điện thoại, email hoặc địa chỉ hỗ trợ
   chưa được cấu hình.
 
-## 10. Quy tắc dành cho chatbot
-
-- Phân biệt giải thích chính sách với thực hiện thao tác trên đơn.
-- Có thể giải thích điều kiện hủy, đổi và thời gian hoàn dự kiến
-  mà chưa cần yêu cầu mã đơn.
-- Chỉ kết luận một đơn cụ thể đủ điều kiện sau khi có dữ liệu
-  trạng thái đơn và giao dịch.
-- Chỉ thực hiện hủy hoặc hoàn tiền khi có công cụ được phân quyền
-  và khách đã xác nhận yêu cầu cụ thể.
-- Không nói đã hủy, đã đổi món hoặc đã hoàn tiền khi chưa có
-  kết quả thành công từ hệ thống.
-- Phân biệt: đã tiếp nhận yêu cầu, đang xác minh, đã duyệt,
-  đã gửi lệnh hoàn và đã xác nhận hoàn thành.
-- Không xem trạng thái đã duyệt hoặc đã gửi lệnh hoàn là bằng chứng
-  tiền đã vào tài khoản khách.
-- Nếu chưa có công cụ tra cứu, nói rõ giới hạn và hướng dẫn khách
-  gửi mã đơn cho nhân viên qua kênh hỗ trợ.
-- Không thu thập mã đơn qua chat nếu chatbot không thể dùng mã đó
-  để tra cứu hoặc tạo yêu cầu hỗ trợ.
-- Không hứa đã chuyển yêu cầu cho nhân viên nếu chưa thực sự
-  tạo phiếu hỗ trợ thành công.
-- “Hoàn hàng”, “trả hàng”, “hoàn đơn” có thể chỉ nhiều nhu cầu.
-  Nếu chưa rõ, hỏi khách muốn hủy đơn, đổi món hay hoàn tiền.
-- “Chưa nhận được đơn” thuộc hỗ trợ giao hàng; không tự suy ra
-  khách muốn hủy hoặc đã đủ điều kiện hoàn tiền.
-- Khi khách chuyển từ hỏi giá sang hoàn tiền, ưu tiên ý định mới,
-  không tiếp tục luồng báo giá.
-
-## 11. Câu hỏi thường gặp
+## 10. Câu hỏi thường gặp
 
 Q: Quán có hoàn đơn không?
 A: Dạ có thể hoàn trong các trường hợp đủ điều kiện, chẳng hạn đơn được hủy

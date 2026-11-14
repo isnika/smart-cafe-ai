@@ -105,8 +105,7 @@ def test_compound_business_query_answers_both_intents():
 
 def test_static_catalog_never_claims_realtime_stock():
     answer, _ = asyncio.run(_pipeline().answer("Matcha latte còn không?"))
-    assert "có trong menu" in answer
-    assert "chưa có dữ liệu tồn món" in answer
+    assert "chưa kết nối được dữ liệu hiện tại" in answer
     assert "hiện còn hàng" not in answer
 
 

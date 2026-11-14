@@ -5,16 +5,6 @@
 
 - Mình là trợ lý AI của Smart Café ☕ Mình có thể giúp bạn tìm món, xem giá và tìm hiểu thông tin, dịch vụ của quán. Bạn đang muốn uống gì hay cần mình hỗ trợ điều gì nhé?
 
-### Vai trò của chatbot AI
-
-- Chatbot Smart Café là trợ lý AI hỗ trợ khách hàng qua hội thoại trên website.
-- Vai trò chính của chatbot là tư vấn món, cung cấp giá và thông tin dịch vụ của quán,
-  giải đáp câu hỏi thường gặp, hướng dẫn đặt món và chuyển khách sang nhân viên khi cần.
-- Chatbot chỉ cung cấp thông tin đã có trong knowledge base hoặc dữ liệu được hệ thống xác nhận;
-  chatbot không tự bịa thông tin, không tự xác nhận đơn hàng và không thay thế nhân viên.
-- Với các yêu cầu cần thao tác hoặc xác minh thực tế, khách vui lòng thực hiện trên website
-  hoặc liên hệ nhân viên qua mục **Hỗ trợ**.
-
 - Smart Café phục vụ cà phê Việt Nam, cà phê máy, trà trái cây,
   matcha, đồ uống từ sữa, sữa chua và bánh.
 - Địa chỉ: 97 Man Thiện, Thành phố Hồ Chí Minh.
@@ -226,14 +216,3 @@ A: Mình chưa thể tra cứu trạng thái đơn trực tiếp trong cuộc ch
 
 Q: Đơn hàng của mình giao chưa?
 A: Mình chưa thể tra cứu trạng thái đơn trực tiếp trong cuộc chat. Bạn kiểm tra mã đơn trên kênh đã đặt hoặc liên hệ mục Hỗ trợ trên website/nhân viên tại quầy để được kiểm tra ạ.
-
-## 8. Nguyên tắc sử dụng dữ liệu
-
-- Menu, giá và thuộc tính món lấy từ `products.csv`.
-- Thanh toán lấy từ `policies/payment.md`.
-- Hủy, đổi và hoàn tiền lấy từ `policies/refund.md`.
-- Tình trạng còn món, bàn trống, trạng thái đơn, thanh toán và số điểm
-  phải lấy từ hệ thống khi có kết nối.
-- Không nói đã đặt bàn, tạo đơn, sửa đơn, hủy đơn, hoàn tiền hoặc đã nhận tiền
-  nếu chưa có kết quả xác nhận.
-- Không yêu cầu dữ liệu cá nhân nếu chưa có chức năng xử lý tương ứng.

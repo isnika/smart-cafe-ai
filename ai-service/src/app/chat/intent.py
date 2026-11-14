@@ -39,6 +39,8 @@ class Intent(str, Enum):
     CONTACT_QUERY = "CONTACT_QUERY"
     STORE_INFO = "STORE_INFO"
     SERVICE_QUERY = "SERVICE_QUERY"
+    IDENTITY = "IDENTITY"
+    CAPABILITIES = "CAPABILITIES"
     POLICY_QUERY = "POLICY_QUERY"
     COMPLAINT = "COMPLAINT"
     CHITCHAT = "CHITCHAT"
@@ -136,6 +138,21 @@ def classify_intent(query: str) -> IntentDecision:
         r"^\s*(ban khoe khong|hom nay the nao)\s*[?.!]*$",
     ):
         return IntentDecision(Intent.CHITCHAT, 0.96, "light-chitchat")
+
+    if _contains(
+        folded,
+        r"\b(ban la ai|ban la gi|chatbot la ai|chatbot la gi|tro ly ai la ai|tro ly la gi|ai dang tra loi)\b",
+    ):
+        return IntentDecision(Intent.IDENTITY, 0.99, "identity")
+
+    if _contains(
+        folded,
+        r"\b(chuc nang|co the lam gi|ban lam duoc gi|ho tro duoc gi|giup duoc gi)\b",
+        r"\b(chatbot|tro ly)\s+(co vai tro gi|co chuc nang gi|lam duoc gi|ho tro gi)\b",
+        r"\b(vai tro cua chatbot|vai tro cua tro ly)\b",
+        r"\bban\s+(co the|lam duoc|giup duoc)\b",
+    ):
+        return IntentDecision(Intent.CAPABILITIES, 0.99, "capabilities")
 
     # Prompt injection không phải câu hỏi menu; chặn trước các rule giá/sản phẩm.
     if _contains(

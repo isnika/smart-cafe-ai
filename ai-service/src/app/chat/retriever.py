@@ -43,6 +43,17 @@ LEXICAL_WEIGHT = max(0.0, min(float(os.getenv("RAG_LEXICAL_WEIGHT", "0.30")), 1.
 MAX_CHUNK_CHARS = 900
 SUPPORTED_EXT = {".md", ".txt"}
 HEADING_RE = re.compile(r"^(#{1,4})\s+(.*\S)\s*$")
+INDEX_SCHEMA_VERSION = "customer-content-v3"
+CUSTOMER_FACT = "customer_fact"
+CUSTOMER_POLICY = "customer_policy"
+INTERNAL_RULE = "internal_rule"
+_INTERNAL_RULE_HEADING_MARKERS = (
+    "quy tac danh cho chatbot",
+    "quy tac tra loi danh cho chatbot",
+    "nguyen tac su dung du lieu",
+    "huong dan nguon du lieu",
+    "chi dan noi bo",
+)
 QA_PAIR_RE = re.compile(
     r"(?ims)^\s*Q:\s*(?P<question>.*?)\s*\n\s*A:\s*(?P<answer>.*?)(?=^\s*Q:\s*|\Z)"
 )
@@ -119,12 +130,33 @@ class Chunk:
     document_type: str = DocumentType.INTERNAL.value
     intents: list[str] = field(default_factory=list)
     retrievable: bool = True
+    content_kind: str = CUSTOMER_FACT
 
 
 @dataclass
 class SearchHit:
     chunk: Chunk
     score: float
+
+
+def _is_internal_rule_heading(heading: str) -> bool:
+    folded = fold_text(heading)
+    return any(marker in folded for marker in _INTERNAL_RULE_HEADING_MARKERS)
+
+
+def is_customer_visible_chunk(chunk: Chunk) -> bool:
+    """Reject internal instructions, including chunks from an older index."""
+    if not getattr(chunk, "retrievable", False):
+        return False
+    content_kind = getattr(chunk, "content_kind", None)
+    if content_kind == INTERNAL_RULE:
+        return False
+    # Chunks created by older test/adaptor code may omit content_kind and use
+    # the dataclass default document_type. Real internal KB chunks are tagged
+    # INTERNAL_RULE during load_chunks and are rejected above.
+    if content_kind is None and getattr(chunk, "document_type", "") == DocumentType.INTERNAL.value:
+        return False
+    return not _is_internal_rule_heading(getattr(chunk, "heading", ""))
 
 
 # --------------------------------------------------------------------------- #
@@ -228,13 +260,17 @@ def _qa_questions(text: str) -> tuple[str, ...]:
     )
 
 
-def _section_metadata(source: str, heading: str) -> tuple[str, list[str], bool]:
+def _section_metadata(source: str, heading: str) -> tuple[str, list[str], bool, str]:
     """Ánh xạ metadata từ cấu trúc KB; không chứa dữ liệu trả lời nghiệp vụ."""
+    if _is_internal_rule_heading(heading):
+        return DocumentType.INTERNAL.value, [], False, INTERNAL_RULE
+
     if source.startswith("menu/"):
         return (
             DocumentType.PRODUCT.value,
             sorted(intent.value for intent in PRODUCT_INTENTS),
             True,
+            CUSTOMER_FACT,
         )
 
     if source.startswith("policies/"):
@@ -247,6 +283,7 @@ def _section_metadata(source: str, heading: str) -> tuple[str, list[str], bool]:
             DocumentType.POLICY.value,
             policy_intents,
             True,
+            CUSTOMER_POLICY,
         )
 
     if source.startswith("faq/"):
@@ -263,14 +300,16 @@ def _section_metadata(source: str, heading: str) -> tuple[str, list[str], bool]:
                 Intent.SERVICE_QUERY.value,
                 Intent.DELIVERY_QUERY.value,
                 Intent.ORDER_ONLINE.value,
+                Intent.ORDER_INTENT.value,
                 Intent.ORDER_STATUS.value,
                 Intent.PROMOTION_QUERY.value,
             ],
             True,
+            CUSTOMER_FACT,
         )
 
     # Các section hướng dẫn nội bộ không được đưa vào context trả lời khách.
-    return DocumentType.INTERNAL.value, [], False
+    return DocumentType.INTERNAL.value, [], False, INTERNAL_RULE
 
 
 def _menu_advisory_fields(menu_dir: Path) -> dict[str, dict[str, str]]:
@@ -376,7 +415,7 @@ def load_chunks(kb_dir: Path = KB_DIR) -> list[Chunk]:
             pieces = qa_pieces or _split_long(body)
             for piece in pieces:
                 head = heading or file_title
-                document_type, intents, retrievable = _section_metadata(source, head)
+                document_type, intents, retrievable, content_kind = _section_metadata(source, head)
                 chunks.append(
                     Chunk(
                         id=len(chunks),
@@ -387,6 +426,7 @@ def load_chunks(kb_dir: Path = KB_DIR) -> list[Chunk]:
                         document_type=document_type,
                         intents=intents,
                         retrievable=retrievable,
+                        content_kind=content_kind,
                     )
                 )
     logger.info("Đã tạo %d chunk từ %s", len(chunks), kb_dir)
@@ -411,6 +451,7 @@ class Retriever:
         self._document_frequency: Counter[str] = Counter()
         self._average_document_length = 0.0
         self._chunk_folded: list[str] = []
+        self._index_ready = False
         self.build_index()
 
     # -- model -------------------------------------------------------------- #
@@ -444,10 +485,17 @@ class Retriever:
 
     # -- index -------------------------------------------------------------- #
     def _fingerprint(self, chunks: list[Chunk]) -> str:
-        h = hashlib.sha256(self.model_name.encode())
+        h = hashlib.sha256()
+        h.update(INDEX_SCHEMA_VERSION.encode())
+        h.update(self.model_name.encode())
+        h.update(str(MAX_CHUNK_CHARS).encode())
         for c in chunks:
             h.update(c.source.encode())
             h.update(c.text.encode())
+            h.update(c.document_type.encode())
+            h.update("\x1f".join(sorted(c.intents)).encode())
+            h.update(str(c.retrievable).encode())
+            h.update(getattr(c, "content_kind", CUSTOMER_FACT).encode())
         return h.hexdigest()[:16]
 
     def _refresh_lexical_index(self) -> None:
@@ -730,11 +778,29 @@ class Retriever:
         if lock is None:
             lock = self._index_lock = threading.RLock()
         with lock:
-            self._build_index_unlocked(force=force)
+            self._index_ready = False
+            try:
+                self._build_index_unlocked(force=force)
+            except Exception:
+                # Never continue serving an older index after a failed rebuild.
+                self.chunks = []
+                self.embeddings = np.zeros((0, 1), dtype=np.float32)
+                self._refresh_lexical_index()
+                logger.exception("RAG index rebuild failed; old index discarded")
+                raise
+            self._index_ready = True
 
     def _build_index_unlocked(self, force: bool = False) -> None:
         """Tạo index; dùng cache nếu knowledge_base không đổi."""
-        chunks = load_chunks(self.kb_dir)
+        loaded_chunks = load_chunks(self.kb_dir)
+        internal_count = sum(not is_customer_visible_chunk(chunk) for chunk in loaded_chunks)
+        chunks = [chunk for chunk in loaded_chunks if is_customer_visible_chunk(chunk)]
+        logger.info(
+            "RAG index source_chunks=%d indexed_chunks=%d internal_excluded=%d",
+            len(loaded_chunks),
+            len(chunks),
+            internal_count,
+        )
         if not chunks:
             self.chunks, self.embeddings = [], np.zeros((0, 1), dtype=np.float32)
             self._refresh_lexical_index()
@@ -792,6 +858,8 @@ class Retriever:
         if lock is None:
             lock = self._index_lock = threading.RLock()
         with lock:
+            if not getattr(self, "_index_ready", True):
+                return []
             return self._search_unlocked(query, top_k, min_score, category, intent)
 
     def _search_unlocked(
@@ -829,7 +897,9 @@ class Retriever:
             lexical_scores,
         )
 
-        mask = np.array([chunk.retrievable for chunk in self.chunks], dtype=bool)
+        # Apply the visibility guard at query time as well. This protects
+        # against a process that still holds an older in-memory index.
+        mask = np.array([is_customer_visible_chunk(chunk) for chunk in self.chunks], dtype=bool)
         if category:
             mask &= np.array([c.category == category for c in self.chunks])
 
