@@ -39,8 +39,13 @@ export const PATHS = {
 
   // Admin
   admin: "/admin",
+  adminBranches: "/admin/branches",
+  adminTables: "/admin/tables",
   adminUsers: "/admin/users",
-  adminTables: "/admin/tables", // Table & QR Management (nút "Tạo QR ca hôm nay")
+  adminConfig: "/admin/config",
+  adminIntegrations: "/admin/integrations",
+  adminAudit: "/admin/audit",
+  adminBackup: "/admin/backup",
 } as const;
 
 export const to = {
@@ -64,3 +69,18 @@ export const roleHome: Record<RoleName, string> = {
   Manager: PATHS.manager,
   Admin: PATHS.admin,
 };
+
+/** Resolve a successful login target without trusting a return URL from another role. */
+export function homeAfterLogin(roleName: RoleName, requestedPath?: string | null): string {
+  if (!requestedPath) return roleHome[roleName];
+  const allowed: Record<RoleName, readonly string[]> = {
+    Customer: [PATHS.home, PATHS.menu, PATHS.cart, PATHS.checkout, PATHS.orders, PATHS.profile],
+    Staff: [PATHS.staff, PATHS.staffQueue, PATHS.staffCheckin, PATHS.staffTables, '/staff/orders/'],
+    Manager: [PATHS.manager, PATHS.managerInventory, PATHS.managerForecast],
+    Admin: [PATHS.admin, PATHS.adminBranches, PATHS.adminTables, PATHS.adminUsers, PATHS.adminConfig, PATHS.adminIntegrations, PATHS.adminAudit, PATHS.adminBackup],
+  };
+  const canOpen = allowed[roleName].some((path) =>
+    path.endsWith('/') ? requestedPath.startsWith(path) : requestedPath === path || requestedPath.startsWith(`${path}/`),
+  );
+  return canOpen ? requestedPath : roleHome[roleName];
+}

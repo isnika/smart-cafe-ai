@@ -1,99 +1,94 @@
 import { useCallback, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useAuthStore } from '@/features/auth/store';
 import { storeApi } from '@/shared/api';
-import type { ScheduleView, Shift, Timekeeping } from '@/shared/types';
+import type { ScheduleView, Timekeeping } from '@/shared/types';
 import { phaseOf, pickActiveSchedule, todayInTz, toFailure, type CheckinFailure, type CheckinPhase } from '../model';
 
-export const CHECKIN_KEY = ['staff', 'checkin'] as const;
+export const CHECKIN_KEY = ['staff', 'timekeeping'] as const;
+const SHIFT_QR = /^shift-qr:(\d+)$/;
 
 export interface UseStaffCheckin {
-  branchId: number | null;
-  shifts: Shift[];
   schedules: ScheduleView[];
-  /** Lịch đang hiển thị (đang làm dở / chưa vào / đã xong). */
+  history: Timekeeping[];
   active: ScheduleView | null;
-  activeShift: Shift | null;
   phase: CheckinPhase;
   isLoading: boolean;
-  /** Lỗi tải ca/lịch. */
   loadError: CheckinFailure | null;
   reload: () => void;
-  /** true khi đang gửi check-in/out. */
   submitting: boolean;
-  /** Lỗi của lần check-in/out gần nhất. */
   actionError: CheckinFailure | null;
   clearActionError: () => void;
-  /** Check-in nếu chưa vào ca, check-out nếu đang trong ca. Bỏ qua khi đang gửi. Trả về true nếu thành công. */
   submitCode: (qrToken: string) => Promise<boolean>;
 }
 
 export function useStaffCheckin(): UseStaffCheckin {
-  const branchId = useAuthStore((s) => s.branchId);
   const qc = useQueryClient();
   const today = todayInTz();
   const [actionError, setActionError] = useState<CheckinFailure | null>(null);
-  const inFlight = useRef(false); // chặn bấm đúp / quét lặp ngay cả trước khi React render lại
-
-  const shiftsQ = useQuery({
-    queryKey: [...CHECKIN_KEY, 'shifts', branchId],
-    queryFn: () => storeApi.listShifts(branchId as number),
-    enabled: branchId !== null,
-  });
+  const inFlight = useRef(false);
   const schedulesQ = useQuery({
-    queryKey: [...CHECKIN_KEY, 'schedules', branchId, today],
-    queryFn: () => storeApi.listSchedules({ branchId: branchId as number, from: today, to: today }),
-    enabled: branchId !== null,
+    queryKey: [...CHECKIN_KEY, 'schedules', today],
+    queryFn: () => storeApi.getMySchedules({ from: today, to: today }),
   });
-
-  const mutation = useMutation<Timekeeping, unknown, { qrToken: string; out: boolean }>({
-    mutationFn: ({ qrToken, out }) => (out ? storeApi.checkOut({ qrToken }) : storeApi.checkIn({ qrToken })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [...CHECKIN_KEY, 'schedules'] }),
+  const historyQ = useQuery({ queryKey: [...CHECKIN_KEY, 'history'], queryFn: () => storeApi.getMyTimekeeping() });
+  const mutation = useMutation<Timekeeping, unknown, { scheduleId: number; out: boolean }>({
+    mutationFn: ({ scheduleId, out }) => out
+      ? storeApi.checkOut({ scheduleId })
+      : storeApi.checkIn({ scheduleId, source: 'QR' }),
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: [...CHECKIN_KEY, 'schedules'] }),
+        qc.invalidateQueries({ queryKey: [...CHECKIN_KEY, 'history'] }),
+      ]);
+    },
   });
-  const { mutateAsync } = mutation;
-
   const schedules = schedulesQ.data ?? [];
-  const shifts = shiftsQ.data ?? [];
-  const active = pickActiveSchedule(schedules);
+  const historyBySchedule = new Map((historyQ.data ?? []).map((item) => [item.scheduleId, item]));
+  const withServerHistory = schedules.map((item) => ({ ...item, timekeeping: historyBySchedule.get(item.id) ?? item.timekeeping ?? null }));
+  const active = pickActiveSchedule(withServerHistory);
   const phase = phaseOf(active);
-  const failure = shiftsQ.error ?? schedulesQ.error;
-
-  const submitCode = useCallback(
-    async (qrToken: string) => {
-      if (inFlight.current) return false;
-      const token = qrToken.trim();
-      if (!token) {
-        setActionError({ message: 'Vui lòng nhập mã ca.', retryable: false });
+  const submitCode = useCallback(async (raw: string) => {
+    if (inFlight.current) return false;
+    const match = SHIFT_QR.exec(raw.trim());
+    if (!match) {
+      setActionError({ message: 'Mã QR không hợp lệ. Hãy quét mã ca làm việc.', retryable: false });
+      return false;
+    }
+    inFlight.current = true;
+    setActionError(null);
+    try {
+      // QR chỉ cung cấp shift_id. Chỉ chấp nhận lịch được trả bởi API lịch cá nhân.
+      const [rows, history] = await Promise.all([
+        storeApi.getMySchedules({ from: today, to: today }),
+        storeApi.getMyTimekeeping({ from: today, to: today }),
+      ]);
+      qc.setQueryData([...CHECKIN_KEY, 'schedules', today], rows);
+      qc.setQueryData([...CHECKIN_KEY, 'history'], history);
+      const matched = rows.find((row) => row.shiftId === Number(match[1]));
+      if (!matched) {
+        setActionError({ message: 'Không tìm thấy lịch làm việc phù hợp.', retryable: false });
         return false;
       }
-      inFlight.current = true;
-      setActionError(null);
-      try {
-        await mutateAsync({ qrToken: token, out: phase === 'in' });
-        return true;
-      } catch (e) {
-        setActionError(toFailure(e));
-        return false;
-      } finally {
-        inFlight.current = false;
-      }
-    },
-    [mutateAsync, phase],
-  );
+      const serverRecord = history.find((item) => item.scheduleId === matched.id) ?? matched.timekeeping;
+      await mutation.mutateAsync({ scheduleId: matched.id, out: Boolean(serverRecord?.checkIn && !serverRecord.checkOut) });
+      return true;
+    } catch (error) {
+      setActionError(toFailure(error));
+      return false;
+    } finally {
+      inFlight.current = false;
+    }
+  }, [mutation.mutateAsync, qc, today]);
 
+  const failure = schedulesQ.error ?? historyQ.error;
   return {
-    branchId,
-    shifts,
-    schedules,
+    schedules: withServerHistory,
+    history: historyQ.data ?? [],
     active,
-    activeShift: active ? (shifts.find((s) => s.id === active.shiftId) ?? active.shift) : null,
     phase,
-    isLoading: branchId !== null && (shiftsQ.isLoading || schedulesQ.isLoading),
+    isLoading: schedulesQ.isLoading || historyQ.isLoading,
     loadError: failure ? toFailure(failure) : null,
-    reload: () => {
-      void shiftsQ.refetch();
-      void schedulesQ.refetch();
-    },
+    reload: () => { void schedulesQ.refetch(); void historyQ.refetch(); },
     submitting: mutation.isPending,
     actionError,
     clearActionError: () => setActionError(null),

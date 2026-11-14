@@ -2,10 +2,10 @@ import type { ApiErrorBody } from '@/shared/types';
 import { normalizeTimestamps, toCamelKeys, toSnakeKeys } from '@/shared/lib';
 
 /**
- * Base URL: spec = https://{host}/api/v1 (qua API Gateway).
- * Mock/dev: để trống → '/api' (MSW chặn đường dẫn tương đối). Thật: đặt VITE_API_BASE_URL.
+ * API client dùng service paths (/auth, /users, ...); Vite proxy dịch sang /api/v1 khi dev.
+ * Với bản deploy, đặt VITE_API_BASE_URL tới prefix gateway /api/v1.
  */
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '/api').replace(/\/+$/, '');
+const BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/+$/, '');
 
 /** true → entry (main.tsx) khởi động MSW; false/không đặt → mọi request đi ra mạng thật. */
 export const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';

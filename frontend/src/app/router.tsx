@@ -33,6 +33,7 @@ import StaffDashboardPage from "@/features/staff-dashboard/pages/StaffDashboardP
 import StaffCheckinPage from "@/features/staff-checkin/pages/StaffCheckinPage";
 import StaffTablesPage from "@/features/staff-tables/pages/StaffTablesPage";
 import PlaceholderPage from "@/pages/PlaceholderPage";
+import { AdminDashboardPage, AdminBranchesPage, AdminTablesPage, AdminUsersPage, AdminUnavailablePage } from "@/features/admin/pages/AdminPages";
 
 const P = PlaceholderPage;
 
@@ -154,12 +155,14 @@ export const routes: RouteObject[] = [
       {
         element: <StaffShellLayout />,
         children: [
-          { path: PATHS.admin, element: <P title="Admin Dashboard" /> },
-          { path: PATHS.adminUsers, element: <P title="Quản lý người dùng" /> },
-          {
-            path: PATHS.adminTables,
-            element: <P title="Bàn & QR" note="Có nút Tạo QR ca hôm nay" />,
-          },
+          { path: PATHS.admin, element: <AdminDashboardPage /> },
+          { path: PATHS.adminBranches, element: <AdminBranchesPage /> },
+          { path: PATHS.adminTables, element: <AdminTablesPage /> },
+          { path: PATHS.adminUsers, element: <AdminUsersPage /> },
+          { path: PATHS.adminConfig, element: <AdminUnavailablePage title="Cấu hình hệ thống" /> },
+          { path: PATHS.adminIntegrations, element: <AdminUnavailablePage title="Tích hợp dịch vụ" /> },
+          { path: PATHS.adminAudit, element: <AdminUnavailablePage title="Nhật ký hoạt động hệ thống" /> },
+          { path: PATHS.adminBackup, element: <AdminUnavailablePage title="Sao lưu & Phục hồi dữ liệu" /> },
         ],
       },
     ],

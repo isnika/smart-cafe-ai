@@ -143,6 +143,7 @@ function toUser(a: MockAccount): User {
     fullName: a.fullName,
     avatar: null,
     roleId: ROLE_IDS[a.roleName],
+    roleName: a.roleName,
     status: a.status,
     emailVerifiedAt: a.status === 'Unverified' ? null : a.createdAt,
     phoneVerifiedAt: null,
@@ -208,6 +209,9 @@ export const identityHandlers = [
   // POST /auth/login   body { identifier, password }
   http.post(url('/auth/login'), guardedV1(async ({ request }) => ok(authenticate(await readJson(request))))),
 
+  // Google credentials require a real Google ID token and cannot be validated by MSW.
+  http.post(url('/auth/google'), guardedV1(() => fail(503, 'GOOGLE_AUTH_NOT_CONFIGURED', 'Google login cần kết nối identity service thật'))),
+
   // POST /auth/refresh  body { refresh_token } → cặp token mới (xoay refresh token)
   http.post(
     url('/auth/refresh'),
@@ -218,8 +222,12 @@ export const identityHandlers = [
     }),
   ),
 
-  // POST /auth/logout → 204
-  http.post(url('/auth/logout'), guardedV1(() => noContent())),
+  // POST /auth/logout → revoke refresh token when supplied, then 204
+  http.post(url('/auth/logout'), guardedV1(async ({ request }) => {
+    const { refresh_token } = await readJson<{ refresh_token?: string }>(request);
+    if (refresh_token) usedRefreshTokens.add(refresh_token);
+    return noContent();
+  })),
 
   // GET /users/me  (luôn cần token hợp lệ, không phụ thuộc mockConfig.enforceAuth)
   http.get(url('/users/me'), guardedV1(({ request }) => ok(toUser(requireAccount(request))))),

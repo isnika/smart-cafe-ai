@@ -15,7 +15,7 @@ export const todayIn = (tz: string = BRANCH_TZ, at: Date = new Date()): string =
 export function buildWorkforceSeed(): { shifts: Shift[]; staffProfiles: StaffProfile[]; schedules: Schedule[] } {
   const shifts: Shift[] = [
     { id: 1, branchId: BRANCH_ID, name: 'Ca sáng', startTime: '06:00:00', endTime: '14:00:00', isOvernight: false, isActive: true },
-    { id: 2, branchId: BRANCH_ID, name: 'Ca chiều', startTime: '14:00:00', endTime: '22:00:00', isOvernight: false, isActive: true },
+    { id: 2, branchId: BRANCH_ID, name: 'Ca qua đêm', startTime: '22:00:00', endTime: '06:00:00', isOvernight: true, isActive: true },
   ];
   const at = '2026-01-01T00:00:00';
   const staffProfiles: StaffProfile[] = [

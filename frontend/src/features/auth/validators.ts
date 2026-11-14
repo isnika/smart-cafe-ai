@@ -1,7 +1,7 @@
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^(0|\+84)\d{9}$/;
 
-export const PASSWORD_MIN = 6;
+export const PASSWORD_MIN = 8;
 
 /** Bỏ khoảng trắng / dấu chấm / gạch ngang trong số điện thoại. */
 export const normalizePhone = (v: string) => v.replace(/[\s.\-()]/g, "");
@@ -37,7 +37,9 @@ export function validateFullName(v: string): string | undefined {
 
 export function validateNewPassword(v: string): string | undefined {
   if (!v) return "Vui lòng nhập mật khẩu";
-  if (v.length < PASSWORD_MIN) return `Mật khẩu tối thiểu ${PASSWORD_MIN} ký tự`;
+  if (v.length < PASSWORD_MIN) return `Mật khẩu cần ít nhất ${PASSWORD_MIN} ký tự`;
+  if (!/[\p{L}]/u.test(v) || !/\d/.test(v)) return "Mật khẩu cần có cả chữ và số";
+  if (new TextEncoder().encode(v).length > 72) return "Mật khẩu tối đa 72 byte UTF-8";
 }
 
 export function validateConfirm(password: string, confirm: string): string | undefined {

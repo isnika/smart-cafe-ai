@@ -50,21 +50,22 @@ describe('model', () => {
 });
 
 describe('useStaffCheckin', () => {
-  it('tải ca + lịch; check-in rồi check-out tự cập nhật trạng thái', async () => {
+  it('tải lịch cá nhân; QR khớp lịch rồi check-in và check-out đúng lịch', async () => {
     await signIn();
     const { result } = renderHook(() => useStaffCheckin(), { wrapper });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
-    expect(result.current.shifts).toHaveLength(2);
+    expect(result.current.schedules).toHaveLength(1);
     expect(result.current.phase).toBe('ready');
 
-    await act(async () => {
-      expect(await result.current.submitCode('shift-qr:1')).toBe(true);
-    });
+    const posts: Array<{ path: string; body: unknown }> = [];
+    server.use(http.post(/\/timekeeping\/check-in$/, async ({ request }) => { posts.push({ path: new URL(request.url).pathname, body: await request.json() }); db.timekeepings.push({ id: 1, scheduleId: 1, checkIn: '2026-11-11T08:00:00', checkOut: null, source: 'QR', isAdjusted: false }); return HttpResponse.json({ id: 1, schedule_id: 1, check_in: '2026-11-11T08:00:00', check_out: null, source: 'QR', is_adjusted: false }); }));
+    await act(async () => { expect(await result.current.submitCode('shift-qr:1')).toBe(true); });
+    expect(posts[0]?.body).toEqual({ schedule_id: 1, source: 'QR' });
     await waitFor(() => expect(result.current.phase).toBe('in'));
 
-    await act(async () => {
-      expect(await result.current.submitCode('shift-qr:1')).toBe(true);
-    });
+    server.use(http.post(/\/timekeeping\/check-out$/, async ({ request }) => { posts.push({ path: new URL(request.url).pathname, body: await request.json() }); db.timekeepings[0]!.checkOut = '2026-11-11T16:00:00'; return HttpResponse.json({ id: 1, schedule_id: 1, check_in: '2026-11-11T08:00:00', check_out: '2026-11-11T16:00:00', source: 'QR', is_adjusted: false }); }));
+    await act(async () => { expect(await result.current.submitCode('shift-qr:1')).toBe(true); });
+    expect(posts[1]?.body).toEqual({ schedule_id: 1 });
     await waitFor(() => expect(result.current.phase).toBe('done'));
   });
 
@@ -95,7 +96,6 @@ describe('StaffCheckinPage', () => {
     fireEvent.change(screen.getByLabelText('Hoặc nhập mã ca'), { target: { value: 'shift-qr:1' } });
     fireEvent.click(screen.getByRole('button', { name: 'Check-out' }));
     expect(await screen.findByText('Giờ ra')).toBeTruthy();
-    expect(screen.getByText('Tổng thời gian làm')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Check-out' })).toBeNull();
   });
 
@@ -112,7 +112,7 @@ describe('StaffCheckinPage', () => {
     await screen.findByText('ĐÃ VÀO CA');
 
     // 409: ép server coi như chưa biết trạng thái bằng handler ghi đè
-    server.use(http.post(url('/store/timekeeping/check-out'), () => HttpResponse.json({ message: 'x', code: 'ALREADY_CHECKED_IN' }, { status: 409 })));
+    server.use(http.post(url('/timekeeping/check-out'), () => HttpResponse.json({ message: 'x', code: 'ALREADY_CHECKED_IN' }, { status: 409 })));
     fireEvent.change(screen.getByLabelText('Hoặc nhập mã ca'), { target: { value: 'shift-qr:1' } });
     fireEvent.click(screen.getByRole('button', { name: 'Check-out' }));
     expect(await screen.findByText('Bạn đã check-in ca này rồi.')).toBeTruthy();
@@ -124,7 +124,7 @@ describe('StaffCheckinPage', () => {
 
   it('lỗi mạng khi tải → nút Thử lại, bấm xong hiện ca', async () => {
     await signIn();
-    server.use(http.get(url('/store/branches/:id/shifts'), () => HttpResponse.error()));
+    server.use(http.get(url('/schedules/me'), () => HttpResponse.error()));
     renderPage();
     expect((await screen.findByRole('alert')).textContent).toMatch(/Không thể kết nối/);
     server.resetHandlers();
@@ -137,7 +137,7 @@ describe('StaffCheckinPage', () => {
     db.shifts.length = 0;
     db.schedules.length = 0;
     renderPage();
-    expect(await screen.findByText('Chi nhánh không có ca nào hôm nay')).toBeTruthy();
+    expect(await screen.findByText(/Hôm nay bạn không có lịch làm việc/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Check-in' })).toBeNull();
   });
 

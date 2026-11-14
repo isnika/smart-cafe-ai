@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { ShieldCheck } from "lucide-react";
 import { roleHome } from "@/app/routes";
 import { isApiError } from "@/shared/api/http";
@@ -23,6 +23,8 @@ const RESEND_SECONDS = 60;
  */
 export default function VerifyOtpPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const routeNotice = (location.state as { notice?: string } | null)?.notice;
   const identifier = useRecoveryStore((s) => s.identifier);
   const purpose = useRecoveryStore((s) => s.purpose);
   const setResetToken = useRecoveryStore((s) => s.setResetToken);
@@ -121,6 +123,7 @@ export default function VerifyOtpPage() {
         </p>
       }
     >
+      {routeNotice && <FormAlert tone="success">{routeNotice}</FormAlert>}
       <AuthHeading
         icon={<ShieldCheck />}
         tone="success"

@@ -1,7 +1,7 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Mail } from "lucide-react";
-import { roleHome } from "@/app/routes";
+import { homeAfterLogin } from "@/app/routes";
 import { isApiError } from "@/shared/api/http";
 import { Button, Input } from "@/shared/ui";
 import { useAuthStore } from "../store";
@@ -28,6 +28,21 @@ interface LocationState {
   notice?: string;
 }
 
+declare global {
+  interface Window {
+    google?: {
+      accounts: {
+        id: {
+          initialize: (options: { client_id: string; callback: (response: { credential?: string }) => void }) => void;
+          prompt: () => void;
+        };
+      };
+    };
+  }
+}
+
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim();
+
 export default function LoginPage() {
   const status = useAuthStore((s) => s.status);
   const roleName = useAuthStore((s) => s.roleName);
@@ -45,11 +60,49 @@ export default function LoginPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [googleReady, setGoogleReady] = useState(false);
 
-  // Đã đăng nhập (kể cả vừa login xong) → đi tiếp. Redirect theo store nên không cần navigate() thủ công.
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID) return;
+    let cancelled = false;
+    const initialize = () => {
+      if (cancelled || !window.google) return false;
+      window.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: ({ credential }) => {
+          if (!credential) {
+            setFormError("Google không trả về thông tin đăng nhập. Vui lòng thử lại.");
+            setSubmitting(false);
+            return;
+          }
+          setFormError(null);
+          setInfo(null);
+          setSubmitting(true);
+          void useAuthStore.getState().loginWithGoogle(credential).catch((err: unknown) => {
+            setFormError(isApiError(err) ? err.message : "Không thể đăng nhập bằng Google, vui lòng thử lại");
+            setSubmitting(false);
+          });
+        },
+      });
+      setGoogleReady(true);
+      return true;
+    };
+
+    if (initialize()) return () => { cancelled = true; };
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.onload = initialize;
+    script.onerror = () => setFormError("Không tải được Google Sign-In. Vui lòng kiểm tra kết nối mạng.");
+    document.head.appendChild(script);
+    return () => { cancelled = true; };
+  }, []);
+
+  // Đã đăng nhập (kể cả vừa login xong) → mở route hợp lệ theo quyền.
   if (status === "authenticated" && roleName) {
     return (
-      <Navigate to={safeRedirect(state?.from) ?? roleHome[roleName]} replace />
+      <Navigate to={homeAfterLogin(roleName, safeRedirect(state?.from))} replace />
     );
   }
 
@@ -71,17 +124,24 @@ export default function LoginPage() {
       await login({ identifier: normalizeIdentifier(identifier), password });
       // thành công: store đổi status → render lại ở trên và <Navigate/>
     } catch (err) {
-      // Tài khoản đã đăng ký nhưng chưa xác minh OTP → gửi lại mã và đưa sang bước xác minh
+      // Tài khoản chưa xác minh → chuyển sang OTP đăng ký, không kết thúc ở lỗi đăng nhập.
       if (isApiError(err) && err.code === "ACCOUNT_UNVERIFIED") {
         const id = normalizeIdentifier(identifier);
         try {
-          authFlowApi.holdCredentials(id, password); // /auth/otp/verify không trả token → cần để auto-login
           await authFlowApi.resendRegistrationOtp(id);
           startVerification(id, "register");
-          navigate("/verify-otp");
+          navigate("/verify-otp", {
+            state: { notice: `Tài khoản chưa xác thực. Đã gửi mã OTP mới đến email ${id}.` },
+          });
           return;
-        } catch {
-          /* gửi mã lỗi → rơi xuống hiển thị thông báo của server bên dưới */
+        } catch (resendError) {
+          setFormError(
+            isApiError(resendError)
+              ? `Tài khoản chưa xác thực. Chưa gửi được OTP đến email: ${resendError.message}`
+              : "Tài khoản chưa xác thực. Chưa gửi được OTP đến email, vui lòng thử lại.",
+          );
+          setSubmitting(false);
+          return;
         }
       }
       setFormError(
@@ -89,7 +149,9 @@ export default function LoginPage() {
           ? err.status === 401
             ? "Email/số điện thoại hoặc mật khẩu không đúng"
             : err.message
-          : "Đã có lỗi xảy ra, vui lòng thử lại",
+          : err instanceof Error
+            ? err.message
+            : "Đã có lỗi xảy ra, vui lòng thử lại",
       );
       setSubmitting(false);
     }
@@ -172,10 +234,18 @@ export default function LoginPage() {
         leftIcon={<GoogleIcon />}
         onClick={() => {
           setFormError(null);
-          setInfo(
-            "Đăng nhập bằng Google sẽ có ở phiên bản sau. Vui lòng dùng email / số điện thoại.",
-          );
+          if (!GOOGLE_CLIENT_ID) {
+            setInfo("Google Sign-In chưa được cấu hình. Hãy thêm VITE_GOOGLE_CLIENT_ID vào frontend/.env.local.");
+            return;
+          }
+          if (!googleReady || !window.google) {
+            setFormError("Google Sign-In đang tải. Vui lòng thử lại sau giây lát.");
+            return;
+          }
+          setInfo(null);
+          window.google.accounts.id.prompt();
         }}
+        disabled={submitting}
       >
         Đăng nhập với Google
       </Button>

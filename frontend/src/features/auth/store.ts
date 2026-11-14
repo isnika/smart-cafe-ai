@@ -55,6 +55,7 @@ interface AuthState {
   branchId: number | null;
 
   login: (input: LoginInput) => Promise<AuthSession>;
+  loginWithGoogle: (idToken: string) => Promise<AuthSession>;
   /**
    * Áp dụng một phiên đã được server cấp (lưu storage + chuyển sang authenticated).
    * Dùng cho login và cho auto-login sau khi xác minh OTP đăng ký.
@@ -86,6 +87,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   login: async (input) => {
     const session = await identityApi.login(input); // auth:false → 401 sai mật khẩu không kích hoạt onUnauthorized
+    get().applySession(session);
+    return session;
+  },
+
+  loginWithGoogle: async (idToken) => {
+    const session = await identityApi.loginWithGoogle(idToken);
     get().applySession(session);
     return session;
   },
@@ -125,8 +132,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: async () => {
+    const refreshToken = get().refreshToken;
     try {
-      await identityApi.logout(); // cần token nên phải gọi TRƯỚC khi clear
+      await identityApi.logout(refreshToken); // cần refresh token để thu hồi phiên server trước khi clear
     } catch {
       /* token có thể đã hết hạn / mất mạng — vẫn đăng xuất phía client */
     }
@@ -143,10 +151,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const user = await identityApi.getMe();
       // Trong lúc chờ, user có thể đã logout / bị 401 clear / login tài khoản khác → bỏ kết quả cũ.
       if (get().accessToken !== token) return;
-      set({ user, status: 'authenticated' });
+      const roleName = identityApi.roleFromUser(user) ?? get().roleName;
+      if (!roleName) throw new Error('API /users/me không trả về vai trò hợp lệ');
+      const branchId = get().branchId;
+      save({ accessToken: token, refreshToken: get().refreshToken, roleName, branchId });
+      set({ user, roleName, status: 'authenticated' });
     } catch {
-      // 401: onUnauthorized đã clear() rồi (token đổi → nhánh dưới bị bỏ qua).
-      // Lỗi mạng / 5xx: giữ token để lần reload sau thử lại, nhưng chưa cho vào app.
+      // HTTP client đã thử refresh một lần khi /me trả 401. Nếu refresh thất bại,
+      // onUnauthorized sẽ clear store; lỗi mạng / 5xx vẫn giữ phiên để tải lại sau.
       if (get().accessToken === token) set({ status: 'anonymous' });
     }
   },

@@ -8,7 +8,7 @@ export const todayInTz = (tz = 'Asia/Ho_Chi_Minh', at: Date = new Date()): IsoDa
 
 export type CheckinPhase = 'none' | 'ready' | 'in' | 'done';
 
-/** Lịch cần hiển thị: ca đang làm dở > ca chưa vào > ca đã xong gần nhất. */
+/** Hiển thị lịch theo trạng thái chấm công do server trả về. */
 export function pickActiveSchedule(rows: ScheduleView[]): ScheduleView | null {
   const inProgress = rows.find((r) => r.timekeeping?.checkIn && !r.timekeeping.checkOut);
   if (inProgress) return inProgress;
@@ -58,10 +58,11 @@ const MESSAGES: Record<string, string> = {
   SHIFT_NOT_FOUND: 'Mã QR không hợp lệ. Kiểm tra lại mã in tại quầy.',
   WRONG_BRANCH: 'Mã QR này không thuộc chi nhánh của bạn.',
   NO_SCHEDULE: 'Bạn không có lịch làm ca này hôm nay.',
-  OUT_OF_SHIFT_WINDOW: 'Ngoài khung giờ cho phép của ca (±30 phút so với lịch làm việc).',
+  OUT_OF_SHIFT_WINDOW: 'Bạn đang check-in/out ngoài khung giờ cho phép.',
   ALREADY_CHECKED_IN: 'Bạn đã check-in ca này rồi.',
   ALREADY_CHECKED_OUT: 'Bạn đã check-out ca này rồi.',
   NOT_CHECKED_IN: 'Bạn chưa check-in ca này nên chưa thể check-out.',
+  VALIDATION_ERROR: 'Thông tin chấm công chưa hợp lệ. Vui lòng tải lại lịch và thử lại.',
 };
 
 export function toFailure(e: unknown): CheckinFailure {
@@ -69,7 +70,13 @@ export function toFailure(e: unknown): CheckinFailure {
     if (e.status === 0 || e.code === API_ERROR_CODES.NETWORK_ERROR) {
       return { message: 'Không thể kết nối tới máy chủ. Kiểm tra mạng rồi thử lại.', retryable: true };
     }
-    const known = e.code ? MESSAGES[e.code] : undefined;
+    const known = e.status === 401 ? 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
+      : e.status === 403 ? 'Bạn không có quyền xem hoặc cập nhật chấm công này.'
+      : e.status === 422 ? MESSAGES[e.code ?? ''] ?? 'Thông tin chấm công chưa hợp lệ.'
+      : e.status === 409 && e.code === 'OUT_OF_SHIFT_WINDOW' ? MESSAGES.OUT_OF_SHIFT_WINDOW
+      : e.status === 409 && e.code === 'ALREADY_CHECKED_IN' ? MESSAGES.ALREADY_CHECKED_IN
+      : e.status === 409 ? 'Trạng thái chấm công đã thay đổi. Hãy tải lại lịch.'
+      : e.code ? MESSAGES[e.code] : undefined;
     return { message: known ?? e.message, retryable: e.status >= 500 };
   }
   return { message: 'Có lỗi xảy ra, vui lòng thử lại.', retryable: true };

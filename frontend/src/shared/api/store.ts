@@ -3,14 +3,14 @@ import type {
   ListSchedulesParams,
   OpenTableSessionInput,
   ScheduleView,
-  Shift,
   TableBill,
   TableSession,
   TableSessionStatus,
   TableStatus,
   TableStatusView,
   Timekeeping,
-  TimekeepingScanInput,
+  TimekeepingCheckInInput,
+  TimekeepingCheckOutInput,
 } from '@/shared/types';
 import { http } from './http';
 import { guestHeaders } from './guest';
@@ -91,8 +91,8 @@ export const getTableSession = (sessionCode: string) =>
   http.get<TableSession>(`${P}/table-sessions/${encodeURIComponent(sessionCode)}`, { auth: false });
 export const getTableBill = (sessionId: number) => http.get<TableBill>(`${P}/table-sessions/${sessionId}/bill`);
 
-// Workforce
-export const listShifts = (branchId: number) => http.get<Shift[]>(`${P}/branches/${branchId}/shifts`);
-export const listSchedules = (params: ListSchedulesParams) => http.get<ScheduleView[]>(`${P}/schedules`, { query: params });
-export const checkIn = (input: TimekeepingScanInput) => http.post<Timekeeping>(`${P}/timekeeping/check-in`, input);
-export const checkOut = (input: TimekeepingScanInput) => http.post<Timekeeping>(`${P}/timekeeping/check-out`, input);
+// Work schedules and staff timekeeping. These are separate from cashier shifts.
+export const getMySchedules = (params: Pick<ListSchedulesParams, 'from' | 'to'>) => http.get<ScheduleView[]>('/schedules/me', { query: params });
+export const getMyTimekeeping = (params: Pick<ListSchedulesParams, 'from' | 'to'> = {}) => http.get<Timekeeping[]>('/timekeeping/me', { query: params });
+export const checkIn = (input: TimekeepingCheckInInput) => http.post<Timekeeping>('/timekeeping/check-in', input, { snake: true });
+export const checkOut = (input: TimekeepingCheckOutInput) => http.post<Timekeeping>('/timekeeping/check-out', input, { snake: true });

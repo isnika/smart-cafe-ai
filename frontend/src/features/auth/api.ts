@@ -15,10 +15,9 @@ export interface RegisterInput {
  * Tất cả là endpoint công khai → auth:false (không gắn token, 401 không kích hoạt refresh/onUnauthorized).
  *
  * Khác biệt so với FE cũ (giữ nguyên chữ ký hàm để các page không phải đổi):
- *  - /auth/otp/verify KHÔNG trả token → verifyRegistration gọi tiếp /auth/login bằng thông tin
- *    vừa đăng ký (giữ tạm trong RAM, xoá ngay sau khi dùng) rồi trả AuthSession để page auto-login.
+ *  - Identity service trả luôn token từ /auth/otp/verify; fallback hỗ trợ deployments cũ không trả token.
  *  - Không có bước "verify OTP → reset token" cho quên mật khẩu: /auth/reset-password nhận thẳng
- *    { target, otp_code, new_password }. verifyOtp chỉ giữ OTP trong RAM (đóng vai "resetToken")
+ *    { phone_email, otp_code, new_password }. verifyOtp chỉ giữ OTP trong RAM (đóng vai "resetToken")
  *    và OTP thật sự được server kiểm tra ở bước đặt mật khẩu mới.
  */
 
@@ -58,16 +57,19 @@ export const authFlowApi = {
   holdCredentials: (identifier: string, password: string) => holdCredentials([identifier], password),
 
   /**
-   * Xác minh tài khoản bằng OTP → /auth/otp/verify (không có token) → /auth/login để lấy phiên.
-   * Mất thông tin đăng nhập tạm (vd: reload giữa chừng) thì tài khoản vẫn đã được xác minh,
-   * chỉ cần đăng nhập lại → ném LOGIN_REQUIRED để page hiển thị thông báo.
+   * Xác minh tài khoản bằng OTP. Identity service trả phiên ngay sau khi OTP hợp lệ.
+   * Nếu một deployment cũ chỉ trả trạng thái xác minh, dùng credential tạm nếu còn;
+   * nếu không thì báo LOGIN_REQUIRED để người dùng đăng nhập.
    */
   verifyRegistration: async (identifier: string, otp: string): Promise<AuthSession> => {
-    await http.post<{ verified: boolean; userStatus: string; usedAt: string }>(
-      "/auth/otp/verify",
-      { target: identifier, otpCode: otp },
-      { auth: false, snake: true },
+    const result = await http.post<{ accessToken?: string; refreshToken?: string | null; user?: AuthSession["user"]; roleName?: AuthSession["roleName"]; role?: string | { name?: string }; branchId?: number | null; verified?: boolean; userStatus?: string; usedAt?: string }>(
+      "/auth/otp/verify", { phoneEmail: identifier, otpCode: otp }, { auth: false, snake: true },
     );
+    // Identity service hiện cấp phiên ngay khi xác minh OTP; một số deployments cũ chỉ trả verified.
+    if (result.accessToken && result.user) {
+      const roleName = result.roleName ?? (typeof result.role === "string" ? result.role : result.role?.name) ?? "Customer";
+      return { accessToken: result.accessToken, refreshToken: result.refreshToken ?? null, user: result.user, roleName: roleName as AuthSession["roleName"], branchId: result.branchId ?? null };
+    }
     const password = takeCredentials(identifier);
     if (!password) {
       throw new ApiError(0, { message: "Xác minh thành công. Vui lòng đăng nhập để tiếp tục.", code: "LOGIN_REQUIRED" });
@@ -77,11 +79,11 @@ export const authFlowApi = {
 
   /** Gửi lại OTP xác minh đăng ký (cũng dùng khi đăng nhập vào tài khoản chưa xác minh). */
   resendRegistrationOtp: (identifier: string) =>
-    http.post<void>("/auth/otp/resend", { target: identifier }, { auth: false, snake: true }),
+    http.post<void>("/auth/otp/resend", { phoneEmail: identifier }, { auth: false, snake: true }),
 
   /** Gửi (hoặc gửi lại) mã OTP 6 số tới email / SĐT để đặt lại mật khẩu. */
   requestOtp: (identifier: string) =>
-    http.post<void>("/auth/forgot-password", { target: identifier }, { auth: false, snake: true }),
+    http.post<void>("/auth/forgot-password", { phoneEmail: identifier }, { auth: false, snake: true }),
 
   /** Không có endpoint riêng: giữ OTP + đích trong RAM, server kiểm tra ở resetPassword. */
   verifyOtp: async (identifier: string, otp: string): Promise<{ resetToken: string }> => {
@@ -95,7 +97,7 @@ export const authFlowApi = {
     if (!target) throw new ApiError(0, { message: "Phiên đặt lại mật khẩu đã hết hạn. Vui lòng thử lại từ đầu.", code: "RESET_EXPIRED" });
     await http.post<void>(
       "/auth/reset-password",
-      { target, otpCode: resetToken, newPassword },
+      { phoneEmail: target, otpCode: resetToken, newPassword },
       { auth: false, snake: true },
     );
     resetTarget.value = null;

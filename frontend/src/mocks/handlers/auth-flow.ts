@@ -60,10 +60,10 @@ const post = (suffix: string, resolver: Parameters<typeof guardedV1>[0]) => http
 /**
  * Contract theo SmartAPI v1 (envelope + snake_case):
  *   POST /auth/register          { full_name, email, phone, password } → 201 (tài khoản Unverified + gửi OTP)
- *   POST /auth/otp/verify        { target, otp_code } → { verified, user_status, used_at }  — KHÔNG cấp token
- *   POST /auth/otp/resend        { target } → 204
- *   POST /auth/forgot-password   { target } → 204
- *   POST /auth/reset-password    { target, otp_code, new_password } → 204 (OTP được kiểm tra ở đây, không có reset token)
+ *   POST /auth/otp/verify        { phone_email, otp_code } → { verified, user_status, used_at }  — KHÔNG cấp token
+ *   POST /auth/otp/resend        { phone_email } → 204
+ *   POST /auth/forgot-password   { phone_email } → 204
+ *   POST /auth/reset-password    { phone_email, otp_code, new_password } → 204 (OTP được kiểm tra ở đây, không có reset token)
  *
  * Kịch bản test nhanh:
  *   email kết thúc @fail.test          → 500 (test hiển thị lỗi form)
@@ -78,7 +78,7 @@ export const authFlowHandlers = [
     const phone = b.phone?.trim() ?? '';
     const password = b.password ?? '';
 
-    if (fullName.length < 2 || !EMAIL_RE.test(email) || !PHONE_RE.test(phone) || password.length < 6) {
+    if (fullName.length < 2 || !EMAIL_RE.test(email) || !PHONE_RE.test(phone) || password.length < 8 || !/\p{L}/u.test(password) || !/\d/.test(password) || new TextEncoder().encode(password).length > 72) {
       fail(400, 'VALIDATION_ERROR', 'Thông tin đăng ký không hợp lệ');
     }
     if (email.toLowerCase().endsWith('@fail.test')) fail(500, 'INTERNAL_ERROR', 'Máy chủ đang bận, vui lòng thử lại sau');
@@ -102,7 +102,8 @@ export const authFlowHandlers = [
 
   /** Xác minh tài khoản bằng OTP đăng ký → Active. KHÔNG trả token: FE phải gọi /auth/login sau đó. */
   post('/otp/verify', async ({ request }) => {
-    const { target, otp_code } = await readJson<{ target?: string; otp_code?: string }>(request);
+    const { phone_email, otp_code } = await readJson<{ phone_email?: string; otp_code?: string }>(request);
+    const target = phone_email;
     if (!target || !otp_code) fail(400, 'VALIDATION_ERROR', 'Thiếu mã OTP');
 
     const account = findAccount(target);
@@ -118,7 +119,8 @@ export const authFlowHandlers = [
    * FE cũng gọi khi đăng nhập vào tài khoản chưa xác minh (403 ACCOUNT_UNVERIFIED).
    */
   post('/otp/resend', async ({ request }) => {
-    const { target } = await readJson<{ target?: string }>(request);
+    const { phone_email } = await readJson<{ phone_email?: string }>(request);
+    const target = phone_email;
     if (!target?.trim()) fail(400, 'VALIDATION_ERROR', 'Thiếu email hoặc số điện thoại');
 
     const account = findAccount(target);
@@ -131,7 +133,8 @@ export const authFlowHandlers = [
    * Chỉ tài khoản Active mới nhận OTP; còn lại bước reset sẽ báo OTP không đúng.
    */
   post('/forgot-password', async ({ request }) => {
-    const { target } = await readJson<{ target?: string }>(request);
+    const { phone_email } = await readJson<{ phone_email?: string }>(request);
+    const target = phone_email;
     if (!target?.trim()) fail(400, 'VALIDATION_ERROR', 'Thiếu email hoặc số điện thoại');
 
     const account = findAccount(target);
@@ -140,9 +143,12 @@ export const authFlowHandlers = [
   }),
 
   post('/reset-password', async ({ request }) => {
-    const { target, otp_code, new_password } = await readJson<{ target?: string; otp_code?: string; new_password?: string }>(request);
+    const { phone_email, otp_code, new_password } = await readJson<{ phone_email?: string; otp_code?: string; new_password?: string }>(request);
+    const target = phone_email;
     if (!target || !otp_code || !new_password) fail(400, 'VALIDATION_ERROR', 'Thiếu thông tin đặt lại mật khẩu');
-    if (new_password.length < 6) fail(400, 'VALIDATION_ERROR', 'Mật khẩu tối thiểu 6 ký tự');
+    if (new_password.length < 8 || !/\p{L}/u.test(new_password) || !/\d/.test(new_password) || new TextEncoder().encode(new_password).length > 72) {
+      fail(400, 'VALIDATION_ERROR', 'Mật khẩu cần ít nhất 8 ký tự, gồm chữ và số, tối đa 72 byte UTF-8');
+    }
 
     const account = findAccount(target);
     consumeOtp('reset', account, otp_code); // OTP dùng 1 lần, sai quá số lần → khoá

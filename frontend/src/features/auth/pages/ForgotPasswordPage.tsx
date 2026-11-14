@@ -7,7 +7,7 @@ import { authFlowApi } from "../api";
 import { useRecoveryStore } from "../recovery-store";
 import { AuthHeading, AuthShell, authLinkMuted } from "../components/AuthShell";
 import { FormAlert } from "../components/FormAlert";
-import { normalizeIdentifier, validateIdentifier } from "../validators";
+import { normalizeIdentifier, validateEmail } from "../validators";
 
 export default function ForgotPasswordPage() {
   const navigate = useNavigate();
@@ -20,7 +20,7 @@ export default function ForgotPasswordPage() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (submitting) return;
-    const err = validateIdentifier(identifier);
+    const err = validateEmail(identifier);
     setError(err);
     if (err) return;
 
@@ -49,13 +49,13 @@ export default function ForgotPasswordPage() {
         icon={<Lock />}
         tone="warning"
         title="Quên mật khẩu"
-        subtitle="Nhập email hoặc số điện thoại đã đăng ký để nhận mã xác nhận OTP"
+        subtitle="Nhập email đã đăng ký để nhận mã xác nhận OTP"
       />
       <form onSubmit={onSubmit} noValidate className="space-y-4">
         {formError && <FormAlert>{formError}</FormAlert>}
         <Input
-          label="Email hoặc Số điện thoại"
-          placeholder="Nhập thông tin của bạn"
+          label="Email"
+          placeholder="ten@email.com"
           leftIcon={<Mail />}
           autoComplete="username"
           autoCapitalize="none"

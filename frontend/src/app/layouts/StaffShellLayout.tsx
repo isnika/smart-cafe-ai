@@ -2,6 +2,12 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   ClipboardList,
   Coffee,
+  Building2,
+  Database,
+  FileClock,
+  PlugZap,
+  QrCode,
+  Settings2,
   LayoutDashboard,
   LayoutGrid,
   LogOut,
@@ -39,7 +45,13 @@ const navByRole: Record<Exclude<RoleName, "Customer">, NavItem[]> = {
   ],
   Admin: [
     { to: "/admin", label: "Tổng quan", icon: LayoutDashboard, end: true },
-    { to: "/admin/users", label: "Người dùng", icon: Users },
+    { to: "/admin/branches", label: "Chi nhánh", icon: Building2 },
+    { to: "/admin/tables", label: "Bàn & QR", icon: QrCode },
+    { to: "/admin/users", label: "Tài khoản & Quyền", icon: Users },
+    { to: "/admin/config", label: "Cấu hình hệ thống", icon: Settings2 },
+    { to: "/admin/integrations", label: "Tích hợp dịch vụ", icon: PlugZap },
+    { to: "/admin/audit", label: "Nhật ký hệ thống", icon: FileClock },
+    { to: "/admin/backup", label: "Sao lưu & Phục hồi", icon: Database },
   ],
 };
 

@@ -41,6 +41,8 @@ export interface User {
   fullName: string;
   avatar?: string | null;
   roleId: number;
+  /** Tên vai trò theo UserResponse.role_name từ Identity API. */
+  roleName?: RoleName;
   status: UserStatus;
   emailVerifiedAt?: IsoDateTime | null;
   phoneVerifiedAt?: IsoDateTime | null;
@@ -352,6 +354,9 @@ export interface Timekeeping {
   isAdjusted: boolean;
   adjustedByStaffId?: number | null;
   adjustmentReason?: string | null;
+  workDate?: IsoDate;
+  status?: string;
+  schedule?: Pick<Schedule, 'workDate' | 'status'> | null;
 }
 
 export interface LeaveRequest {
@@ -375,6 +380,7 @@ export interface ScheduleView extends Schedule {
   employeeCode: string;
   jobTitle: string;
   timekeeping?: Timekeeping | null;
+  staff?: StaffProfile | null;
 }
 
 export interface ListSchedulesParams {
@@ -384,9 +390,14 @@ export interface ListSchedulesParams {
   to?: IsoDate;
 }
 
-/** Check-in/out bằng QR tĩnh theo ca (spec v3). Token dạng `shift-qr:<shiftId>`. */
-export interface TimekeepingScanInput {
-  qrToken: string;
+/** Staff timekeeping uses work schedules, independently from cashier shifts. */
+export interface TimekeepingCheckInInput {
+  scheduleId: number;
+  source: Extract<TimekeepingSource, 'QR' | 'Manual'>;
+}
+
+export interface TimekeepingCheckOutInput {
+  scheduleId: number;
 }
 
 export interface OpenTableSessionInput {

@@ -82,6 +82,14 @@ MAIL_SSL_ENABLE=false
 
 Với Gmail, dùng App Password và bật xác minh 2 bước theo [hướng dẫn Google](https://support.google.com/mail/answer/185833?hl=en). Điền App Password không có dấu cách. Tài khoản cơ quan/trường học có thể bị quản trị viên hạn chế tính năng này. Không commit `.env`.
 
+Nếu chạy bằng Docker Compose, đặt các biến `MAIL_*` trong file `.env` ở thư mục gốc repository; Compose truyền chúng vào `engagement-service`. File `.env` trong `backend/engagement-service` không tự được nạp vào container. Sau khi đổi cấu hình, tạo lại service:
+
+```powershell
+docker compose up -d --force-recreate engagement-service
+```
+
+Với Docker Hub Compose, thêm `-f docker-compose.hub.yml` vào lệnh trên.
+
 Các biến RabbitMQ phải giống nhau ở hai service. Giá trị mặc định khớp Docker Compose:
 
 ```dotenv
