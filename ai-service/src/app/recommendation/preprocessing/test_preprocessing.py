@@ -4,18 +4,18 @@ from preprocessing import prepare_data
 
 
 def test_prepare_data():
-    # ============================================
+     
     # 1. LOAD + PREPROCESSING
-    # ============================================
+     
 
     products, interactions = prepare_data(
         "../data_mock/products.csv",
         "../data_mock/user_item_summary.csv",
     )
 
-    # ============================================
+     
     # 2. PRODUCTS
-    # ============================================
+     
 
     print("\n===== PRODUCTS =====")
     print(products.head())
@@ -25,9 +25,9 @@ def test_prepare_data():
 
     print("\nProduct shape:", products.shape)
 
-    # ============================================
+     
     # 3. INTERACTIONS
-    # ============================================
+     
 
     print("\n===== INTERACTIONS =====")
     print(interactions.head())
@@ -37,9 +37,9 @@ def test_prepare_data():
 
     print("\nInteraction shape:", interactions.shape)
 
-    # ============================================
+     
     # 4. UNIQUE USERS / PRODUCTS
-    # ============================================
+     
 
     print("\n===== UNIQUE COUNTS =====")
 
@@ -53,9 +53,9 @@ def test_prepare_data():
         interactions["product_id"].nunique()
     )
 
-    # ============================================
+     
     # 5. MISSING VALUES
-    # ============================================
+     
 
     print("\n===== PRODUCTS MISSING VALUES =====")
     print(products.isna().sum())
@@ -63,9 +63,9 @@ def test_prepare_data():
     print("\n===== INTERACTIONS MISSING VALUES =====")
     print(interactions.isna().sum())
 
-    # ============================================
+     
     # 6. BASIC VALIDATION
-    # ============================================
+     
 
     assert not products.empty
     assert not interactions.empty

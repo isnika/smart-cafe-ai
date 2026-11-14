@@ -9,9 +9,9 @@ from collaborative import CollaborativeRecommender
 from hybrid import HybridRecommender
 
 
-# ==========================================
+    
 # 1. Load data_mock
-# ==========================================
+    
 
 products, interactions = prepare_data(
     "products_100.csv",
@@ -19,9 +19,9 @@ products, interactions = prepare_data(
 )
 
 
-# ==========================================
+    
 # 2. Content-Based
-# ==========================================
+    
 
 tfidf_matrix, vectorizer = create_tfidf_features(
     products
@@ -35,9 +35,9 @@ content_model.fit(
 )
 
 
-# ==========================================
+    
 # 3. Collaborative Filtering
-# ==========================================
+    
 
 user_item_matrix = create_user_item_matrix(
     interactions
@@ -50,9 +50,9 @@ collaborative_model.fit(
 )
 
 
-# ==========================================
+    
 # 4. Lấy recommendation
-# ==========================================
+    
 
 user_id = "U001"
 
@@ -74,9 +74,9 @@ collaborative_recommendations = (
 )
 
 
-# ==========================================
+    
 # 5. Hybrid
-# ==========================================
+    
 
 hybrid_model = HybridRecommender(
     content_weight=0.5,
@@ -97,9 +97,9 @@ recommendations = hybrid_model.recommend(
 )
 
 
-# ==========================================
+    
 # 6. Print
-# ==========================================
+    
 
 print("\n===== CONTENT-BASED =====")
 

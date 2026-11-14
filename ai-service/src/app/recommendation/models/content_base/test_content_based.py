@@ -3,9 +3,9 @@ from features import create_tfidf_features
 from content_based import ContentBasedRecommender
 
 
-# =========================
+   
 # 1. Load dữ liệu
-# =========================
+   
 
 products, interactions = prepare_data(
     "products_100.csv",
@@ -13,18 +13,18 @@ products, interactions = prepare_data(
 )
 
 
-# =========================
+   
 # 2. Tạo TF-IDF
-# =========================
+   
 
 tfidf_matrix, vectorizer = create_tfidf_features(
     products
 )
 
 
-# =========================
+   
 # 3. Tạo Content-Based Model
-# =========================
+   
 
 model = ContentBasedRecommender()
 
@@ -34,9 +34,9 @@ model.fit(
 )
 
 
-# =========================
+   
 # 4. Test recommendation
-# =========================
+   
 
 product_id = products.iloc[0]["product_id"]
 
@@ -46,9 +46,9 @@ recommendations = model.recommend(
 )
 
 
-# =========================
+   
 # 5. In kết quả
-# =========================
+   
 
 print("\n===== PRODUCT =====")
 

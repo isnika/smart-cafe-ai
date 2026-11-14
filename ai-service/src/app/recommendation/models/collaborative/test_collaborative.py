@@ -3,9 +3,9 @@ from features import create_user_item_matrix
 from collaborative import CollaborativeRecommender
 
 
-# =========================
+ 
 # 1. Load dữ liệu
-# =========================
+ 
 
 products, interactions = prepare_data(
     "products_100.csv",
@@ -13,9 +13,9 @@ products, interactions = prepare_data(
 )
 
 
-# =========================
+ 
 # 2. Tạo User-Item Matrix
-# =========================
+ 
 
 user_item_matrix = create_user_item_matrix(
     interactions
@@ -25,9 +25,9 @@ print("===== USER-ITEM MATRIX =====")
 print(user_item_matrix)
 
 
-# =========================
+ 
 # 3. Train model
-# =========================
+ 
 
 model = CollaborativeRecommender()
 
@@ -36,9 +36,9 @@ model.fit(
 )
 
 
-# =========================
+ 
 # 4. Test recommendation
-# =========================
+ 
 
 user_id = "U001"
 
@@ -48,9 +48,9 @@ recommendations = model.recommend(
 )
 
 
-# =========================
+ 
 # 5. In kết quả
-# =========================
+ 
 
 print("\n===== COLLABORATIVE RECOMMENDATIONS =====")
 

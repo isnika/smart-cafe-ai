@@ -20,9 +20,9 @@ from features.features import (
     create_user_item_matrix,
 )
 
-# ============================================================
+  
 # PATH
-# ============================================================
+  
 
 CURRENT_DIR = Path(__file__).resolve().parent
 
@@ -33,9 +33,9 @@ RECOMMENDATION_DIR = CURRENT_DIR.parent
 DATA_DIR = RECOMMENDATION_DIR / "data_mock"
 
 
-# ============================================================
+  
 # TEST
-# ============================================================
+  
 
 def test_features():
 
