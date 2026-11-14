@@ -1,23 +1,114 @@
-# Smart Café Forecasting (mock-data edition)
+# Smart Café Forecasting
 
-## Included
-- `data_mock/orders.csv`: synthetic order-level data, columns mapped from `Orders` (`created_at`, `branch_id`, `status`, `payment_status`, `final_amount` concept) into forecast-friendly fields.
-- `data_mock/order_items.csv`: synthetic product demand derived from `Order_Items` columns.
-- `data_mock/inventory.csv`: mock of `Inventories` (`quantity_in_stock`, `reserved_quantity`, `reorder_level`).
-- `data_mock/recipes.csv`: mock of `Recipes` (`quantity_required`) linked to product and ingredient IDs.
-- `service.py`: compares RandomForest, ExtraTrees, HistGradientBoosting using chronological 80/20 validation and selects the lowest MAE. Uses only lagged/rolling features available before the target date.
+## Chạy local với demo
 
-## Endpoints
-Run from `ai-service` root:
+Forecasting mặc định là `live`; demo phải bật tường minh:
+
 ```powershell
-python -m pip install -r requirements.txt
+$env:FORECASTING_SOURCE_MODE = "demo"
 uvicorn src.app.main:app --reload
 ```
-- `POST /api/forecasting` body `{"start_date":"2026-10-19","days":1}`
-- `POST /api/forecasting/products` body `{"target_date":"2026-10-19"}`
-- `POST /api/forecasting/inventory` body `{"target_date":"2026-10-19"}`
 
-Revenue output includes chosen model, chronological holdout MAE and scores for each candidate. Product demand is a transparent recent 8-week weekday-average baseline; inventory usage is forecast product quantity multiplied by `Recipes.quantity_required`, compared with available stock (`quantity_in_stock - reserved_quantity`) and `reorder_level`.
+Các endpoint giữ nguyên:
 
-## Important limitations
-All files in `data_mock` are **synthetic**, not extracted from the user's live MySQL database. They are for wiring and end-to-end testing only, not evidence of real-world accuracy. Before production, replace with actual data and ensure revenue definition is consistent (recommended: completed orders, `Orders.final_amount`, and business-local date based on `Branches.timezone`). Avoid double-counting order items and payments: `Orders.final_amount` is the sales target; successful payments/refunds can be used for reconciliation, not summed on top of order revenue. Ingredient recipe IDs must map to catalog variant IDs and inventory ingredient IDs in the live services.
+```text
+POST /api/forecasting
+POST /api/forecasting/products
+POST /api/forecasting/inventory
+```
+
+Request doanh thu:
+
+```json
+{"start_date":"2026-10-19","days":3,"branch_id":1}
+```
+
+Request product/inventory:
+
+```json
+{"target_date":"2026-10-19","branch_id":1}
+```
+
+`branch_id` được truyền xuyên suốt và là bắt buộc ở live mode. Demo chỉ tự chọn
+branch khi fixture có đúng một branch; không có semantics “null = toàn hệ thống”.
+Header `Authorization` (nếu có) được forward nguyên vẹn tới backend snapshot;
+backend chịu trách nhiệm kiểm tra caller có quyền trên branch đó.
+
+## Mapping schema → snapshot
+
+Spring Boot vẫn sở hữu database. AI service không kết nối trực tiếp MySQL.
+Adapter live đọc snapshot read-only từ `FORECASTING_SNAPSHOT_PATH`.
+
+- `Orders.id`, `branch_id`, `created_at`, `status`, `payment_status`,
+  `final_amount` → `orders.order_id`, `branch_id`, `order_time`, trạng thái và
+  `order_total_vnd`.
+- `Order_Items.order_id`, `product_id`, `variant_id`, `quantity` → demand theo
+  variant. Live bắt buộc có `variant_id`; AI service không tự chia product xuống
+  nhiều variant.
+- `Recipes.variant_id`, `ingredient_id`, `quantity_required` → công thức tiêu hao.
+- `Inventories.branch_id`, `ingredient_id`, `quantity_in_stock`,
+  `reserved_quantity`, `reorder_level` → tồn khả dụng và đề xuất mua.
+- `Branches.timezone` → timezone nghiệp vụ của snapshot.
+
+Revenue dùng `final_amount`/`order_total_vnd` sau lọc `Completed` và payment
+được ghi nhận. `Partially_Refunded` chỉ được tính nếu snapshot có
+`refunded_amount_vnd`; `Refunded` đóng góp doanh thu bằng 0. Product demand dùng
+item của order `Completed`; refund sau khi hoàn tất không tự xóa tiêu hao vì
+schema không chứng minh món đã được hoàn nguyên. Đây là giới hạn nghiệp vụ cần
+backend xác nhận bằng inventory events nếu muốn chính xác hơn.
+
+## Contract live đề xuất
+
+`GET {FORECASTING_DATA_API_BASE_URL}{FORECASTING_SNAPSHOT_PATH}?branch_id=1`
+
+Backend cần trả JSON có các trường:
+
+```json
+{
+  "version": "orders-cursor-v1",
+  "generated_at": "2026-10-18T18:00:00Z",
+  "complete_through": "2026-10-18",
+  "coverage_complete": true,
+  "timezone": "Asia/Ho_Chi_Minh",
+  "orders": [],
+  "order_items": [],
+  "recipes": [],
+  "inventory": []
+}
+```
+
+`coverage_complete=true` là bắt buộc để AI service được phép điền 0 cho ngày
+không có giao dịch trong khoảng dữ liệu hoàn chỉnh. Khi snapshot lỗi, live mode
+trả lỗi; không tự chuyển sang CSV demo. Backend endpoint này hiện chưa được xác
+nhận là đã triển khai trong repository này.
+
+## Thuật toán và đánh giá
+
+- Revenue features: calendar, lag 1/7/14, rolling mean 7/28 với shift trước
+  rolling; forecast nhiều bước dùng recursive predictions.
+- Candidates: `SeasonalNaive`, `WeekdayMean8Weeks`, `RandomForestRegressor`,
+  `ExtraTreesRegressor`, `HistGradientBoostingRegressor`.
+- Model chọn bằng rolling-origin validation; fold cuối giữ riêng làm test.
+- Metrics: MAE, RMSE, WAPE. WAPE là `N/A` nếu tổng actual bằng 0.
+- Product demand là expected quantity trung bình các weekday trong 8 tuần gần
+  nhất; `recommended_quantity` mới làm tròn theo nearest integer.
+- Inventory usage giữ số thập phân và không tự đổi đơn vị. Thiếu recipe,
+  inventory hoặc unit mismatch trả `status=insufficient_data`, không mặc định
+  usage bằng 0.
+- Không trả prediction interval vì chưa có phương pháp calibration/coverage.
+
+## Cache và lưu forecast
+
+Model cache theo source, branch, cấu hình, và fingerprint authorization live; TTL
+được điều khiển bởi `FORECASTING_CACHE_TTL_SECONDS`. Refresh xây snapshot/model
+mới trước, chỉ thay cache sau khi build thành công. Nếu refresh live thất bại và
+đã có model cũ, response đánh dấu `stale=true`.
+
+AI service hiện chưa ghi trực tiếp bảng `AI_Forecasts`. Schema này thuộc backend
+Spring Boot; cần backend write adapter/idempotency contract riêng trước khi bật
+lưu kết quả. Interface nội bộ `ForecastPersistenceRepository.save_run()` đã
+được đặt ra để không buộc AI service tự mở kết nối database. Contract write đề
+xuất cần nhận `run_id`, `branch_id`, `forecast_type`, `target_id`,
+`forecast_date`, `predicted_value`, `model_version`, `raw_data` và dùng idempotency
+theo `(run_id, branch_id, forecast_type, target_id, forecast_date)`; endpoint
+write backend chưa được triển khai/xác nhận trong repository này.
