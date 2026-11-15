@@ -112,6 +112,7 @@ def rolling_origin_evaluation(
             "validation": {},
             "test": {},
             "fallback_reason": "insufficient_history_for_rolling_evaluation",
+            "fold_details": [],
         }
     initial = min(max(30, int(initial_train_days)), len(series) - horizon_days)
     origins = list(range(initial, len(series) - horizon_days + 1, max(1, step_days)))
@@ -168,4 +169,5 @@ def rolling_origin_evaluation(
         "validation": validation,
         "test": test,
         "fallback_reason": None,
+        "fold_details": folds,
     }
