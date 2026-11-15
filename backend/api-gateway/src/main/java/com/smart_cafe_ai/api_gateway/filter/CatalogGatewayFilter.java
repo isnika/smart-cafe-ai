@@ -49,7 +49,9 @@ public class CatalogGatewayFilter implements WebFilter {
             Claims claims=Jwts.parser().verifyWith(key).build().parseSignedClaims(authorization.substring(7)).getPayload();
             if(claims.getExpiration()==null || claims.getSubject()==null || claims.getSubject().isBlank() || claims.getSubject().length()>36)
                 return error(exchange,401,"UNAUTHORIZED","Phiên đăng nhập không hợp lệ.",trace);
-            if(!"Manager".equals(claims.get("role")) && !"Admin".equals(claims.get("role"))) return error(exchange,403,"FORBIDDEN","Bạn không có quyền quản lý thực đơn.",trace);
+            String role = String.valueOf(claims.get("role"));
+            if(!"Manager".equalsIgnoreCase(role) && !"Admin".equalsIgnoreCase(role)
+                    && !"ROLE_MANAGER".equalsIgnoreCase(role) && !"ROLE_ADMIN".equalsIgnoreCase(role)) return error(exchange,403,"FORBIDDEN","Bạn không có quyền quản lý thực đơn.",trace);
         } catch(ExpiredJwtException ex) {return error(exchange,401,"TOKEN_EXPIRED","Phiên đăng nhập đã hết hạn.",trace);}
         catch(JwtException|IllegalArgumentException ex) {return error(exchange,401,"UNAUTHORIZED","Phiên đăng nhập không hợp lệ.",trace);}
         return chain.filter(exchange);

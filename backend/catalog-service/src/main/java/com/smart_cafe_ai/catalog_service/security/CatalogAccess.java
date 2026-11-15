@@ -37,8 +37,10 @@ public class CatalogAccess {
         } catch (JwtException | IllegalArgumentException ex) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.");
         }
-        Object role = claims.get("role");
-        if (!"Manager".equals(role) && !"Admin".equals(role)) {
+        Object roleObj = claims.get("role");
+        String role = roleObj != null ? roleObj.toString() : "";
+        if (!"Manager".equalsIgnoreCase(role) && !"Admin".equalsIgnoreCase(role)
+                && !"ROLE_MANAGER".equalsIgnoreCase(role) && !"ROLE_ADMIN".equalsIgnoreCase(role)) {
             throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Bạn không có quyền quản lý thực đơn.");
         }
         return claims.getSubject();

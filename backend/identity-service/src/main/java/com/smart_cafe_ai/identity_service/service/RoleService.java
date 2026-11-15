@@ -72,7 +72,11 @@ public class RoleService {
         }
 
         // System roles protection
-        if (List.of("Customer", "Staff", "Manager", "Admin").contains(role.getName())) {
+        List<String> systemRoles = List.of(
+                "ROLE_ADMIN", "ROLE_MANAGER", "ROLE_CASHIER", "ROLE_BARISTA", "ROLE_STAFF", "ROLE_CUSTOMER",
+                "Customer", "Staff", "Manager", "Admin", "Cashier", "Barista"
+        );
+        if (systemRoles.contains(role.getName())) {
             return ApiResponse.error("CONFLICT", "Không thể xóa các vai trò mặc định của hệ thống");
         }
 

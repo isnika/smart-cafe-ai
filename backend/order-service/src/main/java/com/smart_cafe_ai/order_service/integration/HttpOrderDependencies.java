@@ -36,7 +36,10 @@ public class HttpOrderDependencies implements OrderDependencies {
         // Identity currently provides a batch lookup; use it instead of reading its database.
         var data=call("identity","/users/batch",Map.of("ids",List.of(userId)));
         if(!data.isArray())throw unavailable("identity");
-        for(var u:data)if(userId.equals(u.path("id").asText())&&"Active".equals(u.path("status").asText())&&"Customer".equals(u.path("role_name").asText()))return;
+        for(var u:data){
+            String roleName = u.path("role_name").asText();
+            if(userId.equals(u.path("id").asText())&&"Active".equals(u.path("status").asText())&&("ROLE_CUSTOMER".equalsIgnoreCase(roleName)||"Customer".equalsIgnoreCase(roleName)))return;
+        }
         throw new ApiException(UNPROCESSABLE_ENTITY,"CUSTOMER_NOT_FOUND","Khách hàng không tồn tại hoặc không hoạt động.");
     }
     @Override public List<ResolvedItem> resolve(Integer branchId,List<Item> items){

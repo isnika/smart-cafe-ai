@@ -75,7 +75,9 @@ public class AuthService {
         if (userRepository.existsByPhoneIn(phoneAliases(phone))) {
             return ApiResponse.error("CONFLICT", "Số điện thoại đã được sử dụng");
         }
-        Role customerRole = roleRepository.findByName("Customer").orElseGet(() -> roleRepository.save(Role.builder().name("Customer").description("Default Customer role").build()));
+        Role customerRole = roleRepository.findByName("ROLE_CUSTOMER")
+                .or(() -> roleRepository.findByName("Customer"))
+                .orElseGet(() -> roleRepository.save(Role.builder().name("ROLE_CUSTOMER").description("Khách hàng thành viên Smart Cafe").build()));
         User user = User.builder().fullName(name.getData()).email(email).phone(phone).passwordHash(passwordEncoder.encode(request.getPassword())).role(customerRole).status(UserStatus.Unverified).build();
         User savedUser = userRepository.save(user);
         otpService.generateAndSaveOtp(email, OtpPurpose.Register, savedUser.getId(), null);
@@ -154,8 +156,9 @@ public class AuthService {
                 throw new GoogleAuthException(HttpStatus.FORBIDDEN, "GOOGLE_EMAIL_VERIFICATION_REQUIRED",
                         "Hãy đăng ký và xác thực email bằng OTP, sau đó đăng nhập để liên kết Google");
             }
-            Role customerRole = roleRepository.findByName("Customer").orElseGet(() ->
-                    roleRepository.save(Role.builder().name("Customer").description("Default Customer role").build()));
+            Role customerRole = roleRepository.findByName("ROLE_CUSTOMER")
+                    .or(() -> roleRepository.findByName("Customer"))
+                    .orElseGet(() -> roleRepository.save(Role.builder().name("ROLE_CUSTOMER").description("Khách hàng thành viên Smart Cafe").build()));
             String name = identity.name() == null || identity.name().isBlank() ? "Google User" : identity.name().trim();
             String picture = identity.picture();
             user = User.builder()
@@ -366,7 +369,7 @@ public class AuthService {
     }
 
     private AuthResponse issueTokens(User user, String deviceInfo) {
-        String roleName = user.getRole() != null ? user.getRole().getName() : "Customer";
+        String roleName = user.getRole() != null ? user.getRole().getName() : "ROLE_CUSTOMER";
         String accessToken = jwtService.generateAccessToken(user.getId(), roleName);
         String refreshToken = jwtService.generateRefreshToken(user.getId());
         saveRefreshTokenInDb(user, refreshToken, deviceInfo);
