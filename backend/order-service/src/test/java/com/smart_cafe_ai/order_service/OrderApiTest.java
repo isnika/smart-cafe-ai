@@ -46,7 +46,7 @@ class OrderApiTest {
     @Autowired EngagementCheckoutRepository checkouts;
     @Autowired EngagementCheckoutRecovery recovery;
     @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
-    final String customer=token("customer-1","Customer"),other=token("customer-2","Customer"),staff=token("staff-1","Staff"),manager=token("manager-1","Manager"),admin=token("admin-1","Admin");
+    final String customer=token("customer-1","ROLE_CUSTOMER"),other=token("customer-2","ROLE_CUSTOMER"),staff=token("staff-1","ROLE_STAFF"),manager=token("manager-1","ROLE_MANAGER"),admin=token("admin-1","ROLE_ADMIN");
 
     @BeforeEach void setup(){
         checkouts.deleteAll();
@@ -64,7 +64,12 @@ class OrderApiTest {
             return items.stream().map(item->new ResolvedItem(item.variantId(),100,"Ca phe","Size M",new BigDecimal("30000"),item.options().stream().map(o->new ResolvedOption(o.optionId(),"Topping",new BigDecimal("5000"),o.quantity())).toList())).toList();
         });
     }
-    static String token(String user,String role){return "Bearer "+Jwts.builder().subject(user).claim("role",role).issuedAt(new Date()).expiration(Date.from(Instant.now().plusSeconds(3600))).signWith(Keys.hmacShaKeyFor(Decoders.BASE64.decode("404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970"))).compact();}
+    static String token(String user,String role){
+        String effectiveRole = role;
+        if(role != null && !role.isBlank()){
+            effectiveRole = role.startsWith("ROLE_") ? role : "ROLE_" + role.toUpperCase();
+        }
+        return "Bearer "+Jwts.builder().subject(user).claim("role",effectiveRole).issuedAt(new Date()).expiration(Date.from(Instant.now().plusSeconds(3600))).signWith(Keys.hmacShaKeyFor(Decoders.BASE64.decode("404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970"))).compact();}
     JsonNode data(MvcResult result) throws Exception{return json.readTree(result.getResponse().getContentAsString()).path("data");}
     ResultActions call(MockHttpServletRequestBuilder r,String auth,String body) throws Exception {if(auth!=null)r.header("Authorization",auth);if(body!=null)r.contentType(MediaType.APPLICATION_JSON).content(body);return mvc.perform(r);}
     long cart() throws Exception {long id=data(call(post("/api/v1/carts"),customer,"{\"cart_source\":\"Online\",\"branch_id\":1,\"fulfillment_type\":\"Pickup\"}").andExpect(status().isCreated()).andReturn()).path("id").asLong();

@@ -46,7 +46,11 @@ class CategoryAdminApiTest {
     @Autowired JdbcTemplate jdbc;
 
     static String token(String role) {
-        return "Bearer " + Jwts.builder().subject("manager-user").claim("role",role)
+        String effectiveRole = role;
+        if (role != null && !role.isBlank()) {
+            effectiveRole = role.startsWith("ROLE_") ? role : "ROLE_" + role.toUpperCase();
+        }
+        return "Bearer " + Jwts.builder().subject("manager-user").claim("role",effectiveRole)
                 .expiration(new Date(System.currentTimeMillis()+600000))
                 .signWith(Keys.hmacShaKeyFor(Decoders.BASE64.decode(SECRET))).compact();
     }
@@ -84,12 +88,12 @@ class CategoryAdminApiTest {
         var key=Keys.hmacShaKeyFor(Decoders.BASE64.decode(SECRET));
         var wrongKey=Keys.hmacShaKeyFor(new byte[48]);
         var tokens=List.of("Bearer invalid",
-                "Bearer "+Jwts.builder().subject("manager").claim("role","Admin")
+                "Bearer "+Jwts.builder().subject("manager").claim("role","ROLE_ADMIN")
                     .expiration(new Date(System.currentTimeMillis()+60000)).signWith(wrongKey).compact(),
-                "Bearer "+Jwts.builder().subject("manager").claim("role","Admin")
+                "Bearer "+Jwts.builder().subject("manager").claim("role","ROLE_ADMIN")
                     .expiration(new Date(1)).signWith(key).compact(),
-                "Bearer "+Jwts.builder().subject("manager").claim("role","Admin").signWith(key).compact(),
-                "Bearer "+Jwts.builder().claim("role","Admin")
+                "Bearer "+Jwts.builder().subject("manager").claim("role","ROLE_ADMIN").signWith(key).compact(),
+                "Bearer "+Jwts.builder().claim("role","ROLE_ADMIN")
                     .expiration(new Date(System.currentTimeMillis()+60000)).signWith(key).compact());
         for(String token:tokens) mvc.perform(get(BASE+"/admin/categories").header("Authorization",token))
                 .andExpect(status().isUnauthorized());

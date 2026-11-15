@@ -83,7 +83,6 @@ public class ManagerStaffService {
         }
 
         Role staffRole = roleRepository.findByName("ROLE_STAFF")
-                .or(() -> roleRepository.findByName("Staff"))
                 .orElseGet(() -> roleRepository.save(Role.builder().name("ROLE_STAFF").description("Nhân viên phục vụ sàn/bàn").build()));
 
         User staff = User.builder()

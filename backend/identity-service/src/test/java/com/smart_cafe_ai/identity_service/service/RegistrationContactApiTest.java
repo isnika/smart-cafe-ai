@@ -52,11 +52,11 @@ class RegistrationContactApiTest {
     @BeforeEach
     void setUp() {
         user = createUser("contact-test@example.com", "0901234567");
-        token = jwt.generateAccessToken(user.getId(), "Customer");
+        token = jwt.generateAccessToken(user.getId(), "ROLE_CUSTOMER");
     }
 
     User createUser(String email, String phone) {
-        Role role = roles.findByName("Customer").orElseGet(() -> roles.save(Role.builder().name("Customer").build()));
+        Role role = roles.findByName("ROLE_CUSTOMER").orElseGet(() -> roles.save(Role.builder().name("ROLE_CUSTOMER").build()));
         User result = users.saveAndFlush(User.builder().email(email).phone(phone).fullName("Nguyễn Văn An")
                 .passwordHash("test-hash").role(role).status(UserStatus.Active).emailVerifiedAt(LocalDateTime.now()).build());
         testUsers.add(result.getId());
@@ -196,7 +196,7 @@ class RegistrationContactApiTest {
         request(Map.of("email", "new@example.com"), 200);
         String code = event(user.getId()).path("otpCode").asText();
         User other = createUser("other-contact@example.com", "0981234567");
-        update(jwt.generateAccessToken(other.getId(), "Customer"), Map.of("email", "new@example.com", "otp_code", code), 400);
+        update(jwt.generateAccessToken(other.getId(), "ROLE_CUSTOMER"), Map.of("email", "new@example.com", "otp_code", code), 400);
         update(token, Map.of("email", "new@example.com", "otp_code", "bad"), 400);
         OtpLog row = otps.findAll().get(0); row.setExpiresAt(LocalDateTime.now().minusMinutes(1)); otps.saveAndFlush(row);
         update(token, Map.of("email", "new@example.com", "otp_code", code), 400);
@@ -242,7 +242,7 @@ class RegistrationContactApiTest {
         User other = createUser("other-contact@example.com", "0981234567");
         String first = otp.generateAndSaveOtp("shared@example.com", OtpPurpose.Change_Email, user.getId(), null);
         String second = otp.generateAndSaveOtp("shared@example.com", OtpPurpose.Change_Email, other.getId(), null);
-        String otherToken = jwt.generateAccessToken(other.getId(), "Customer");
+        String otherToken = jwt.generateAccessToken(other.getId(), "ROLE_CUSTOMER");
         List<Integer> statuses = concurrently(
                 () -> update(token, Map.of("email", "shared@example.com", "otp_code", first)),
                 () -> update(otherToken, Map.of("email", "shared@example.com", "otp_code", second)));

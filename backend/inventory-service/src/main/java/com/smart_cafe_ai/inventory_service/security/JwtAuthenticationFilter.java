@@ -35,10 +35,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (jwtService.isTokenValid(token)) {
                 String userId = jwtService.extractUserId(token);
                 List<String> roles = jwtService.extractRoles(token);
+                if (roles == null || roles.isEmpty()) {
+                    roles = List.of("ROLE_CUSTOMER");
+                }
 
                 List<SimpleGrantedAuthority> authorities = roles.stream()
                         .map(role -> {
-                            String r = role.toUpperCase();
+                            String r = (role == null || role.isBlank()) ? "ROLE_CUSTOMER" : role.toUpperCase();
                             return new SimpleGrantedAuthority(r.startsWith("ROLE_") ? r : "ROLE_" + r);
                         })
                         .collect(Collectors.toList());

@@ -53,13 +53,13 @@ class AvatarApiTest {
             assertEquals("image", options.get("resource_type"));
             return Map.of("public_id", id, "secure_url", "https://res.cloudinary.com/test/image/upload/v1/" + id + ".png");
         });
-        Role role = roles.findByName("Customer").orElseGet(() -> roles.save(Role.builder().name("Customer").build()));
+        Role role = roles.findByName("ROLE_CUSTOMER").orElseGet(() -> roles.save(Role.builder().name("ROLE_CUSTOMER").build()));
         user = users.saveAndFlush(User.builder().email("avatar-test@example.com").phone("0901234567")
                 .fullName("Avatar Test").passwordHash("test-hash").role(role).status(UserStatus.Active).build());
         oldId = "smart-cafe/avatars/" + user.getId() + "/11111111-1111-1111-1111-111111111111";
         oldUrl = "https://res.cloudinary.com/test/image/upload/v1/" + oldId + ".png";
         user.setAvatar(oldUrl); users.saveAndFlush(user);
-        token = jwt.generateAccessToken(user.getId(), "Customer");
+        token = jwt.generateAccessToken(user.getId(), "ROLE_CUSTOMER");
     }
 
     @AfterEach

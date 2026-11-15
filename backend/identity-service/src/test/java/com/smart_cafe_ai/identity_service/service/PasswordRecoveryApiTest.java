@@ -63,7 +63,7 @@ class PasswordRecoveryApiTest {
     @BeforeEach
     void setUp() {
         email = "recovery-" + UUID.randomUUID() + "@example.com";
-        Role role = roles.findByName("Customer").orElseGet(() -> roles.save(Role.builder().name("Customer").build()));
+        Role role = roles.findByName("ROLE_CUSTOMER").orElseGet(() -> roles.save(Role.builder().name("ROLE_CUSTOMER").build()));
         user = users.saveAndFlush(User.builder().fullName("Password recovery test").email(email)
                 .passwordHash(passwords.encode(OLD_PASSWORD)).role(role).status(UserStatus.Active).build());
     }

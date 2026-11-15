@@ -27,13 +27,15 @@ public class Access {
         try {
             Claims c=Jwts.parser().verifyWith(key).build().parseSignedClaims(header.substring(7)).getPayload();
             String sub=c.getSubject(),role=c.get("role",String.class);
-            if(c.getExpiration()==null||sub==null||sub.isBlank()||sub.length()>36||role==null) throw new IllegalArgumentException();
+            if(c.getExpiration()==null||sub==null||sub.isBlank()||sub.length()>36) throw new IllegalArgumentException();
+            if(role == null || role.isBlank()) role = "ROLE_CUSTOMER";
+            if(!role.startsWith("ROLE_")) role = "ROLE_" + role.toUpperCase();
             return new Actor(sub,role,c.get("branch_id",Integer.class));
         } catch(ExpiredJwtException ex) { throw new ApiException(UNAUTHORIZED,"TOKEN_EXPIRED","Phiên đăng nhập đã hết hạn."); }
         catch(JwtException|IllegalArgumentException ex) { throw new ApiException(UNAUTHORIZED,"UNAUTHORIZED","Token không hợp lệ."); }
     }
-    public Actor customer(HttpServletRequest request) { Actor a=actor(request); if(!"Customer".equals(a.role())) throw ApiException.forbidden(); return a; }
-    public Actor manager(HttpServletRequest request) { Actor a=actor(request); if(!"Manager".equals(a.role())&&!"Admin".equals(a.role())) throw ApiException.forbidden(); return a; }
+    public Actor customer(HttpServletRequest request) { Actor a=actor(request); if(!"ROLE_CUSTOMER".equals(a.role())) throw ApiException.forbidden(); return a; }
+    public Actor manager(HttpServletRequest request) { Actor a=actor(request); if(!"ROLE_MANAGER".equals(a.role())&&!"ROLE_ADMIN".equals(a.role())) throw ApiException.forbidden(); return a; }
     public void internal(HttpServletRequest request) {
         String supplied=request.getHeader("X-Service-Key");
         if(supplied==null||supplied.isBlank()) throw new ApiException(UNAUTHORIZED,"UNAUTHORIZED","Thiếu X-Service-Key.");

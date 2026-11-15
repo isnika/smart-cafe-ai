@@ -17,9 +17,9 @@ import static org.springframework.http.HttpStatus.*;
 @Component
 public class Access {
     public record Actor(String userId,String role) {
-        public boolean staff(){return Set.of("Staff","Manager","Admin").contains(role);}
-        public boolean admin(){return "Admin".equals(role);}
-        public boolean manager(){return "Manager".equals(role)||admin();}
+        public boolean staff(){return Set.of("ROLE_STAFF","ROLE_CASHIER","ROLE_BARISTA","ROLE_MANAGER","ROLE_ADMIN").contains(role);}
+        public boolean admin(){return "ROLE_ADMIN".equals(role);}
+        public boolean manager(){return "ROLE_MANAGER".equals(role)||admin();}
     }
     public record Context(Actor actor,String sessionCode,String clientKey) {}
     private final SecretKey key;
@@ -36,7 +36,9 @@ public class Access {
             if(!header.startsWith("Bearer "))throw new IllegalArgumentException();
             var c=Jwts.parser().verifyWith(key).build().parseSignedClaims(header.substring(7)).getPayload();
             String sub=c.getSubject(),role=c.get("role",String.class);
-            if(c.getExpiration()==null||sub==null||sub.isBlank()||sub.length()>36||role==null)throw new IllegalArgumentException();
+            if(c.getExpiration()==null||sub==null||sub.isBlank()||sub.length()>36)throw new IllegalArgumentException();
+            if(role == null || role.isBlank()) role = "ROLE_CUSTOMER";
+            if(!role.startsWith("ROLE_")) role = "ROLE_" + role.toUpperCase();
             userStatuses.findById(sub).ifPresent(status->{
                 if(!"Active".equals(status.status)) {
                     String code=switch(status.status){case "Banned"->"ACCOUNT_BANNED";case "Deactivated"->"ACCOUNT_DEACTIVATED";default->"ACCOUNT_UNVERIFIED";};
@@ -48,7 +50,7 @@ public class Access {
         catch(JwtException|IllegalArgumentException ex){throw new ApiException(UNAUTHORIZED,"UNAUTHORIZED","Token không hợp lệ.");}
     }
     public Actor require(Context context){if(context.actor()==null)throw new ApiException(UNAUTHORIZED,"UNAUTHORIZED","Vui lòng đăng nhập.");return context.actor();}
-    public Actor customer(Context context){var a=require(context);if(!"Customer".equals(a.role()))throw ApiException.forbidden();return a;}
+    public Actor customer(Context context){var a=require(context);if(!"ROLE_CUSTOMER".equals(a.role()))throw ApiException.forbidden();return a;}
     public Actor staff(Context context){var a=require(context);if(!a.staff())throw ApiException.forbidden();return a;}
     public Actor manager(Context context){var a=require(context);if(!a.manager())throw ApiException.forbidden();return a;}
     public String client(Context c){if(c.clientKey()==null||c.clientKey().isBlank()||c.clientKey().length()>64)throw ApiException.invalid("QR cần X-Client-Key dài 1–64 ký tự.");return c.clientKey();}

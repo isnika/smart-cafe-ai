@@ -39,8 +39,7 @@ public class CatalogAccess {
         }
         Object roleObj = claims.get("role");
         String role = roleObj != null ? roleObj.toString() : "";
-        if (!"Manager".equalsIgnoreCase(role) && !"Admin".equalsIgnoreCase(role)
-                && !"ROLE_MANAGER".equalsIgnoreCase(role) && !"ROLE_ADMIN".equalsIgnoreCase(role)) {
+        if (!"ROLE_MANAGER".equalsIgnoreCase(role) && !"ROLE_ADMIN".equalsIgnoreCase(role)) {
             throw new ApiException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Bạn không có quyền quản lý thực đơn.");
         }
         return claims.getSubject();

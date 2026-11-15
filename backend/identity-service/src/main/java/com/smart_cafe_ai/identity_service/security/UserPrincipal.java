@@ -13,10 +13,9 @@ public class UserPrincipal implements UserDetails {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        if (user.getRole() == null) {
-            return Collections.emptyList();
-        }
-        String roleName = user.getRole().getName();
+        String roleName = (user.getRole() != null && user.getRole().getName() != null && !user.getRole().getName().isBlank())
+                ? user.getRole().getName()
+                : "ROLE_CUSTOMER";
         if (!roleName.startsWith("ROLE_")) {
             roleName = "ROLE_" + roleName.toUpperCase();
         }
@@ -32,7 +31,11 @@ public class UserPrincipal implements UserDetails {
     }
 
     public String getRoleName() {
-        return user.getRole() != null ? user.getRole().getName() : null;
+        if (user.getRole() != null && user.getRole().getName() != null && !user.getRole().getName().isBlank()) {
+            String roleName = user.getRole().getName();
+            return roleName.startsWith("ROLE_") ? roleName : "ROLE_" + roleName.toUpperCase();
+        }
+        return "ROLE_CUSTOMER";
     }
 
     @Override

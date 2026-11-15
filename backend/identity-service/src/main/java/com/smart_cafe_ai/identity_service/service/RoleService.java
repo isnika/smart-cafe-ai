@@ -35,12 +35,18 @@ public class RoleService {
 
     @Transactional
     public ApiResponse<RoleResponse> createRole(RoleRequest request) {
-        if (roleRepository.findByName(request.getName()).isPresent()) {
+        String roleName = request.getName() != null ? request.getName().trim() : "";
+        if (!roleName.toUpperCase().startsWith("ROLE_")) {
+            roleName = "ROLE_" + roleName.toUpperCase();
+        } else {
+            roleName = roleName.toUpperCase();
+        }
+        if (roleRepository.findByName(roleName).isPresent()) {
             return ApiResponse.error("CONFLICT", "Vai trò này đã tồn tại");
         }
 
         Role role = Role.builder()
-                .name(request.getName())
+                .name(roleName)
                 .description(request.getDescription())
                 .build();
 
@@ -53,7 +59,13 @@ public class RoleService {
         Role role = roleRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy vai trò"));
 
-        role.setName(request.getName());
+        String roleName = request.getName() != null ? request.getName().trim() : "";
+        if (!roleName.toUpperCase().startsWith("ROLE_")) {
+            roleName = "ROLE_" + roleName.toUpperCase();
+        } else {
+            roleName = roleName.toUpperCase();
+        }
+        role.setName(roleName);
         role.setDescription(request.getDescription());
 
         Role updatedRole = roleRepository.save(role);
@@ -73,8 +85,7 @@ public class RoleService {
 
         // System roles protection
         List<String> systemRoles = List.of(
-                "ROLE_ADMIN", "ROLE_MANAGER", "ROLE_CASHIER", "ROLE_BARISTA", "ROLE_STAFF", "ROLE_CUSTOMER",
-                "Customer", "Staff", "Manager", "Admin", "Cashier", "Barista"
+                "ROLE_ADMIN", "ROLE_MANAGER", "ROLE_CASHIER", "ROLE_BARISTA", "ROLE_STAFF", "ROLE_CUSTOMER"
         );
         if (systemRoles.contains(role.getName())) {
             return ApiResponse.error("CONFLICT", "Không thể xóa các vai trò mặc định của hệ thống");

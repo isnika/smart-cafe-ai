@@ -48,12 +48,12 @@ class GoogleLoginTest {
         ReflectionTestUtils.setField(jwt, "accessTokenExpirationMs", 900000L);
         ReflectionTestUtils.setField(jwt, "refreshTokenExpirationMs", 604800000L);
         auth = new AuthService(users, roles, refreshTokens, passwords, jwt, mock(OtpService.class), google, mock(UserStatusEvents.class));
-        customer = Role.builder().id(1).name("Customer").build();
+        customer = Role.builder().id(1).name("ROLE_CUSTOMER").build();
         request = new GoogleLoginRequest();
         request.setIdToken("google-token");
         request.setDeviceInfo("Postman");
         when(google.verify("google-token")).thenReturn(identity("customer@gmail.com", true, null));
-        when(roles.findByName("Customer")).thenReturn(Optional.of(customer));
+        when(roles.findByName("ROLE_CUSTOMER")).thenReturn(Optional.of(customer));
         when(users.saveAndFlush(any(User.class))).thenAnswer(invocation -> {
             User user = invocation.getArgument(0);
             user.ensureIdAndStatus();
@@ -66,7 +66,7 @@ class GoogleLoginTest {
         var response = auth.googleLogin(request);
         assertTrue(response.isSuccess());
         assertTrue(response.getData().getNewUser());
-        assertEquals("Customer", response.getData().getUser().getRoleName());
+        assertEquals("ROLE_CUSTOMER", response.getData().getUser().getRoleName());
         assertEquals(UserStatus.Active, response.getData().getUser().getStatus());
         assertTrue(jwt.isTokenValid(response.getData().getAccessToken()));
         ArgumentCaptor<User> user = ArgumentCaptor.forClass(User.class);

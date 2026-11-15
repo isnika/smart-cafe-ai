@@ -30,8 +30,12 @@ public class JwtService {
     }
 
     public String generateAccessToken(String userId, String role, Integer branchId) {
+        String effectiveRole = (role != null && !role.isBlank()) ? role : "ROLE_CUSTOMER";
+        if (!effectiveRole.startsWith("ROLE_")) {
+            effectiveRole = "ROLE_" + effectiveRole.toUpperCase();
+        }
         Map<String, Object> claims = new HashMap<>();
-        claims.put("role", role);
+        claims.put("role", effectiveRole);
         if (branchId != null) {
             claims.put("branch_id", branchId);
         }

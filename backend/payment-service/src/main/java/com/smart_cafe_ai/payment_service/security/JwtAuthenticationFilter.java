@@ -39,6 +39,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (jwtService.isTokenValid(token)) {
                 String userId = jwtService.extractUserId(token);
                 List<String> rawRoles = jwtService.extractRoles(token);
+                if (rawRoles == null || rawRoles.isEmpty()) {
+                    rawRoles = List.of("ROLE_CUSTOMER");
+                }
 
                 Set<String> authoritySet = new HashSet<>();
                 for (String r : rawRoles) {

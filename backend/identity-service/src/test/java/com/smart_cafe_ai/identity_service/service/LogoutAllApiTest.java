@@ -47,14 +47,14 @@ class LogoutAllApiTest {
 
     @ParameterizedTest
     @CsvSource({
-            "/auth, Customer", "/api/auth, Customer", "/api/v1/auth, Customer",
-            "/auth, Staff", "/api/auth, Staff", "/api/v1/auth, Staff"
+            "/auth, ROLE_CUSTOMER", "/api/auth, ROLE_CUSTOMER", "/api/v1/auth, ROLE_CUSTOMER",
+            "/auth, ROLE_STAFF", "/api/auth, ROLE_STAFF", "/api/v1/auth, ROLE_STAFF"
     })
     void revokesAllSessionsForCurrentUserOnly(String prefix, String role) throws Exception {
         User user = createUser("logout-all@example.com", role);
         JsonNode first = login(prefix, user.getEmail());
         JsonNode second = login(prefix, user.getEmail());
-        User other = createUser("other@example.com", "Customer");
+        User other = createUser("other@example.com", "ROLE_CUSTOMER");
         JsonNode otherSession = login(prefix, other.getEmail());
 
         // An attempted target in the body must not override the authenticated account.
@@ -81,7 +81,7 @@ class LogoutAllApiTest {
     @ParameterizedTest
     @ValueSource(strings = {"/auth", "/api/auth", "/api/v1/auth"})
     void rejectsMissingInvalidAndExpiredAuthenticationWithoutRevokingTokens(String prefix) throws Exception {
-        User user = createUser("logout-all@example.com", "Customer");
+        User user = createUser("logout-all@example.com", "ROLE_CUSTOMER");
         JsonNode session = login(prefix, user.getEmail());
         mvc.perform(post(prefix + "/logout-all"))
                 .andExpect(status().isUnauthorized())
@@ -94,7 +94,7 @@ class LogoutAllApiTest {
         ReflectionTestUtils.setField(expiredJwt, "secretKey", environment.getRequiredProperty("jwt.secret"));
         ReflectionTestUtils.setField(expiredJwt, "accessTokenExpirationMs", -60000L);
         mvc.perform(post(prefix + "/logout-all")
-                        .header("Authorization", "Bearer " + expiredJwt.generateAccessToken(user.getId(), "Customer")))
+                        .header("Authorization", "Bearer " + expiredJwt.generateAccessToken(user.getId(), "ROLE_CUSTOMER")))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
         refresh(prefix, session.path("refresh_token").asText(), true);
@@ -102,9 +102,9 @@ class LogoutAllApiTest {
 
     @Test
     void succeedsWhenAccountHasNoRefreshTokens() throws Exception {
-        User user = createUser("logout-all@example.com", "Customer");
+        User user = createUser("logout-all@example.com", "ROLE_CUSTOMER");
         mvc.perform(post("/auth/logout-all")
-                        .header("Authorization", "Bearer " + jwt.generateAccessToken(user.getId(), "Customer")))
+                        .header("Authorization", "Bearer " + jwt.generateAccessToken(user.getId(), "ROLE_CUSTOMER")))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.success").value(true));
     }
 

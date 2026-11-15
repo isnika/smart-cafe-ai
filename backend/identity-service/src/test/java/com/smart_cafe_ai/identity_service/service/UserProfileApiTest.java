@@ -54,11 +54,11 @@ class UserProfileApiTest {
 
     @BeforeEach
     void setUp() {
-        Role role = roles.findByName("Customer").orElseGet(() -> roles.save(Role.builder().name("Customer").build()));
+        Role role = roles.findByName("ROLE_CUSTOMER").orElseGet(() -> roles.save(Role.builder().name("ROLE_CUSTOMER").build()));
         user = users.saveAndFlush(User.builder().email("profile-validation@example.com")
                 .fullName(ORIGINAL_NAME).avatar(ORIGINAL_AVATAR).passwordHash("unused-hash")
                 .role(role).status(UserStatus.Active).build());
-        token = jwt.generateAccessToken(user.getId(), "Customer");
+        token = jwt.generateAccessToken(user.getId(), "ROLE_CUSTOMER");
     }
 
     static Stream<Arguments> invalidNames() {

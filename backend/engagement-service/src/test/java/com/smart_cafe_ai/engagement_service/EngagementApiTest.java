@@ -51,7 +51,11 @@ class EngagementApiTest {
         for(String table:List.of("order_benefit_state","product_reviews","verified_purchases","voucher_redemptions","vouchers","loyalty_transactions","loyalty_cards","device_tokens","notifications","outbox_events","processed_events")) jdbc.update("DELETE FROM "+table);
     }
     private String token(String user,String role) {
-        return Jwts.builder().subject(user).claim("role",role).claim("branch_id",1).expiration(Date.from(Instant.now().plusSeconds(3600)))
+        String effectiveRole = role;
+        if (role != null && !role.isBlank()) {
+            effectiveRole = role.startsWith("ROLE_") ? role : "ROLE_" + role.toUpperCase();
+        }
+        return Jwts.builder().subject(user).claim("role",effectiveRole).claim("branch_id",1).expiration(Date.from(Instant.now().plusSeconds(3600)))
                 .signWith(Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret))).compact();
     }
     private MockHttpServletRequestBuilder auth(MockHttpServletRequestBuilder request,String user,String role) { return request.header("Authorization","Bearer "+token(user,role)); }
