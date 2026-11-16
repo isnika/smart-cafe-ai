@@ -8,3 +8,5 @@ chroma_db/
 src/app/chat/.rag_cache/
 frontend-test-chatbot/dist/
 frontend-test-chatbot/node_modules/
+
+

@@ -16,3 +16,24 @@ tests/
 docs/
 theory/
 evaluation/
+
+# Java / Maven
+backend/target/
+*.class
+
+# Node / frontend
+**/node_modules/
+**/dist/
+frontend/.env*
+!frontend/.env.example
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Environment
+.env
+.env.*
+!.env.example
+
