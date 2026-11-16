@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import {
   buildLineKey,
   MAX_LINE_QUANTITY,
@@ -21,7 +22,7 @@ export interface DeliveryDetails {
 }
 
 interface OnlineCartState {
-  /** null = khách chưa chọn "Giao hàng / Mang đi" → các màn Online không hoạt động, giỏ Dine-in vẫn là giỏ hiện hành. */
+  /** null = khách đang duyệt món/chỉnh giỏ, chưa chọn cách nhận hàng. */
   fulfillmentType: OnlineFulfillment | null;
   lines: DineInCartLine[];
   /** Mã đã được người dùng nhập; mức giảm thật luôn do server (validate) trả, không lưu ở đây. */
@@ -33,6 +34,7 @@ interface OnlineCartState {
   increment: (key: string) => void;
   decrement: (key: string) => void;
   removeLine: (key: string) => void;
+  updateLine: (key: string, line: NewCartLine) => void;
   setVoucher: (code: string | null) => void;
   setDelivery: (delivery: DeliveryDetails) => void;
   /** Sau khi đặt đơn: bỏ món + mã giảm giá, giữ hình thức nhận và địa chỉ để lần sau khỏi nhập lại. */
@@ -42,7 +44,7 @@ interface OnlineCartState {
 const clamp = (n: number) => Math.min(MAX_LINE_QUANTITY, n);
 
 // Giỏ Online TÁCH HẲN giỏ Dine-in (store khác, không chung state). Tổng tiền không lưu: suy ra từ `lines` (cart.ts).
-export const useOnlineCartStore = create<OnlineCartState>((set) => ({
+export const useOnlineCartStore = create<OnlineCartState>()(persist((set) => ({
   fulfillmentType: null,
   lines: [],
   voucherCode: null,
@@ -56,7 +58,7 @@ export const useOnlineCartStore = create<OnlineCartState>((set) => ({
     set((s) => {
       const existing = s.lines.find((l) => l.key === key);
       if (existing) {
-        return { lines: s.lines.map((l) => (l.key === key ? { ...l, quantity: clamp(l.quantity + quantity) } : l)) };
+        return { lines: s.lines.map((l) => (l.key === key ? { ...l, quantity: clamp(l.quantity + quantity), serverLineTotal: null } : l)) };
       }
       return { lines: [...s.lines, { ...line, key, quantity: clamp(quantity) }] };
     });
@@ -73,7 +75,23 @@ export const useOnlineCartStore = create<OnlineCartState>((set) => ({
 
   removeLine: (key) => set((s) => ({ lines: s.lines.filter((l) => l.key !== key) })),
 
+  updateLine: (key, line) => set((s) => {
+    const updated = { ...line, key: buildLineKey(line), quantity: s.lines.find((item) => item.key === key)?.quantity ?? 1 };
+    const remaining = s.lines.filter((item) => item.key !== key && item.key !== updated.key);
+    const collision = s.lines.find((item) => item.key === updated.key && item.key !== key);
+    return { lines: [...remaining, collision ? { ...updated, quantity: clamp(updated.quantity + collision.quantity) } : updated] };
+  }),
+
   setVoucher: (voucherCode) => set({ voucherCode }),
   setDelivery: (delivery) => set({ delivery }),
   clearOrder: () => set({ lines: [], voucherCode: null }),
+}), {
+  name: 'smartcafe.online-cart.v1',
+  storage: createJSONStorage(() => localStorage),
+  partialize: (state) => ({
+    fulfillmentType: state.fulfillmentType,
+    lines: state.lines,
+    voucherCode: state.voucherCode,
+    delivery: state.delivery,
+  }) as OnlineCartState,
 }));

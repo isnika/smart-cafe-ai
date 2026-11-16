@@ -40,6 +40,7 @@ interface DineInCartState {
   increment: (key: string) => Promise<boolean>;
   decrement: (key: string) => Promise<boolean>;
   removeLine: (key: string) => Promise<boolean>;
+  updateLine: (key: string, line: NewCartLine) => Promise<boolean>;
   /** Bỏ giỏ trên server (Abandoned) rồi xoá state. */
   clear: () => Promise<void>;
   /** Xoá state cục bộ (sau khi POST /orders thành công: giỏ server đã Converted). */
@@ -276,6 +277,25 @@ export const useDineInCartStore = create<DineInCartState>((set, get) => {
         const line = findLine(key);
         return line ? removalPlan(line) : null;
       }),
+
+    updateLine: (key, next) => mutate(() => {
+      const line = findLine(key);
+      if (!line) return null;
+      const duplicate = get().lines.find((candidate) => candidate.key !== key && lineSignature(candidate) === buildLineKey(next));
+      return {
+        itemName: line.productName,
+        run: async (c) => {
+          if (duplicate) await orderApi.removeCartItem(c, Number(line.key));
+          else await orderApi.updateCartItem(c, Number(line.key), {
+            variantId: next.variantId,
+            quantity: line.quantity,
+            note: next.note ?? null,
+            options: next.options.map((option) => ({ optionId: option.optionId, quantity: option.quantity })),
+          });
+          await fetchCart(c);
+        },
+      };
+    }),
 
     clear: async () => {
       const c = ctx();

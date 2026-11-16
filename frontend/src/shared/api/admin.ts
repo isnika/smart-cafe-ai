@@ -9,15 +9,16 @@ export interface AdminBranch {
   acceptsOnlineOrders?: boolean; deliveryRadiusKm?: number | null; deliveryFee?: number | null; status: 'Active' | 'Inactive' | string;
 }
 export interface AdminTable { id: number; branchId: number; branchName?: string | null; tableNumber: string; qrCode?: string | null; isActive: boolean }
-export interface AdminUser extends User { branchId?: number | null }
-export interface PageMeta { page: number; size: number; total: number; totalPages: number }
+export type AdminUser = User;
+export interface PageMeta { page: number; size: number; totalItems: number; totalPages: number }
 export interface AdminPage<T> { items: T[]; meta: PageMeta }
 export interface BranchInput {
   code: string; name: string; address: string; phone?: string; timezone?: string;
   openingTime?: string; closingTime?: string; acceptsOnlineOrders?: boolean;
   deliveryRadiusKm?: number | null; deliveryFee?: number | null;
 }
-export interface AdminUserInput { fullName: string; email: string; phone?: string; password: string; roleId: number; branchId?: number; status: string }
+export interface AdminUserInput { fullName: string; email: string; phone?: string; password: string; roleId: number; status: string }
+export interface StaffProfileInput { userId: string; branchId: number; employeeCode: string; jobTitle: string; employmentType: 'Full_Time' | 'Part_Time' | 'Probation' | 'Intern'; hireDate: string }
 
 const unwrapList = <T>(value: unknown): T[] => {
   if (Array.isArray(value)) return value as T[];
@@ -72,9 +73,10 @@ export async function listAdminUsers(params: { page: number; size: number; q?: s
   });
   const items = unwrapList<AdminUser>(result.data);
   const meta = result.meta;
-  return { items, meta: { page: meta?.page ?? params.page, size: meta?.size ?? params.size, total: meta?.total ?? items.length, totalPages: meta?.totalPages ?? 1 } };
+  return { items, meta: { page: meta?.page ?? params.page, size: meta?.size ?? params.size, totalItems: Number(meta?.totalItems ?? items.length), totalPages: meta?.totalPages ?? 1 } };
 }
 export const listAdminRoles = async () => unwrapList<Role>(await http.get<unknown>('/admin/roles'));
 export const createAdminUser = async (input: AdminUserInput) => unwrapData<AdminUser>(await http.post<unknown>('/admin/users', input, { snake: true }));
-export const updateAdminUserRole = async (id: string, roleId: number, branchId?: number | null) => unwrapData<AdminUser>(await http.patch<unknown>(`/admin/users/${id}/role`, { roleId, branchId }, { snake: true }));
+export const createStaffProfile = async (input: StaffProfileInput) => unwrapData<unknown>(await http.post<unknown>('/staff-profiles', input, { snake: true }));
+export const updateAdminUserRole = async (id: string, roleId: number) => unwrapData<AdminUser>(await http.patch<unknown>(`/admin/users/${id}/role`, { roleId }, { snake: true }));
 export const updateAdminUserStatus = async (id: string, status: string) => unwrapData<AdminUser>(await http.patch<unknown>(`/admin/users/${id}/status`, { status }, { snake: true }));

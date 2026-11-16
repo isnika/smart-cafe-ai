@@ -1,6 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { AlertTriangle, PackageSearch, RefreshCw, Search, Warehouse } from 'lucide-react';
-import { Toaster } from 'sonner';
 import { useAuthStore } from '@/features/auth/store';
 import { isApiError } from '@/shared/api';
 import { cn } from '@/shared/lib/cn';
@@ -125,8 +124,6 @@ export default function InventoryPage() {
       )}
       {branchId !== null && selected && adjusting && <AdjustModal branchId={branchId} item={selected} onClose={() => setAdjusting(false)} />}
 
-      {/* Chưa có Toaster toàn cục trong app; khi có thì bỏ dòng này. */}
-      <Toaster richColors position="top-right" />
     </div>
   );
 }

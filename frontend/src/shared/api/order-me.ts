@@ -54,7 +54,9 @@ export async function listMyOrders(
     },
     signal,
   });
-  const items = toMyOrderSummaries(data);
+  // Một số backend khi chưa có đơn trả data=null thay vì mảng rỗng. Chuẩn hoá
+  // riêng trường hợp này thành danh sách rỗng; các shape sai khác vẫn báo lỗi.
+  const items = toMyOrderSummaries(data ?? []);
   return { items, meta: toPageMeta(meta, { page: params.page ?? 1, size: params.size ?? items.length, count: items.length }) };
 }
 

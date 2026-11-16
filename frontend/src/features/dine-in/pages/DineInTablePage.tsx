@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { toast } from "sonner";
 import { isApiError } from "@/shared/api";
 import { PATHS } from "@/app/routes";
 import { formatVnd } from "@/shared/lib";
@@ -215,7 +216,9 @@ function MenuView() {
         product={picking}
         onClose={() => setPicking(null)}
         onAdd={(line, quantity) => {
-          void addLine(line, quantity);
+          void addLine(line, quantity).then((added) => {
+            if (added) toast.success(`Đã thêm ${quantity} ${line.productName} vào giỏ hàng`);
+          });
           setPicking(null);
         }}
       />

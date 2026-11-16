@@ -101,11 +101,11 @@ describe('API tạo đơn Online (POST /orders theo spec)', () => {
 });
 
 describe('điểm bắt đầu & menu', () => {
-  it('chọn Giao hàng ở "/" → vào /menu ở chế độ Online, có nút thêm món; giỏ Dine-in không bị ảnh hưởng', async () => {
+  it('vào menu trước khi chọn cách nhận, có thể thêm món; giỏ Dine-in không bị ảnh hưởng', async () => {
     const { router } = renderApp('/');
-    fireEvent.click(await screen.findByRole('button', { name: 'Giao hàng' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Xem thực đơn' }));
     await waitFor(() => expect(router.state.location.pathname).toBe('/menu'));
-    expect(useOnlineCartStore.getState().fulfillmentType).toBe('Delivery');
+    expect(useOnlineCartStore.getState().fulfillmentType).toBeNull();
     const add = await screen.findAllByRole('button', { name: /^Thêm / });
     expect(add.length).toBeGreaterThan(0);
     expect(useDineInCartStore.getState().lines).toHaveLength(0);
@@ -120,7 +120,27 @@ describe('điểm bắt đầu & menu', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Xem giỏ hàng \(1\)/ }));
     expect(router.state.location.pathname).toBe('/cart');
     expect(await screen.findByRole('heading', { name: 'Giỏ hàng của bạn' })).toBeTruthy();
-    expect(screen.getByText('Mang đi')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Đặt hàng mang đi/ }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('thêm món trước, chọn mang đi trong giỏ rồi tiếp tục checkout', async () => {
+    customer();
+    const { router } = renderApp('/menu/1');
+    await screen.findByRole('heading', { level: 2, name: 'Cà phê sữa đá' });
+    fireEvent.click(screen.getByRole('button', { name: /Thêm vào giỏ/ }));
+    fireEvent.click(await screen.findByRole('link', { name: 'Xem giỏ hàng (1)' }));
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/cart'));
+    const pickup = screen.getByRole('button', { name: /Đặt hàng mang đi/ });
+    fireEvent.click(pickup);
+    expect(useOnlineCartStore.getState().fulfillmentType).toBe('Pickup');
+    expect(pickup.getAttribute('aria-pressed')).toBe('true');
+
+    const proceed = screen.getByRole('button', { name: 'Tiến hành đặt hàng' });
+    await waitFor(() => expect((proceed as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(proceed);
+    expect(await screen.findByRole('heading', { name: 'Xác nhận đơn hàng' })).toBeTruthy();
+    expect(router.state.location.pathname).toBe('/checkout');
   });
 });
 

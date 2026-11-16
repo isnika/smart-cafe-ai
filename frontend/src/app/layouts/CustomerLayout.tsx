@@ -17,9 +17,9 @@ const tabs = [
 /** Khung cho khách: nội dung + bottom-nav. Khách chưa đăng nhập vẫn vào được. */
 export function CustomerLayout() {
   const dineInCount = useDineInCartStore((s) => countItems(s.lines));
-  // Khách đang ở chế độ Online thì badge là giỏ Online (hai giỏ không cộng dồn).
-  const onlineCount = useOnlineCartStore((s) => (s.fulfillmentType ? countItems(s.lines) : null));
-  const cartCount = onlineCount ?? dineInCount;
+  // Cho phép kiểm tra giỏ Online trước khi chọn cách nhận món; vẫn giữ badge giỏ QR tại bàn.
+  const onlineCount = useOnlineCartStore((s) => countItems(s.lines));
+  const cartCount = onlineCount + dineInCount;
   return (
     <div className="mx-auto min-h-screen max-w-2xl bg-primary-50">
       <main className="pb-24">

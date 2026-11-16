@@ -65,7 +65,6 @@ export default function OnlineCheckoutPage() {
     const result = await submit({
       method,
       ...(note.trim() ? { note } : {}),
-      ...(pricing.appliedCode ? { voucherCode: pricing.appliedCode } : {}),
     });
     if (!result) return;
     const { order, next } = result;

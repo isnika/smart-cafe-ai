@@ -8,6 +8,7 @@ import type { OrderDetail } from '@/shared/types';
 import { onlineBranchBlock } from './branch-policy';
 import { syncOnlineCart } from './cart-sync';
 import { isMockMode, isVoucherEnabled, ONLINE_BRANCH_ID } from './config';
+import { normalizeDelivery, validateDelivery } from './delivery';
 import { toPaymentMethod, type PaymentChoice } from './payment';
 import { useOnlineCartStore, type DeliveryDetails, type OnlineFulfillment } from './store';
 
@@ -19,6 +20,7 @@ import { useOnlineCartStore, type DeliveryDetails, type OnlineFulfillment } from
  */
 export function buildOnlineOrderInput(args: {
   cartId: number;
+  branchId?: number;
   fulfillmentType: OnlineFulfillment;
   delivery?: DeliveryDetails;
   note?: string;
@@ -27,7 +29,7 @@ export function buildOnlineOrderInput(args: {
   const note = args.note?.trim();
   const common = {
     cartId: args.cartId,
-    branchId: ONLINE_BRANCH_ID,
+    branchId: args.branchId ?? ONLINE_BRANCH_ID,
     ...(note ? { note } : {}),
     ...(args.voucherCode && isVoucherEnabled() ? { voucherCode: args.voucherCode } : {}),
   };
@@ -52,13 +54,13 @@ export function buildOnlineOrderInput(args: {
 //    (server có thể đã tạo đơn nhưng response bị mất). Retry dùng LẠI cart_id đã gửi — không đồng bộ lại giỏ,
 //    vì giỏ đã Converted sẽ bị mở giỏ mới và payload khác key cũ.
 // 3) Đặt thành công → bỏ key; lần đặt mới (kể cả cùng nội dung) sinh key mới. Nội dung đổi → key mới.
-let attempt: { signature: string; key: string; cartId: number | null } | null = null;
+let attempt: { signature: string; key: string; cartId: number | null; branchId: number | null } | null = null;
 let inflight: { signature: string; promise: Promise<OrderDetail> } | null = null;
 
 const newKey = () => globalThis.crypto?.randomUUID?.() ?? `k-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 function attemptFor(signature: string): NonNullable<typeof attempt> {
-  if (!attempt || attempt.signature !== signature) attempt = { signature, key: newKey(), cartId: null };
+  if (!attempt || attempt.signature !== signature) attempt = { signature, key: newKey(), cartId: null, branchId: null };
   return attempt;
 }
 
@@ -88,10 +90,14 @@ export function placeOnlineOrder(opts: { note?: string; voucherCode?: string; me
   if (fulfillmentType === 'Delivery' && !delivery) {
     return Promise.reject(new SubmitOrderError('MISSING_DELIVERY', 'Vui lòng nhập thông tin giao hàng.'));
   }
+  const normalizedDelivery = fulfillmentType === 'Delivery' && delivery ? normalizeDelivery(delivery) : undefined;
+  if (normalizedDelivery && Object.keys(validateDelivery(normalizedDelivery)).length > 0) {
+    return Promise.reject(new SubmitOrderError('MISSING_DELIVERY', 'Vui lòng kiểm tra tên, số điện thoại và địa chỉ giao hàng.'));
+  }
 
   const voucherCode = isVoucherEnabled() ? opts.voucherCode : undefined;
   const signature = JSON.stringify([
-    user.id, fulfillmentType, toOrderLines(lines), fulfillmentType === 'Delivery' ? delivery : null,
+    user.id, fulfillmentType, toOrderLines(lines), fulfillmentType === 'Delivery' ? normalizedDelivery : null,
     opts.note?.trim() ?? '', voucherCode ?? '', opts.method ?? '',
   ]);
   if (inflight?.signature === signature) return inflight.promise;
@@ -109,12 +115,14 @@ export function placeOnlineOrder(opts: { note?: string; voucherCode?: string; me
     if (current.cartId === null) {
       const cart = await syncOnlineCart({ fulfillmentType, branchId: ONLINE_BRANCH_ID, lines: snapshot(lines) });
       current.cartId = cart.id;
+      current.branchId = cart.branchId;
     }
 
     const input = buildOnlineOrderInput({
       cartId: current.cartId,
+      branchId: current.branchId ?? ONLINE_BRANCH_ID,
       fulfillmentType,
-      ...(delivery ? { delivery } : {}),
+      ...(normalizedDelivery ? { delivery: normalizedDelivery } : {}),
       ...(opts.note ? { note: opts.note } : {}),
       ...(voucherCode ? { voucherCode } : {}),
     });

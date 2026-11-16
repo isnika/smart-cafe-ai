@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { Bike, Coffee, QrCode, ShoppingBag } from "lucide-react";
+import { Coffee, QrCode, ShoppingBag } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { PATHS } from "@/app/routes";
-import { useOnlineCartStore, type OnlineFulfillment } from "@/features/online-order/store";
 import { Button, Modal } from "@/shared/ui";
 import { QrScanner } from "../components/QrScanner";
 import { TableCodeForm } from "../components/TableCodeForm";
@@ -12,12 +11,6 @@ export default function OrderModePage() {
   const [scanHelp, setScanHelp] = useState(false);
   const [manual, setManual] = useState(false);
   const navigate = useNavigate();
-  const setFulfillment = useOnlineCartStore((s) => s.setFulfillment);
-
-  function startOnline(type: OnlineFulfillment) {
-    setFulfillment(type);
-    navigate(PATHS.menu);
-  }
 
   return (
     <main
@@ -86,25 +79,11 @@ export default function OrderModePage() {
           </h2>
         </div>
         <p className="mt-4 text-body text-gray-600">
-          Thưởng thức ở bất cứ đâu. Giao tận nơi hoặc ghé quán nhận món.
+          Chọn món và kiểm tra giỏ hàng trước, sau đó chọn giao hàng trực tuyến hoặc mang đi.
         </p>
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          {(
-            [
-              { type: "Delivery", label: "Giao hàng", icon: Bike },
-              { type: "Pickup", label: "Mang đi", icon: ShoppingBag },
-            ] as const
-          ).map(({ type, label, icon: Icon }) => (
-            <button
-              key={type}
-              type="button"
-              onClick={() => startOnline(type)}
-              className="flex h-12 items-center justify-center gap-2 rounded-lg border border-primary-200 bg-primary-50 font-medium text-primary-800 hover:bg-primary-100"
-            >
-              <Icon className="size-5" aria-hidden /> {label}
-            </button>
-          ))}
-        </div>
+        <Button size="lg" fullWidth className="mt-4 rounded-full" onClick={() => navigate(PATHS.menu)}>
+          Xem thực đơn
+        </Button>
       </section>
 
       <div className="mt-auto pt-10 text-center">

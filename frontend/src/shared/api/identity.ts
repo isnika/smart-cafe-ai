@@ -121,6 +121,7 @@ export const refresh = async (refreshToken: string): Promise<RefreshedTokens> =>
 };
 
 export const getMe = async () => toUser(await http.get<WireUser>('/users/me'));
+export const updateProfile = async (input: { fullName: string }) => toUser(await http.put<WireUser>('/users/me', input, { snake: true }));
 export const listRoles = () => http.get<Role[]>('/admin/roles');
 
 // ── Địa chỉ giao hàng (spec "1. Identity / Địa chỉ giao hàng", Customer, Bearer) ──

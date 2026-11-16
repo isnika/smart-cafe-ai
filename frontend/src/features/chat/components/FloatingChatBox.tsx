@@ -62,7 +62,7 @@ export function FloatingChatBox() {
           id={panelId}
           aria-label="Trợ lý AI"
           onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}
-          className="fixed bottom-36 right-4 z-40 flex h-[min(34rem,calc(100dvh-10rem))] w-[min(24rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-lg border border-primary-100 bg-white shadow-modal"
+          className="fixed inset-x-0 top-0 z-40 mx-auto flex h-[calc(100dvh-8rem-var(--safe-bottom,0px))] w-full max-w-2xl flex-col overflow-hidden bg-white shadow-modal"
         >
           <header className="flex items-center gap-2 bg-ai-gradient px-3 py-2.5 text-white">
             <Bot className="size-5 shrink-0" aria-hidden />
@@ -83,14 +83,6 @@ export function FloatingChatBox() {
             >
               Chuyển nhân viên
             </Button>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              aria-label="Đóng khung chat"
-              className="grid size-8 shrink-0 place-items-center rounded-sm hover:bg-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
-            >
-              <X className="size-5" aria-hidden />
-            </button>
           </header>
 
           <div
@@ -234,7 +226,7 @@ export function FloatingChatBox() {
         aria-controls={open ? panelId : undefined}
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          'fixed bottom-20 right-4 z-40 flex size-14 items-center justify-center rounded-full bg-ai-gradient text-white shadow-dropdown focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ai-from',
+          'fixed bottom-[calc(4rem+var(--safe-bottom,0px))] right-4 z-50 flex size-14 items-center justify-center rounded-full bg-ai-gradient text-white shadow-dropdown focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ai-from',
           !open && 'animate-ai-pulse',
         )}
       >

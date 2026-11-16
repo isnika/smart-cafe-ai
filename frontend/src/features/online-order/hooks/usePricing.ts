@@ -35,7 +35,7 @@ export function useOnlinePricing() {
   const isDelivery = fulfillmentType === 'Delivery';
   const signedIn = !!userId && roleName === 'Customer';
 
-  const branch = useOnlineBranch(fulfillmentType !== null);
+  const branch = useOnlineBranch(fulfillmentType !== null && lines.length > 0);
   const destination =
     delivery && typeof delivery.latitude === 'number' && typeof delivery.longitude === 'number'
       ? { latitude: delivery.latitude, longitude: delivery.longitude }
@@ -86,7 +86,7 @@ export function useOnlinePricing() {
     voucherMessage: voucherOn && voucherCode && quote && !quote.valid ? (quote.message ?? 'Mã giảm giá không hợp lệ') : null,
     /** false khi còn thiếu dữ liệu để tính tổng (đang tải chi nhánh / đồng bộ giỏ / kiểm tra mã) hoặc chi nhánh không phục vụ → chặn bấm tiếp. */
     ready:
-      branch.isSuccess &&
+      (fulfillmentType === null || branch.isSuccess) &&
       !branchBlock &&
       (!useServerCart || cart.isSuccess) &&
       !(voucherOn && voucherCode && voucher.isFetching),

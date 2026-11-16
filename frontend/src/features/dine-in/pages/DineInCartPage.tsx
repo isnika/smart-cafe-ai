@@ -1,4 +1,5 @@
 import { ShoppingBag, UtensilsCrossed } from "lucide-react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { PATHS, to } from "@/app/routes";
 import { formatVnd } from "@/shared/lib";
@@ -9,6 +10,9 @@ import { PageHeader } from "../components/PageHeader";
 import { StickyActionBar } from "../components/StickyActionBar";
 import { selectSubTotal, useDineInCartStore } from "../store";
 import { CartErrorAlert } from "../components/CartErrorAlert";
+import { ProductOptionsModal } from "../components/ProductOptionsModal";
+import type { DineInCartLine, NewCartLine } from "../cart";
+import type { MenuProduct } from "@/shared/types";
 
 /** Giỏ hàng tại bàn. Giỏ gắn với phiên bàn nên khi chưa quét QR thì chỉ hiện hướng dẫn. */
 export default function DineInCartPage() {
@@ -16,6 +20,11 @@ export default function DineInCartPage() {
   const tableCode = useDineInCartStore((s) => s.tableCode);
   const sessionId = useDineInCartStore((s) => s.tableSessionId);
   const navigate = useNavigate();
+  const [editing, setEditing] = useState<DineInCartLine | null>(null);
+  const updateLine = useDineInCartStore((s) => s.updateLine);
+  const increment = useDineInCartStore((s) => s.increment);
+  const decrement = useDineInCartStore((s) => s.decrement);
+  const removeLine = useDineInCartStore((s) => s.removeLine);
 
   const subTotal = useDineInCartStore(selectSubTotal); // pricing◇ từ server
   const busy = useDineInCartStore((s) => s.pending > 0);
@@ -51,7 +60,7 @@ export default function DineInCartPage() {
           <CartErrorAlert />
           <ul className="space-y-3" aria-label="Món đã chọn">
             {lines.map((l) => (
-              <CartLineCard key={l.key} line={l} />
+              <CartLineCard key={l.key} line={l} actions={{ increment, decrement, removeLine, editLine: setEditing }} />
             ))}
           </ul>
 
@@ -78,6 +87,13 @@ export default function DineInCartPage() {
           </StickyActionBar>
         </div>
       )}
+      <ProductOptionsModal
+        product={editing ? ({ id: editing.productId, name: editing.productName } as MenuProduct) : null}
+        onClose={() => setEditing(null)}
+        onAdd={() => undefined}
+        initialLine={editing}
+        onUpdate={(line: NewCartLine) => { if (editing) void updateLine(editing.key, line); setEditing(null); }}
+      />
     </div>
   );
 }

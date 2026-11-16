@@ -1,4 +1,4 @@
-import { Coffee, Trash2 } from "lucide-react";
+import { Coffee, Pencil, Trash2 } from "lucide-react";
 import { formatVnd } from "@/shared/lib";
 import { describeLine, lineTotal, type DineInCartLine } from "../cart";
 import { useDineInCartStore } from "../store";
@@ -9,6 +9,7 @@ export interface CartLineActions {
   increment: (key: string) => void;
   decrement: (key: string) => void;
   removeLine: (key: string) => void;
+  editLine?: (line: DineInCartLine) => void;
 }
 
 /** `actions` mặc định là giỏ Dine-in; giỏ Online truyền actions của store riêng của nó. */
@@ -19,6 +20,7 @@ export function CartLineCard({ line, actions }: { line: DineInCartLine; actions?
     removeLine: useDineInCartStore((s) => s.removeLine),
   };
   const { increment, decrement, removeLine } = actions ?? dineIn;
+  const editLine = actions?.editLine;
   const detail = describeLine(line);
 
   return (
@@ -44,7 +46,7 @@ export function CartLineCard({ line, actions }: { line: DineInCartLine; actions?
             <Trash2 className="size-4" />
           </button>
         </div>
-        {detail && <p className="text-caption text-gray-500">{detail}</p>}
+        {detail && (editLine ? <button type="button" onClick={() => editLine(line)} aria-label={`Chỉnh sửa lựa chọn ${line.productName}: ${detail}`} className="mt-1 inline-flex items-center gap-1 rounded bg-primary-50 px-2 py-1 text-left text-caption font-medium text-primary-700 hover:bg-primary-100"><span>{detail}</span><Pencil className="size-3.5 shrink-0" aria-hidden /></button> : <p className="text-caption text-gray-500">{detail}</p>)}
         {line.note && <p className="text-caption italic text-gray-500">“{line.note}”</p>}
         <div className="mt-2 flex items-center justify-between">
           <span className="text-body font-semibold text-primary-600">{formatVnd(lineTotal(line))}</span>

@@ -64,7 +64,7 @@ export function toOrderLines(lines: readonly DineInCartLine[]): OrderLineInput[]
 
 /** "Size M, Trân châu" – dòng mô tả dưới tên món. */
 export const describeLine = (l: Pick<DineInCartLine, 'variantName' | 'options'>): string =>
-  [l.variantName !== 'Standard' ? `Size ${l.variantName}` : null, ...l.options.map((o) => o.optionName)]
+  [l.variantName !== 'Standard' ? (/^size\s+/i.test(l.variantName) ? l.variantName : `Size ${l.variantName}`) : null, ...l.options.map((o) => o.optionName)]
     .filter(Boolean)
     .join(', ');
 

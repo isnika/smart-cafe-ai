@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { Coffee } from "lucide-react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { PATHS } from "@/app/routes";
-import { countItems, lineUnitTotal, MAX_LINE_QUANTITY } from "@/features/dine-in/cart";
+import { lineUnitTotal, MAX_LINE_QUANTITY } from "@/features/dine-in/cart";
 import { QuantityStepper } from "@/features/dine-in/components/QuantityStepper";
 import { useOnlineCartStore } from "@/features/online-order/store";
 import { RecommendationSection } from "@/features/recommendation/components/RecommendationSection";
@@ -46,17 +47,16 @@ interface Props {
 }
 
 export function ProductDetailView({ detail, categoryName }: Props) {
+  const navigate = useNavigate();
   const variants = useMemo(() => sortVariants(detail.variants), [detail.variants]);
   const groups = useMemo(() => sortGroups(detail.optionGroups), [detail.optionGroups]);
 
   const [variantId, setVariantId] = useState<number | null>(() => initialVariantId(variants));
   const [picked, setPicked] = useState<Picks>(() => initialPicks(groups));
   const [quantity, setQuantity] = useState(1);
-  const [justAdded, setJustAdded] = useState(false);
 
   const fulfillment = useOnlineCartStore((s) => s.fulfillmentType);
   const addLine = useOnlineCartStore((s) => s.addLine);
-  const cartCount = useOnlineCartStore((s) => countItems(s.lines));
 
   const variant = variants.find((v) => v.id === variantId) ?? null;
   const soldOut = isSoldOut(variants);
@@ -65,19 +65,19 @@ export function ProductDetailView({ detail, categoryName }: Props) {
   const total = draft ? lineUnitTotal(draft) * quantity : 0;
   const shownPrice = variant?.price ?? (variants.length > 0 ? Math.min(...variants.map((v) => v.price)) : null);
 
-  const canAdd = !soldOut && draft !== null && !missing && fulfillment !== null;
+  const canAdd = !soldOut && draft !== null && !missing;
   const buttonLabel = soldOut ? "Hết hàng" : missing ? `Chọn ${missing.name}` : `Thêm vào giỏ • ${formatVnd(total)}`;
 
-  // Đổi lựa chọn thì thông báo "đã thêm" của lần trước không còn đúng nữa.
   const change = <T,>(setter: (value: T) => void) => (value: T) => {
-    setJustAdded(false);
     setter(value);
   };
 
   const handleAdd = () => {
     if (!canAdd || !draft) return;
     addLine(draft, quantity);
-    setJustAdded(true);
+    toast.success(`Đã thêm ${quantity} ${detail.name} vào giỏ hàng`, {
+      action: { label: "Xem giỏ hàng", onClick: () => navigate(PATHS.cart) },
+    });
     setQuantity(1);
   };
 
@@ -158,7 +158,6 @@ export function ProductDetailView({ detail, categoryName }: Props) {
                           checked={checked}
                           disabled={!o.isAvailable}
                           onChange={() => setPicked((prev) => togglePick(groups, prev, g.id, o.id))}
-                          onClick={() => setJustAdded(false)}
                         />
                         {o.optionName}
                       </span>
@@ -179,20 +178,9 @@ export function ProductDetailView({ detail, categoryName }: Props) {
       </div>
 
       <div className="fixed inset-x-0 bottom-[calc(3.5rem+var(--safe-bottom,0px))] z-20 mx-auto max-w-2xl border-t border-primary-100 bg-white px-4 py-3">
-        {justAdded && (
-          <p role="status" className="mb-2 flex items-center justify-between gap-2 rounded-md bg-success-soft px-3 py-2 text-body text-success-strong">
-            <span>Đã thêm vào giỏ hàng</span>
-            <Link to={PATHS.cart} className="font-semibold underline">
-              Xem giỏ hàng ({cartCount})
-            </Link>
-          </p>
-        )}
         {fulfillment === null && !soldOut && (
           <p className="mb-2 text-caption text-gray-600">
-            Chọn Giao hàng / Mang đi hoặc quét QR trên bàn để đặt món.{" "}
-            <Link to={PATHS.start} className="font-semibold text-primary-600 underline">
-              Bắt đầu đặt món
-            </Link>
+            Bạn có thể chọn giao hàng hoặc mang đi sau khi thêm món vào giỏ.
           </p>
         )}
         <div className="flex items-center gap-3">

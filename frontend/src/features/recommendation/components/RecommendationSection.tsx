@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
 import { Sparkles } from 'lucide-react';
+import { toast } from 'sonner';
 import { ProductOptionsModal } from '@/features/dine-in/components/ProductOptionsModal';
 import { useOnlineCartStore } from '@/features/online-order/store';
 import type { MenuProduct } from '@/shared/types';
@@ -79,6 +80,7 @@ export function RecommendationSection({ variant, excludeProductId }: Props) {
           onClose={() => setPicking(null)}
           onAdd={(line, quantity) => {
             addLine(line, quantity);
+            toast.success(`Đã thêm ${quantity} ${line.productName} vào giỏ hàng`);
             setPicking(null);
           }}
         />

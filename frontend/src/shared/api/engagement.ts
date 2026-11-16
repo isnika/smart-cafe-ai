@@ -1,5 +1,6 @@
 import type {
   LoyaltySummary,
+  LoyaltyTransaction,
   Notification,
   Page,
   PageParams,
@@ -13,6 +14,7 @@ const P = '/engagement';
 
 // Loyalty
 export const getLoyaltySummary = () => http.get<LoyaltySummary>(`${P}/loyalty/me`);
+export const getLoyaltyTransactions = (page = 1, size = 20) => http.get<Page<LoyaltyTransaction>>(`${P}/loyalty/me/transactions`, { query: { page, size } });
 
 // Voucher
 export const validateVoucher = (input: ValidateVoucherInput) => http.post<VoucherValidation>(`${P}/vouchers/validate`, input);

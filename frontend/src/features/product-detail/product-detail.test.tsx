@@ -159,9 +159,8 @@ describe('/menu/:id – chọn tuỳ chọn, giá tạm tính, thêm vào giỏ'
     expect(lines[0]!.options.map((o) => o.optionId).sort()).toEqual([101, 104]);
     expect(useDineInCartStore.getState().lines).toHaveLength(0); // không rò sang giỏ Dine-in
 
-    const status = await screen.findByRole('status');
-    expect(status.textContent).toContain('Đã thêm vào giỏ hàng');
-    expect(within(status).getByRole('link', { name: 'Xem giỏ hàng (2)' }).getAttribute('href')).toBe('/cart');
+    expect(await screen.findByText('Đã thêm 2 Cà phê sữa đá vào giỏ hàng')).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Xem giỏ hàng' })).toBeTruthy();
     expect(addButton().textContent).toBe('Thêm vào giỏ • 45.000đ'); // số lượng về 1 sau khi thêm
 
     // thêm lại đúng lựa chọn đó → gộp vào cùng dòng
@@ -183,13 +182,14 @@ describe('/menu/:id – chọn tuỳ chọn, giá tạm tính, thêm vào giỏ'
     expect((screen.getByRole('radio', { name: '100% đường' }) as HTMLInputElement).checked).toBe(false);
   });
 
-  it('chưa chọn Giao hàng / Mang đi → nút thêm bị khoá và có lối vào luồng đặt món', async () => {
+  it('chưa chọn Giao hàng / Mang đi vẫn thêm được món để chọn cách nhận trong giỏ', async () => {
     renderApp('/menu/1');
     await screen.findByRole('heading', { level: 2, name: 'Cà phê sữa đá' });
-    expect(addButton().disabled).toBe(true);
-    expect(screen.getByRole('link', { name: 'Bắt đầu đặt món' }).getAttribute('href')).toBe('/');
+    expect(addButton().disabled).toBe(false);
+    expect(screen.getByText('Bạn có thể chọn giao hàng hoặc mang đi sau khi thêm món vào giỏ.')).toBeTruthy();
     fireEvent.click(addButton());
-    expect(useOnlineCartStore.getState().lines).toHaveLength(0);
+    expect(useOnlineCartStore.getState().lines).toHaveLength(1);
+    expect(await screen.findByRole('link', { name: 'Xem giỏ hàng (1)' })).toBeTruthy();
   });
 
   it('size hết hàng bị khoá, không chọn được', async () => {

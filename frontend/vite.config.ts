@@ -38,6 +38,18 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/catalog/, '/api/v1/catalog'),
       },
+      // Online and QR carts use service-relative paths; forward them to Order Service.
+      '/carts': {
+        target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8080',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/carts/, '/api/v1/carts'),
+      },
+      // Customer order history uses service-relative paths (/orders/me).
+      '/orders': {
+        target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8080',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/orders/, '/api/v1/orders'),
+      },
       // Admin pages call the Store service with service-relative paths.
       // Forward these through the gateway just like the versioned production API.
       '/branches': {

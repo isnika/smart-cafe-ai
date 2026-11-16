@@ -3,11 +3,7 @@ import {
   ClipboardList,
   Coffee,
   Building2,
-  Database,
-  FileClock,
-  PlugZap,
   QrCode,
-  Settings2,
   LayoutDashboard,
   LayoutGrid,
   LogOut,
@@ -48,10 +44,6 @@ const navByRole: Record<Exclude<RoleName, "Customer">, NavItem[]> = {
     { to: "/admin/branches", label: "Chi nhánh", icon: Building2 },
     { to: "/admin/tables", label: "Bàn & QR", icon: QrCode },
     { to: "/admin/users", label: "Tài khoản & Quyền", icon: Users },
-    { to: "/admin/config", label: "Cấu hình hệ thống", icon: Settings2 },
-    { to: "/admin/integrations", label: "Tích hợp dịch vụ", icon: PlugZap },
-    { to: "/admin/audit", label: "Nhật ký hệ thống", icon: FileClock },
-    { to: "/admin/backup", label: "Sao lưu & Phục hồi", icon: Database },
   ],
 };
 
@@ -130,7 +122,7 @@ export function StaffShellLayout() {
 
   return (
     <div className="min-h-screen bg-primary-50 md:flex">
-      <aside className="hidden w-60 shrink-0 flex-col border-r border-primary-100 bg-white p-4 md:flex">
+      <aside className="hidden md:fixed md:inset-y-0 md:left-0 md:z-30 md:flex md:w-60 md:flex-col md:border-r md:border-primary-100 md:bg-white md:p-4">
         <div className="mb-5 flex items-center gap-3 px-1">
           <span className="grid size-10 place-items-center rounded-lg bg-primary-600 text-white">
             <Coffee className="size-5" aria-hidden />
@@ -150,7 +142,7 @@ export function StaffShellLayout() {
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col md:ml-60">
         {/* Thanh trên chỉ hiện ở màn hình nhỏ (desktop đã có sidebar) */}
         <header className="flex items-center justify-between bg-white px-4 py-3 shadow-sticky md:hidden">
           <div>

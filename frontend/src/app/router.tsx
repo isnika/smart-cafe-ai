@@ -25,6 +25,7 @@ import OnlineCheckoutPage from "@/features/online-order/pages/OnlineCheckoutPage
 import OrderSuccessPage from "@/features/online-order/pages/OrderSuccessPage";
 import PaymentReturnPage from "@/features/online-order/pages/PaymentReturnPage";
 import OrderHistoryPage from "@/features/orders/pages/OrderHistoryPage";
+import ProfilePage from "@/features/profile/pages/ProfilePage";
 import OrderTrackingPage from "@/features/online-order/pages/OrderTrackingPage";
 import ManagerDashboardPage from "@/features/manager-dashboard/pages/ManagerDashboardPage";
 import InventoryPage from "@/features/manager-inventory/pages/InventoryPage";
@@ -32,10 +33,7 @@ import ManagerForecastPage from "@/features/manager-forecast/pages/ManagerForeca
 import StaffDashboardPage from "@/features/staff-dashboard/pages/StaffDashboardPage";
 import StaffCheckinPage from "@/features/staff-checkin/pages/StaffCheckinPage";
 import StaffTablesPage from "@/features/staff-tables/pages/StaffTablesPage";
-import PlaceholderPage from "@/pages/PlaceholderPage";
-import { AdminDashboardPage, AdminBranchesPage, AdminTablesPage, AdminUsersPage, AdminUnavailablePage } from "@/features/admin/pages/AdminPages";
-
-const P = PlaceholderPage;
+import { AdminDashboardPage, AdminBranchesPage, AdminTablesPage, AdminUsersPage } from "@/features/admin/pages/AdminPages";
 
 // Tải lười để trang này không đi vào bundle production
 const DesignSystemPage = lazy(() => import("@/pages/DesignSystemPage"));
@@ -108,7 +106,7 @@ export const routes: RouteObject[] = [
               { path: PATHS.paymentReturn, element: <PaymentReturnPage /> },
               { path: PATHS.orders, element: <OrderHistoryPage /> },
               { path: PATHS.order, element: <OrderTrackingPage /> },
-              { path: PATHS.profile, element: <P title="Hồ sơ & địa chỉ" /> },
+              { path: PATHS.profile, element: <ProfilePage /> },
             ],
           },
         ],
@@ -159,10 +157,6 @@ export const routes: RouteObject[] = [
           { path: PATHS.adminBranches, element: <AdminBranchesPage /> },
           { path: PATHS.adminTables, element: <AdminTablesPage /> },
           { path: PATHS.adminUsers, element: <AdminUsersPage /> },
-          { path: PATHS.adminConfig, element: <AdminUnavailablePage title="Cấu hình hệ thống" /> },
-          { path: PATHS.adminIntegrations, element: <AdminUnavailablePage title="Tích hợp dịch vụ" /> },
-          { path: PATHS.adminAudit, element: <AdminUnavailablePage title="Nhật ký hoạt động hệ thống" /> },
-          { path: PATHS.adminBackup, element: <AdminUnavailablePage title="Sao lưu & Phục hồi dữ liệu" /> },
         ],
       },
     ],

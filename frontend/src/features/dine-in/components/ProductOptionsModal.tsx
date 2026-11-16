@@ -3,7 +3,7 @@ import { formatVnd } from "@/shared/lib";
 import { cn } from "@/shared/lib/cn";
 import type { MenuProduct, ProductDetail } from "@/shared/types";
 import { Button, Modal, Skeleton } from "@/shared/ui";
-import { lineUnitTotal, MAX_LINE_QUANTITY, type NewCartLine } from "../cart";
+import { lineUnitTotal, MAX_LINE_QUANTITY, type DineInCartLine, type NewCartLine } from "../cart";
 import { DINE_IN_BRANCH_ID } from "../config";
 import { useProductDetail } from "../hooks/useMenu";
 import { QuantityStepper } from "./QuantityStepper";
@@ -13,9 +13,11 @@ interface Props {
   product: MenuProduct | null;
   onClose: () => void;
   onAdd: (line: NewCartLine, quantity: number) => void;
+  initialLine?: DineInCartLine | null;
+  onUpdate?: (line: NewCartLine) => void;
 }
 
-export function ProductOptionsModal({ product, onClose, onAdd }: Props) {
+export function ProductOptionsModal({ product, onClose, onAdd, initialLine, onUpdate }: Props) {
   const detail = useProductDetail(product?.id ?? null, DINE_IN_BRANCH_ID);
   return (
     <Modal open={product !== null} onClose={onClose} title={product?.name ?? ""}>
@@ -33,22 +35,22 @@ export function ProductOptionsModal({ product, onClose, onAdd }: Props) {
           </Button>
         </div>
       )}
-      {detail.data && <OptionsForm key={detail.data.id} detail={detail.data} onAdd={onAdd} />}
+      {detail.data && <OptionsForm key={`${detail.data.id}-${initialLine?.variantId ?? 'new'}`} detail={detail.data} onAdd={onAdd} initialLine={initialLine} onUpdate={onUpdate} />}
     </Modal>
   );
 }
 
-function OptionsForm({ detail, onAdd }: { detail: ProductDetail; onAdd: Props["onAdd"] }) {
+function OptionsForm({ detail, onAdd, initialLine, onUpdate }: { detail: ProductDetail; onAdd: Props["onAdd"]; initialLine?: DineInCartLine | null; onUpdate?: Props["onUpdate"] }) {
   const variants = useMemo(() => [...detail.variants].sort((a, b) => a.sortOrder - b.sortOrder), [detail.variants]);
   const groups = useMemo(() => [...detail.optionGroups].sort((a, b) => a.sortOrder - b.sortOrder), [detail.optionGroups]);
 
-  const [variantId, setVariantId] = useState<number | null>(() => variants.find((v) => v.isAvailable)?.id ?? null);
+  const [variantId, setVariantId] = useState<number | null>(() => initialLine?.variantId ?? variants.find((v) => v.isAvailable)?.id ?? null);
   const [picked, setPicked] = useState<Record<number, number[]>>(() =>
     Object.fromEntries(
-      groups.map((g) => [g.id, g.options.filter((o) => o.isDefault && o.isAvailable).map((o) => o.id)]),
+      groups.map((g) => [g.id, initialLine ? g.options.filter((o) => initialLine.options.some((picked) => picked.optionId === o.id)).map((o) => o.id) : g.options.filter((o) => o.isDefault && o.isAvailable).map((o) => o.id)]),
     ),
   );
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState<number>(initialLine?.quantity ?? 1);
 
   const variant = variants.find((v) => v.id === variantId) ?? null;
 
@@ -170,8 +172,8 @@ function OptionsForm({ detail, onAdd }: { detail: ProductDetail; onAdd: Props["o
           onDecrement={() => setQuantity((q) => Math.max(1, q - 1))}
           onIncrement={() => setQuantity((q) => Math.min(MAX_LINE_QUANTITY, q + 1))}
         />
-        <Button className="flex-1" disabled={!!missing || !draft} onClick={() => draft && onAdd(draft, quantity)}>
-          {missing ? `Chọn ${missing.name}` : `Thêm vào giỏ • ${formatVnd(total)}`}
+        <Button className="flex-1" disabled={!!missing || !draft} onClick={() => draft && (initialLine && onUpdate ? onUpdate(draft) : onAdd(draft, quantity))}>
+          {missing ? `Chọn ${missing.name}` : initialLine ? `Lưu lựa chọn • ${formatVnd(total)}` : `Thêm vào giỏ • ${formatVnd(total)}`}
         </Button>
       </div>
     </div>
