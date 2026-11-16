@@ -1,0 +1,37 @@
+{
+  "data_source": "demo_mock",
+  "cutoff": "2026-08-31T21:59:00",
+  "days": 30,
+  "top_k": 5,
+  "train_orders": 38355,
+  "test_orders": 3846,
+  "eligible_users": {
+    "discovery_novel_future": 362,
+    "reorder_repeat_future": 441
+  },
+  "discovery": {
+    "personalized_hybrid": {
+      "precision_at_k": 0.10221,
+      "recall_at_k": 0.202004,
+      "ndcg_at_k": 0.165561
+    },
+    "popularity_baseline": {
+      "precision_at_k": 0.068508,
+      "recall_at_k": 0.121483,
+      "ndcg_at_k": 0.110946
+    }
+  },
+  "reorder": {
+    "reorder_history": {
+      "precision_at_k": 0.501134,
+      "recall_at_k": 0.4577,
+      "ndcg_at_k": 0.637399
+    }
+  },
+  "notes": [
+    "Train snapshot is built strictly before cutoff.",
+    "Discovery ground truth excludes products already purchased before cutoff.",
+    "Repeat purchases are evaluated separately with reorder strategy.",
+    "Mock metrics are not production performance."
+  ]
+}

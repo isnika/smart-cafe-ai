@@ -1,0 +1,50 @@
+chay service: uvicorn src.app.main:app --reload --port 8000
+http://127.0.0.1:8000/docs
+
+
+ollama run qwen2.5:3b test model
+
+dùng httpx để gọi API tương thích OpenAI do Ollama cung cấp.
+
+1. Chuẩn hóa dữ liệu knowledge ( Done)
+- Chuẩn hóa dữ liệu menu: tên món, giá, mô tả, thành phần, nhiệt độ, caffeine.
+- Chuẩn bị kiến thức FAQ: giờ mở cửa, địa chỉ, thanh toán, tích điểm, đổi hoặc hủy đơn.
+- Phân biệt dữ liệu thật của quán với dữ liệu giả lập.
+
+2. Xây dựng RAG (Doing)
+RAG là cách để chatbot tìm thông tin trong dữ liệu của quán trước khi trả lời.
+Nhờ đó, câu trả lời bám sát menu và chính sách hơn, thay vì tự đoán.'
+
+3. Quản lý hội thoại
+Ghi nhớ ngữ cảnh trong phiên chat, hiểu câu hỏi nối tiếp và nhận diện ý định như hỏi menu,
+tư vấn món, hỏi khuyến mãi hoặc tra cứu đơn hàng.
+
+4. Kết nối hệ thống
+Kết nối API với backend quán để tra cứu giá, chương trình khuyến mãi, trạng thái đơn hàng và
+thông tin khách hàng theo quyền truy cập.
+
+5. Đánh giá chất lượng
+Tạo bộ câu hỏi kiểm thử, đo độ chính xác truy xuất, mức độ đúng của câu trả lời, độ trễ và tỷ lệ chatbot trả lời sai.
+
+
+Qúa trình hiện tại:
+Đọc menu từ products.csv Đã có
+
+Tìm món bằng từ khóa	Đã có, nhưng còn đơn giản
+
+Gọi LLM qua API Đã có khung tích hợp
+
+Tìm kiếm kiến thức bằng vector Chưa triển khai
+
+Trả lời dựa trên FAQ/chính sách quán Chưa đầy đủ
+
+Ghi nhớ ngữ cảnh nhiều lượt chat Chưa có
+
+Đánh giá độ chính xác Chưa có
+
+Luồng xử lý
+
+retriever.py đọc mọi file .md và .txt trong knowledge_base/ (menu, cafe_info, faq, policies). Mỗi file được chia chunk theo heading Markdown, và section quá dài (trên 900 ký tự) được cắt tiếp. Mỗi chunk giữ metadata gồm source, category, heading.
+Embedding dùng multilingual-e5-small, hỗ trợ tiếng Việt và chạy CPU được. Index được cache trong .rag_cache/ và chỉ tính lại khi nội dung knowledge_base thay đổi.
+rag.py viết lại câu hỏi nối tiếp thành câu độc lập (ví dụ “còn size L thì sao?” thành “matcha latte size L giá bao nhiêu?”), rồi tìm top-k chunk. Nếu không chunk nào đạt ngưỡng điểm thì trả về câu fallback, không gọi LLM. Ngược lại, bot ghép context vào prompt và trả lời kèm danh sách nguồn.
+service.py bọc pipeline thành ChatService (có reindex()), kèm ví dụ router FastAPI ở cuối file.

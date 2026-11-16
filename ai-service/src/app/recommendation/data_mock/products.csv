@@ -1,0 +1,103 @@
+product_id,name,category,description,price_vnd,temperature,caffeine_level,flavor_tags,launch_date
+1,Cà phê sữa,Coffee,Cà phê sữa truyền thống,29000,hot,high,coffee|milky,2025-01-01
+2,Bạc xỉu,Coffee,Cà phê nhiều sữa,32000,either,high,coffee|milky,2025-01-01
+3,Matcha latte,Matcha,Matcha với sữa,55000,hot,medium,matcha|milky,2025-01-01
+4,Cà phê đen,Coffee,Cà phê đen truyền thống,25000,hot,high,coffee|strong,2025-01-01
+5,Cà phê đen đá,Coffee,Cà phê đen dùng với đá,25000,cold,high,coffee|strong,2025-01-01
+6,Cà phê sữa đá,Coffee,Cà phê sữa dùng với đá,29000,cold,high,coffee|milky,2025-01-01
+7,Cà phê muối,Coffee,Cà phê kết hợp kem muối,39000,cold,high,coffee,2025-01-01
+8,Cà phê dừa,Coffee,Cà phê kết hợp nước cốt dừa,42000,cold,high,coffee|dessert,2025-01-01
+9,Cà phê trứng,Coffee,Cà phê phủ lớp kem trứng béo,45000,either,high,coffee|dessert,2025-01-01
+10,Cà phê caramel,Coffee,Cà phê kết hợp caramel,49000,either,high,coffee|dessert,2025-01-01
+11,Cà phê vanilla,Coffee,Cà phê kết hợp vanilla,49000,either,high,coffee|dessert,2025-01-01
+12,Cà phê hazelnut,Coffee,Cà phê hương hạt phỉ,49000,either,high,coffee|dessert,2025-01-01
+13,Cà phê mocha,Coffee,Cà phê kết hợp chocolate và sữa,55000,either,high,coffee|dessert|milky,2025-01-01
+14,Americano,Coffee,Espresso pha loãng với nước,42000,hot,high,coffee|strong,2025-01-01
+15,Americano đá,Coffee,Americano dùng với đá,42000,cold,high,coffee|strong,2025-01-01
+16,Espresso,Coffee,Cà phê espresso đậm vị,35000,hot,high,coffee|strong,2025-01-01
+17,Espresso doppio,Coffee,Hai shot espresso đậm vị,45000,hot,high,coffee|strong,2025-01-01
+18,Cappuccino,Coffee,Espresso với sữa nóng và bọt sữa,52000,hot,high,coffee|milky,2025-01-01
+19,Latte,Coffee,Espresso kết hợp nhiều sữa,52000,hot,high,coffee|milky,2025-01-01
+20,Caramel macchiato,Coffee,Espresso với sữa và caramel,58000,hot,high,coffee|dessert|milky,2025-01-01
+21,Flat white,Coffee,Espresso với sữa mịn,55000,hot,high,coffee|milky,2025-01-01
+22,Cold brew,Coffee,Cà phê ủ lạnh trong thời gian dài,49000,cold,high,coffee|strong,2025-01-01
+23,Cold brew sữa,Coffee,Cold brew kết hợp với sữa,55000,cold,high,coffee|milky|strong,2025-01-01
+24,Cold brew cam,Coffee,Cold brew kết hợp nước cam,55000,cold,high,coffee|fruity|strong,2026-04-01
+25,Cold brew tonic,Coffee,Cold brew kết hợp tonic,59000,cold,high,coffee|strong,2026-03-01
+26,Matcha đá,Matcha,Matcha pha với nước và đá,52000,cold,medium,matcha,2025-01-01
+27,Matcha latte đá,Matcha,Matcha latte dùng với đá,54000,cold,medium,matcha|milky,2025-01-01
+28,Matcha dừa,Matcha,Matcha kết hợp nước cốt dừa,51000,cold,medium,dessert|matcha,2025-01-01
+29,Matcha kem cheese,Matcha,Matcha phủ kem cheese,61000,cold,medium,dessert|matcha,2026-01-15
+30,Matcha caramel,Matcha,Matcha kết hợp caramel,50000,cold,medium,dessert|matcha,2025-01-01
+31,Matcha strawberry,Matcha,Matcha kết hợp dâu tây,52000,cold,medium,fruity|matcha,2026-02-10
+32,Matcha coconut,Matcha,Matcha kết hợp sữa dừa,54000,cold,medium,dessert|matcha,2025-01-01
+33,Matcha vanilla,Matcha,Matcha kết hợp vanilla,51000,cold,medium,dessert|matcha,2025-01-01
+34,Matcha đá xay,Matcha,Matcha xay cùng đá và sữa,61000,cold,medium,matcha|milky,2025-01-01
+35,Matcha chocolate,Matcha,Matcha kết hợp chocolate,50000,cold,medium,dessert|matcha,2025-01-01
+36,Trà đào,Tea,Trà kết hợp đào và đá,42000,cold,low,fruity|refreshing|tea,2025-01-01
+37,Trà đào cam sả,Tea,Trà đào kết hợp cam và sả,44000,cold,low,fruity|refreshing|tea,2025-01-01
+38,Trà tắc,Tea,Trà kết hợp tắc và đường,41000,cold,low,fruity|refreshing|tea,2025-01-01
+39,Trà chanh,Tea,Trà chanh thanh mát,43000,cold,low,fruity|refreshing|tea,2025-01-01
+40,Trà chanh dây,Tea,Trà kết hợp chanh dây,40000,cold,low,fruity|refreshing|tea,2025-01-01
+41,Trà vải,Tea,Trà kết hợp vải,42000,cold,low,fruity|refreshing|tea,2025-01-01
+42,Trà dâu,Tea,Trà kết hợp dâu tây,44000,cold,low,fruity|refreshing|tea,2025-01-01
+43,Trà xoài,Tea,Trà kết hợp xoài,41000,cold,low,fruity|refreshing|tea,2025-01-01
+44,Trà kiwi,Tea,Trà kết hợp kiwi,43000,cold,low,fruity|refreshing|tea,2025-01-01
+45,Trà hoa nhài,Tea,Trà hoa nhài thơm nhẹ,40000,either,low,herbal|refreshing|tea,2025-01-01
+46,Trà sen,Tea,Trà sen thanh nhẹ,42000,either,low,herbal|refreshing|tea,2025-01-01
+47,Trà ô long,Tea,Trà ô long đậm hương,44000,either,low,refreshing|tea,2025-01-01
+48,Trà ô long đào,Tea,Trà ô long kết hợp đào,41000,cold,low,fruity|refreshing|tea,2025-01-01
+49,Trà ô long vải,Tea,Trà ô long kết hợp vải,43000,cold,low,fruity|refreshing|tea,2025-01-01
+50,Trà hibiscus,Tea,Trà hoa hibiscus chua nhẹ,40000,cold,none,fruity|herbal|refreshing|tea,2025-01-01
+51,Trà gừng mật ong,Tea,Trà gừng kết hợp mật ong,42000,hot,none,herbal|refreshing|tea,2025-01-01
+52,Trà bạc hà,Tea,Trà bạc hà thanh mát,44000,either,none,herbal|refreshing|tea,2025-01-01
+53,Chocolate nóng,Chocolate,Chocolate nóng với sữa,51000,hot,none,chocolate|dessert,2025-01-01
+54,Chocolate đá,Chocolate,Chocolate sữa dùng với đá,53000,cold,none,chocolate|dessert,2025-01-01
+55,Chocolate mint,Chocolate,Chocolate kết hợp bạc hà,50000,cold,none,chocolate|dessert,2026-05-01
+56,Chocolate caramel,Chocolate,Chocolate kết hợp caramel,52000,cold,none,chocolate|dessert,2025-01-01
+57,Chocolate hazelnut,Chocolate,Chocolate hương hạt phỉ,54000,cold,none,chocolate|dessert,2025-01-01
+58,Chocolate vanilla,Chocolate,Chocolate kết hợp vanilla,51000,cold,none,chocolate|dessert,2025-01-01
+59,Chocolate dừa,Chocolate,Chocolate kết hợp dừa,53000,cold,none,chocolate|dessert,2025-01-01
+60,Chocolate đá xay,Chocolate,Chocolate xay cùng đá và sữa,58000,cold,none,chocolate|dessert|milky,2025-01-01
+61,Strawberry chocolate,Chocolate,Chocolate kết hợp dâu tây,52000,cold,none,chocolate|dessert|fruity,2025-01-01
+62,Sữa tươi,Milk,Sữa tươi nguyên chất,42000,cold,none,milk|milky,2025-01-01
+63,Sữa tươi đường đen,Milk,Sữa tươi kết hợp đường đen,39000,cold,none,dessert|milk|milky,2025-01-01
+64,Sữa tươi matcha,Milk,Sữa tươi kết hợp matcha,41000,cold,none,milk|milky,2025-01-01
+65,Sữa tươi cacao,Milk,Sữa tươi kết hợp cacao,38000,cold,none,dessert|milk|milky,2025-01-01
+66,Sữa tươi dâu,Milk,Sữa tươi kết hợp dâu,40000,cold,none,fruity|milk|milky,2025-01-01
+67,Sữa tươi khoai môn,Milk,Sữa tươi kết hợp khoai môn,42000,cold,none,dessert|milk|milky,2025-01-01
+68,Sữa tươi caramel,Milk,Sữa tươi kết hợp caramel,39000,cold,none,dessert|milk|milky,2025-01-01
+69,Sữa chua dâu,Yogurt,Sữa chua kết hợp dâu tây,43000,cold,none,fruity|milky|yogurt,2025-01-01
+70,Sữa chua việt quất,Yogurt,Sữa chua kết hợp việt quất,40000,cold,none,fruity|milky|yogurt,2025-01-01
+71,Sữa chua xoài,Yogurt,Sữa chua kết hợp xoài,42000,cold,none,fruity|milky|yogurt,2025-01-01
+72,Sữa chua đào,Yogurt,Sữa chua kết hợp đào,44000,cold,none,fruity|milky|yogurt,2025-01-01
+73,Sữa chua chanh dây,Yogurt,Sữa chua kết hợp chanh dây,41000,cold,none,fruity|milky|yogurt,2025-01-01
+74,Sữa chua kiwi,Yogurt,Sữa chua kết hợp kiwi,43000,cold,none,fruity|milky|yogurt,2025-01-01
+75,Sinh tố bơ,Smoothie,Sinh tố bơ béo mịn,48000,cold,none,fruity|smoothie,2025-01-01
+76,Sinh tố xoài,Smoothie,Sinh tố xoài tươi,50000,cold,none,fruity|smoothie,2025-01-01
+77,Sinh tố dâu,Smoothie,Sinh tố dâu tây,52000,cold,none,fruity|smoothie,2025-01-01
+78,Sinh tố chuối,Smoothie,Sinh tố chuối,49000,cold,none,fruity|smoothie,2025-01-01
+79,Sinh tố việt quất,Smoothie,Sinh tố việt quất,51000,cold,none,fruity|smoothie,2025-01-01
+80,Sinh tố mãng cầu,Smoothie,Sinh tố mãng cầu,48000,cold,none,fruity|smoothie,2025-01-01
+81,Sinh tố sapoche,Smoothie,Sinh tố sapoche,50000,cold,none,fruity|smoothie,2025-01-01
+82,Sinh tố dừa,Smoothie,Sinh tố dừa,52000,cold,none,dessert|smoothie,2025-01-01
+83,Nước ép cam,Juice,Nước ép cam tươi,44000,cold,none,fruity|juice|refreshing,2025-01-01
+84,Nước ép dưa hấu,Juice,Nước ép dưa hấu tươi,46000,cold,none,fruity|juice|refreshing,2025-01-01
+85,Nước ép táo,Juice,Nước ép táo tươi,43000,cold,none,fruity|juice|refreshing,2025-01-01
+86,Nước ép thơm,Juice,Nước ép thơm tươi,45000,cold,none,fruity|juice|refreshing,2025-01-01
+87,Nước ép cà rốt,Juice,Nước ép cà rốt tươi,47000,cold,none,juice|refreshing,2025-01-01
+88,Nước ép cần tây,Juice,Nước ép cần tây tươi,44000,cold,none,juice|refreshing,2025-01-01
+89,Nước ép cam cà rốt,Juice,Nước ép cam kết hợp cà rốt,46000,cold,none,fruity|juice|refreshing,2025-01-01
+90,Nước ép táo cần tây,Juice,Nước ép táo kết hợp cần tây,43000,cold,none,fruity|juice|refreshing,2025-01-01
+91,Soda chanh,Soda,Soda kết hợp chanh tươi,40000,cold,none,fruity|refreshing|soda,2025-01-01
+92,Soda tắc,Soda,Soda kết hợp tắc,42000,cold,none,fruity|refreshing|soda,2025-01-01
+93,Soda việt quất,Soda,Soda kết hợp việt quất,39000,cold,none,fruity|refreshing|soda,2025-01-01
+94,Soda dâu,Soda,Soda kết hợp dâu tây,41000,cold,none,fruity|refreshing|soda,2025-01-01
+95,Soda đào,Soda,Soda kết hợp đào,38000,cold,none,fruity|refreshing|soda,2025-01-01
+96,Soda chanh dây,Soda,Soda kết hợp chanh dây,40000,cold,none,fruity|refreshing|soda,2025-01-01
+97,Soda bạc hà,Soda,Soda kết hợp bạc hà,42000,cold,none,herbal|refreshing|soda,2025-01-01
+98,Nước suối,Other,Nước suối đóng chai,15000,neutral,none,other,2025-01-01
+99,Nước khoáng có gas,Other,Nước khoáng có gas,25000,neutral,none,other,2025-01-01
+100,Cookies chocolate,Bakery,Bánh cookie vị chocolate,35000,neutral,none,bakery|dessert,2025-01-01
+101,Croissant bơ,Bakery,Bánh croissant nhân bơ,42000,neutral,none,bakery|fruity,2025-01-01
+102,Bánh chuối,Bakery,Bánh chuối mềm thơm,35000,neutral,none,bakery|fruity,2025-01-01

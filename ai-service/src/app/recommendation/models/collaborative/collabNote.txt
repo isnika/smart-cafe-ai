@@ -1,0 +1,6 @@
+User × Product Matrix
+
+       P1 P2 P3 P4
+U1      5  2  0  1
+U2      4  0  5  0
+U3      0  3  4  5
