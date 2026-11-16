@@ -23,6 +23,10 @@ Catalog public menu APIs (categories, product search, product detail): see [setu
 
 ```text
 backend/
+├── .env.example
+├── docker-compose.yml
+├── docker-compose.hub.yml
+├── docker-compose.local.yml
 ├── pom.xml
 ├── discovery-server/
 ├── api-gateway/
@@ -37,5 +41,29 @@ backend/
 ```
 
 The previous modular-monolith prototype under `backend/src/main/java/com/smartcafe/backend/modules` was removed so this folder now represents the microservice design only.
+
+## Docker Compose
+
+Run these commands from the repository root:
+
+```powershell
+cd backend
+Copy-Item .env.example .env
+docker compose up -d --build
+```
+
+To run published Docker Hub images with the local overrides, run from `backend/`:
+
+```powershell
+docker compose -f docker-compose.hub.yml -f docker-compose.local.yml up -d
+```
+
+Compose loads `backend/.env` automatically when run from `backend/`. To run from the repository root instead:
+
+```powershell
+docker compose --env-file backend/.env -f backend/docker-compose.hub.yml -f backend/docker-compose.local.yml up -d
+```
+
+The project name remains `smart-cafe-ai` so existing Compose volumes and networks keep the same names. Database initialization scripts remain in `../database/`.
 
 OTP email delivery (Identity → RabbitMQ → Engagement → SMTP): see [setup and testing](engagement-service/README.md).

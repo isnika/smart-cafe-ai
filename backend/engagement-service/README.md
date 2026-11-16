@@ -40,7 +40,7 @@ Nếu broker chưa chạy, khởi động bằng `.\rabbitmq-service.bat start` 
 **Cách B: chạy riêng RabbitMQ bằng Docker.** Từ thư mục `smart-cafe-ai`:
 
 ```powershell
-docker compose up -d rabbitmq
+docker compose -f backend/docker-compose.yml up -d rabbitmq
 ```
 
 Chọn một trong hai cách trên. Sau đó, từ thư mục `smart-cafe-ai`, tạo cấu hình Engagement nếu chưa có:
@@ -184,7 +184,7 @@ Endpoint không trả email/mã OTP, bị từ chối nếu chưa cấu hình to
 Từ thư mục `smart-cafe-ai`:
 
 ```powershell
-docker compose --profile mail-test up -d rabbitmq mailpit
+docker compose -f backend/docker-compose.yml --profile tools up -d rabbitmq mailpit
 ```
 
 Thay cấu hình SMTP trong `.env` Engagement rồi khởi động lại service:

@@ -362,7 +362,7 @@ $env:SPRING_DATASOURCE_PASSWORD = '<mat-khau-mysql>'
 $env:JWT_SECRET = '<cung-gia-tri-Identity>'
 ```
 
-Catalog đọc biến môi trường hệ điều hành, chưa tự nạp file `.env`. Lưu ý `.env.example` ở gốc hiện trỏ đến database Identity; cần dùng URL Catalog như trên.
+Catalog đọc biến môi trường hệ điều hành, chưa tự nạp file `.env`. Lưu ý `backend/.env.example` hiện trỏ đến database Identity; cần dùng URL Catalog như trên.
 
 Từ thư mục gốc dự án:
 
