@@ -188,8 +188,10 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/smart_cafe_catalog_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-root}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-root}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
       EUREKA_SERVER_URL: http://discovery-server:8761/eureka/
-      STORE_INTERNAL_BASE_URL: ${STORE_INTERNAL_BASE_URL:-http://store-service:8083/internal}
+      STORE_INTERNAL_BASE_URL: http://store-service:8083/internal
       STORE_INTERNAL_API_KEY: ${STORE_INTERNAL_API_KEY:-smart-cafe-internal-store-key}
       CATALOG_INTERNAL_API_KEY: ${CATALOG_INTERNAL_API_KEY:-smart-cafe-internal-catalog-key}
       CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-dri1spe3b}
@@ -265,13 +267,13 @@ services:
       EUREKA_SERVER_URL: http://discovery-server:8761/eureka/
       JWT_SECRET: ${JWT_SECRET:-404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
       ORDER_INTERNAL_API_KEY: ${ORDER_INTERNAL_API_KEY:-smart-cafe-internal-order-key}
-      STORE_INTERNAL_BASE_URL: ${STORE_INTERNAL_BASE_URL:-http://store-service:8083/internal}
+      STORE_INTERNAL_BASE_URL: http://store-service:8083/internal
       STORE_INTERNAL_API_KEY: ${STORE_INTERNAL_API_KEY:-smart-cafe-internal-store-key}
-      CATALOG_INTERNAL_BASE_URL: ${CATALOG_INTERNAL_BASE_URL:-http://catalog-service:8082/internal/catalog}
+      CATALOG_INTERNAL_BASE_URL: http://catalog-service:8082/internal/catalog
       CATALOG_INTERNAL_API_KEY: ${CATALOG_INTERNAL_API_KEY:-smart-cafe-internal-catalog-key}
-      IDENTITY_INTERNAL_BASE_URL: ${IDENTITY_INTERNAL_BASE_URL:-http://identity-service:8081/api/v1/internal}
+      IDENTITY_INTERNAL_BASE_URL: http://identity-service:8081/api/v1/internal
       IDENTITY_INTERNAL_API_KEY: ${IDENTITY_INTERNAL_API_KEY:-smart-cafe-internal-identity-key}
-      ENGAGEMENT_INTERNAL_BASE_URL: ${ENGAGEMENT_INTERNAL_BASE_URL:-http://engagement-service:8087/api/v1/internal}
+      ENGAGEMENT_INTERNAL_BASE_URL: http://engagement-service:8087/api/v1/internal
       ENGAGEMENT_INTERNAL_API_KEY: ${ENGAGEMENT_INTERNAL_API_KEY:-smart-cafe-internal-engagement-key}
       JAVA_TOOL_OPTIONS: "-Xms128m -Xmx384m"
     depends_on:
