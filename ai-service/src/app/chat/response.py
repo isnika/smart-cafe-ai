@@ -106,6 +106,259 @@ def _clean_business_answer(answer: str) -> str:
     return answer[:1].upper() + answer[1:] if answer else answer
 
 
+def _fact_lines(blocks: list[tuple[str, str]]) -> list[str]:
+    """Lấy các dòng dữ kiện khách hàng từ chunk, bỏ heading và bảng rỗng."""
+    lines: list[str] = []
+    for _, body in blocks:
+        current = ""
+
+        def flush() -> None:
+            nonlocal current
+            if current and current not in lines:
+                lines.append(current)
+            current = ""
+
+        for raw in body.splitlines():
+            line = raw.strip()
+            if not line or line.startswith("Q:"):
+                continue
+            if line.startswith("A:") or line.startswith(("|---", "| ---")):
+                flush()
+                continue
+            if line.startswith(("-", "*")):
+                flush()
+                line = line[1:].strip()
+            if line.startswith("|") and line.endswith("|"):
+                flush()
+                cells = [cell.strip() for cell in line.strip("|").split("|")]
+                if cells and any(cell for cell in cells):
+                    line = " — ".join(cell for cell in cells if cell)
+            if line:
+                current = f"{current} {line}".strip() if current else line
+        flush()
+    return lines
+
+
+def _fact_score(question: str, fact: str) -> float:
+    query_tokens = set(search_tokens(question))
+    fact_tokens = set(search_tokens(fact))
+    if not query_tokens:
+        query_tokens = set(re.findall(r"[0-9a-zA-ZÀ-ỹđĐ]+", fold_text(question)))
+        fact_tokens = set(re.findall(r"[0-9a-zA-ZÀ-ỹđĐ]+", fold_text(fact)))
+    if not query_tokens or not fact_tokens:
+        return 0.0
+    overlap = len(query_tokens & fact_tokens)
+    folded_question = fold_text(question)
+    folded_fact = fold_text(fact)
+    phrase_bonus = sum(
+        1.5 for phrase in (
+            "chi nhanh", "email", "fanpage", "zalo", "website", "hotline",
+            "cho ngoi", "phong rieng", "dat ban", "giu ban", "o cam",
+            "sac dien thoai", "laptop", "phi giao", "freeship", "tich diem",
+            "thanh vien", "hoan tien", "huy don", "thu cung", "chup anh",
+        )
+        if phrase in folded_question and phrase in folded_fact
+    )
+    if "mang cho" in folded_question and any(
+        term in folded_fact for term in ("thu cung", "cho cung", "day dat")
+    ):
+        phrase_bonus += 4.0
+    if "quay quang cao" in folded_question and "chup anh thuong mai" in folded_fact:
+        phrase_bonus += 4.0
+    if "doi ban" in folded_question and "dieu chinh cho ngoi" in folded_fact:
+        phrase_bonus += 4.0
+    if "thue rieng" in folded_question and "cho thue rieng" in folded_fact:
+        phrase_bonus += 4.0
+    return overlap + phrase_bonus
+
+
+def _best_facts(
+    question: str,
+    blocks: list[tuple[str, str]],
+    *,
+    limit: int = 2,
+    minimum: float = 1.0,
+) -> list[str]:
+    facts = _fact_lines(blocks)
+    ranked = sorted(
+        ((fact, _fact_score(question, fact)) for fact in facts),
+        key=lambda item: item[1],
+        reverse=True,
+    )
+    if not ranked:
+        return []
+    best_score = ranked[0][1]
+    threshold = max(minimum, best_score * 0.80)
+    return [fact for fact, score in ranked if score >= threshold][:limit]
+
+
+def _distance_km(question: str) -> float | None:
+    match = re.search(r"(?<!\w)(\d+(?:[.,]\d+)?)\s*km\b", fold_text(question))
+    if not match:
+        return None
+    try:
+        return float(match.group(1).replace(",", "."))
+    except ValueError:
+        return None
+
+
+def _money_values(text: str) -> list[str]:
+    return [
+        re.sub(r"\D", "", value)
+        for value in re.findall(r"(?<!\w)(\d{1,3}(?:[.,]\d{3})+)\s*(?:đ|vnd|đồng)", text, re.I)
+    ]
+
+
+def _delivery_answer(question: str, blocks: list[tuple[str, str]]) -> str:
+    """Trả lời theo quãng đường/điều kiện giao, không lấy nhầm Q/A gần nhất."""
+    folded = fold_text(question)
+    facts = _fact_lines(blocks)
+    distance = _distance_km(question)
+    values = _money_values("\n".join(facts))
+    low_fee = f"{int(values[0]):,}".replace(",", ".") + "đ" if values else "15.000đ"
+    high_fee = f"{int(values[1]):,}".replace(",", ".") + "đ" if len(values) > 1 else "25.000đ"
+
+    if distance is not None:
+        if distance <= 3:
+            return f"Quãng đường {distance:g} km thuộc phạm vi 0–3 km, phí giao là {low_fee} ạ."
+        if distance <= 5:
+            return f"Quãng đường {distance:g} km thuộc phạm vi trên 3–5 km, phí giao là {high_fee} ạ."
+        return "Quán chưa hỗ trợ giao trực tiếp với quãng đường trên 5 km theo tuyến hệ thống tính ạ."
+
+    if "muc toi thieu" in folded or "don bao nhieu" in folded:
+        fact = next((item for item in facts if "toi thieu" in fold_text(item)), None)
+        return _clean_business_answer(fact or "Quán không có giá trị đơn tối thiểu được công bố ạ.")
+    if "freeship" in folded or "mien phi giao" in folded:
+        fact = next(
+            (item for item in facts if "mien phi" in fold_text(item) and "giao" in fold_text(item)),
+            None,
+        )
+        return _clean_business_answer(fact or "Hiện quán không có miễn phí giao hàng mặc định ạ.")
+    if "cung phuong" in folded or ("phuong" in folded and "phi" in folded):
+        return (
+            "Phí giao được tính theo quãng đường hệ thống, không thể xác định chỉ từ tên phường. "
+            "Phí cuối cùng sẽ hiển thị sau khi bạn nhập địa chỉ ạ."
+        )
+    if any(term in folded for term in ("bao lau giao", "thoi gian giao", "mua lon", "thoi tiet")):
+        matching = [
+            item for item in facts
+            if any(term in fold_text(item) for term in ("30", "60", "thoi tiet", "giao thong", "luong don"))
+        ]
+        if matching:
+            return " ".join(matching[:2])
+    if "mang di" in folded and "bao lau" in folded:
+        matching = [
+            item for item in facts
+            if "10" in item and "20" in item or "chuan bi" in fold_text(item)
+        ]
+        if matching:
+            return " ".join(matching[:2])
+    if "cam ket" in folded or "10 phut" in folded:
+        matching = [
+            item for item in facts
+            if ("10" in item and "20" in item)
+            or "khong hua gio" in fold_text(item)
+        ]
+        if matching:
+            return " ".join(matching[:2])
+    if "toi da" in folded or "bao xa" in folded:
+        fact = next((item for item in facts if "toi da 5 km" in fold_text(item) or "tren 5 km" in fold_text(item)), None)
+        if fact:
+            return _clean_business_answer(fact)
+    facts = _best_facts(question, blocks, limit=2)
+    return " ".join(facts) if facts else ""
+
+
+def _promotion_answer(question: str, blocks: list[tuple[str, str]]) -> str:
+    folded = fold_text(question)
+    facts = _fact_lines(blocks)
+    if "dang ky" in folded or "mat phi" in folded:
+        fact = next((item for item in facts if "dang ky" in fold_text(item) or "mien phi" in fold_text(item)), None)
+        if fact:
+            return _clean_business_answer(fact)
+    if "tai khoan" in folded or "nhan dien" in folded:
+        fact = next((item for item in facts if "nhan dien" in fold_text(item)), None)
+        if fact:
+            return _clean_business_answer(fact)
+    if "hoan tien" in folded or "huy" in folded:
+        matching = [
+            item for item in facts
+            if "tich diem" in fold_text(item) or "hoan tien" in fold_text(item) or "don huy" in fold_text(item)
+        ]
+        if matching:
+            return " ".join(matching[:2])
+    if "bao nhieu diem" in folded or "may diem" in folded:
+        amounts = [int(value) for value in _money_values(question)]
+        eligible = amounts[0] if amounts else None
+        if eligible is not None:
+            points = eligible // 10_000
+            return (
+                f"Phí giao hàng không được tính điểm. Với {eligible:,}đ tiền món đủ điều kiện, "
+                f"bạn được {points} điểm ạ."
+            ).replace(",", ".")
+    if "tich diem" in folded or "diem" in folded:
+        if "han" in folded or "bao lau" in folded:
+            fact = next((item for item in facts if "12 thang" in fold_text(item)), None)
+            if fact:
+                return _clean_business_answer(fact)
+        if "chua hoan tat" in folded or "chua co diem" in folded:
+            fact = next((item for item in facts if "sau khi don hoan tat" in fold_text(item)), None)
+            if fact:
+                return _clean_business_answer(fact)
+        matching = [
+            item for item in facts
+            if "10.000" in item or "khong tich diem" in fold_text(item) or "don hoan tat" in fold_text(item)
+        ]
+        if matching:
+            return " ".join(matching[:3])
+    return ""
+
+
+def _contact_answer(question: str, blocks: list[tuple[str, str]]) -> str:
+    folded = fold_text(question)
+    facts = _fact_lines(blocks)
+    wanted: tuple[str, ...]
+    if "hotline" in folded and re.search(r"\b\d{1,2}\s*(?:gio|h)\b", folded):
+        answer = _best_qa(blocks, question)
+        if answer:
+            requested = re.search(r"\b(\d{1,2})\s*(?:gio|h)\b", folded)
+            times = [int(value) for value in re.findall(r"(?<!\d)(\d{1,2}):\d{2}", answer)]
+            if requested and len(times) >= 2:
+                hour = int(requested.group(1))
+                if hour < times[0] or hour > times[-1]:
+                    return f"Không bạn nhé. Hotline hoạt động từ {times[0]:02d}:00 đến {times[-1]:02d}:30 hằng ngày ạ."
+                return f"Có bạn nhé, hotline hoạt động trong khung {times[0]:02d}:00–{times[-1]:02d}:30 hằng ngày ạ."
+    if "fanpage" in folded and "zalo" in folded:
+        wanted = ("fanpage", "zalo")
+    elif "fanpage" in folded or "facebook" in folded:
+        wanted = ("fanpage", "facebook")
+    elif "zalo" in folded:
+        wanted = ("zalo",)
+    elif "email" in folded:
+        wanted = ("email",)
+    elif "website" in folded or "url" in folded:
+        wanted = ("website",)
+    elif "chi nhanh" in folded:
+        wanted = ("chi nhanh",)
+    elif "ho tro truc tiep" in folded or "quay thu ngan" in folded:
+        wanted = ("ho tro", "quay thu ngan")
+    else:
+        return ""
+    if wanted == ("website",):
+        matching = [item for item in facts if fold_text(item).startswith("website:")]
+    elif wanted == ("email",):
+        matching = [item for item in facts if fold_text(item).startswith("email")]
+    elif wanted == ("ho tro", "quay thu ngan"):
+        matching = [
+            item for item in facts
+            if fold_text(item).startswith("kenh ho tro")
+            or fold_text(item).startswith("kenh lien he")
+        ]
+    else:
+        matching = [item for item in facts if any(term in fold_text(item) for term in wanted)]
+    return " ".join(matching[:3]) if matching else ""
+
+
 def _opening_hours_answer(answer: str, question: str) -> str:
     """Luôn trả đủ hai mốc khi context có giờ mở và đóng cửa."""
     times = re.findall(r"(?<!\d)(\d{1,2})(?::(\d{2}))?\s*h?\b", answer, re.I)
@@ -389,6 +642,65 @@ def build_extractive_answer(prompt_content: str) -> str:
         Intent.CONTACT_QUERY,
         Intent.POLICY_QUERY,
     }:
+        if intent is Intent.CONTACT_QUERY:
+            contact = _contact_answer(question, blocks)
+            if contact:
+                return _clean_business_answer(contact)
+        if intent is Intent.DELIVERY_QUERY:
+            delivery = _delivery_answer(question, blocks)
+            if delivery:
+                return _clean_business_answer(delivery)
+        if intent is Intent.PROMOTION_QUERY:
+            promotion = _promotion_answer(question, blocks)
+            if promotion:
+                return _clean_business_answer(promotion)
+        if intent is Intent.WIFI_QUERY:
+            folded_question = fold_text(question)
+            if any(term in folded_question for term in ("livestream", "4k", "toc do", "chat luong mang")):
+                speed_fact = next(
+                    (item for item in _fact_lines(blocks) if "toc do" in fold_text(item)),
+                    None,
+                )
+                if speed_fact:
+                    return _clean_business_answer(speed_fact)
+            wifi_facts = _best_facts(question, blocks, limit=2, minimum=1.0)
+            if wifi_facts and any(term in folded_question for term in ("mat khau", "ten mang")):
+                return _clean_business_answer(" ".join(wifi_facts))
+        if intent in {Intent.SERVICE_QUERY, Intent.ORDER_ONLINE, Intent.STORE_INFO}:
+            if intent is Intent.SERVICE_QUERY:
+                folded_service = fold_text(question)
+                if "bao nhieu cho" in folded_service:
+                    fact = next(
+                        (item for item in _fact_lines(blocks) if "cho ngoi" in fold_text(item)),
+                        None,
+                    )
+                    if fact:
+                        return _clean_business_answer(fact)
+                number = re.search(r"\b(\d+)\s*nguoi\b", folded_service)
+                if number and int(number.group(1)) > 6:
+                    fact = next(
+                        (item for item in _fact_lines(blocks) if "tren 6 nguoi" in fold_text(item)),
+                        None,
+                    )
+                    if fact:
+                        return _clean_business_answer(fact)
+                if "thong tin" in folded_service and "dat ban" in folded_service:
+                    fact = next(
+                        (item for item in _fact_lines(blocks) if fold_text(item).startswith("thong tin can co")),
+                        None,
+                    )
+                    if fact:
+                        return _clean_business_answer(fact)
+            facts = _best_facts(question, blocks, limit=3, minimum=1.0)
+            if facts:
+                answer = " ".join(facts)
+                if intent is Intent.SERVICE_QUERY and "phi" in fold_text(question) and not any(
+                    term in fold_text(answer) for term in ("phi", "phu phi", "mien phi")
+                ):
+                    answer += " Hiện dữ liệu chưa nêu phụ phí cho tiện ích này; bạn hỏi nhân viên giúp mình nhé!"
+                if "cho ngoi" in fold_text(question) and "chua" not in fold_text(answer):
+                    answer += " Chỗ trống tại thời điểm bạn đến chưa thể xác nhận trước ạ."
+                return _clean_business_answer(answer)
         answer = _best_qa(blocks, question)
         if answer:
             if intent is Intent.OPENING_HOURS:

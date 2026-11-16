@@ -159,7 +159,7 @@ def classify_intent(query: str) -> IntentDecision:
         folded,
         r"\bbo qua\b.*\b(quy tac|huong dan|system|prompt)\b",
         r"\b(tu bia|bia gia|gia mao)\b",
-        r"\b(api key|mat khau|system prompt|thong tin noi bo)\b",
+        r"\b(api key|system prompt|thong tin noi bo)\b",
     ):
         return IntentDecision(Intent.UNKNOWN, 0.99, "out-of-scope")
 
@@ -181,6 +181,20 @@ def classify_intent(query: str) -> IntentDecision:
     if _contains(folded, r"\b(wifi|internet)\b"):
         return IntentDecision(Intent.WIFI_QUERY, 0.99, "wifi-synonym")
 
+    # Các kênh liên hệ và hồ sơ quán phải đi vào FAQ business. Đặt rule này
+    # trước LOCATION/PRODUCT_PRICE để "website ở đâu" hoặc "email nào" không
+    # bị hiểu thành địa chỉ hay giá món.
+    if _contains(
+        folded,
+        r"\b(email|e-mail|fanpage|facebook|zalo|website|url|link website)\b",
+        r"\b(ho tro truc tiep|gap nhan vien|lien he truc tiep|quay thu ngan)\b",
+        r"\b(chi nhanh|co may chi nhanh|bao nhieu chi nhanh)\b",
+    ) and not _contains(
+        folded,
+        r"\b(dat|mua|goi)\b.*\b(website|web|online|truc tuyen)\b",
+    ):
+        return IntentDecision(Intent.CONTACT_QUERY, 0.98, "contact-channel")
+
     if _contains(
         folded,
         r"\b(mo cua|dong cua|gio hoat dong|gio lam viec)\b",
@@ -192,6 +206,58 @@ def classify_intent(query: str) -> IntentDecision:
 
     if _contains(folded, r"\b(hotline|lien he|so dien thoai|sdt|phone)\b"):
         return IntentDecision(Intent.CONTACT_QUERY, 0.98, "contact")
+
+    # Giao hàng có các từ "địa chỉ/bao nhiêu/phí" nhưng vẫn là DELIVERY_QUERY.
+    # Đặt trước LOCATION và PRICE để giữ đúng ngữ cảnh của quãng đường.
+    if _contains(
+        folded,
+        r"\b(\d+[.,]?\d*\s*km|km\b)",
+        r"\b(phi ship|phi giao|freeship|mien phi giao|giao toi da|toi da bao xa)\b",
+        r"\b(bao lau giao|thoi gian giao|mua lon|thoi tiet)\b.*\b(giao|toi|den)\b",
+        r"\b(cam ket|10 phut)\b.*\b(do|xong|toi|nhan)\b",
+        r"\b(bao nhieu|muc toi thieu)\b.*\b(don|giao)\b",
+        r"\b(don)\b.*\b(giao|freeship|mien phi)\b",
+        r"\b(cung phuong|phuong)\b.*\b(phi|ship|giao)\b",
+    ) and not _contains(
+        folded,
+        r"\b(don|don hang)\b.*\b(chua giao|chua duoc giao|dang giao|giao toi dau|giao chua|giao roi chua|da giao chua|toi chua)\b",
+    ):
+        return IntentDecision(Intent.DELIVERY_QUERY, 0.98, "delivery-fact")
+
+    # Đặt món/đặt bàn là chủ đề riêng. Các rule cụ thể phải chạy trước các
+    # pattern chung như "ở đâu", "bao nhiêu" và "có ... không".
+    if _contains(
+        folded,
+        r"\b(dat|mua|goi)\s+(mon|hang)\b.*\b(o dau|web|website|online|truc tuyen)\b",
+        r"\b(grabfood|shopeefood|befood|ung dung giao do an|gian hang)\b",
+        r"\b(dat web|dat tren web|dat online)\b",
+    ):
+        return IntentDecision(Intent.ORDER_ONLINE, 0.98, "order-channel")
+
+    if _contains(
+        folded,
+        r"\b(tao(?:\s+\w+){0,3}\s+don|dat giup|dat cho minh|dat mon|dat hang)\b",
+        r"\b(cho)\s*\d+\s*(nguoi|ban)\b",
+    ) and not _contains(
+        folded,
+        r"\b(dat ban|giu ban)\b",
+        r"\b\d+\s*nguoi\b|\bnhom\s*\d+\b",
+        r"\b(toi nay|hom nay|luc\s+\d{1,2})\b",
+    ):
+        return IntentDecision(Intent.ORDER_INTENT, 0.97, "order-action")
+
+    # Không gian, tiện ích và quy định sử dụng quán. Rule này phải chạy trước
+    # PRODUCT_AVAILABILITY/PRODUCT_PRICE vì các câu đều có dạng "có ... không"
+    # hoặc "bao nhiêu".
+    if _contains(
+        folded,
+        r"\b(dat ban|giu ban|nhom\s*\d+\s*nguoi|\d+\s*nguoi)\b",
+        r"\b(cho ngoi|ban ghe|phong rieng|so cho|bao nhieu cho|con ban|ban trong)\b",
+        r"\b(gui xe|giu xe|bai xe|bai do|nha ve sinh|nuoc loc|ghe em be|khu vui choi|ho tro di chuyen)\b",
+        r"\b(o cam|o dien|sac dien|am dun|cong suat lon|laptop|phu thu|gioi han ngoi|yen tinh|hop online|bat loa|doi ban)\b",
+        r"\b(vape|hut thuoc|thuoc la|ngoai troi|thu cung|mang cho|cho den quan|cho cung|thue rieng|cho thue rieng|chup anh|quay quang cao|dung den|che loi di|ghep ban|do uong ben ngoai|tra sua quan khac|banh sinh nhat|phao|trang tri sinh nhat)\b",
+    ):
+        return IntentDecision(Intent.SERVICE_QUERY, 0.97, "service-fact")
 
     if _contains(folded, r"\b(dia chi|o dau|vi tri|cho nao)\b"):
         return IntentDecision(Intent.LOCATION_QUERY, 0.98, "location")
@@ -214,7 +280,8 @@ def classify_intent(query: str) -> IntentDecision:
 
     if _contains(
         folded,
-        r"\b(khuyen mai|giam gia|voucher|ma giam|uu dai|tich diem|thanh vien)\b",
+        r"\b(khuyen mai|giam gia|voucher|ma giam|uu dai|tich diem|thanh vien|diem|tai khoan nhan dien)\b",
+        r"\b(don chua hoan tat|chua hoan tat)\b.*\b(diem|tich)\b",
     ):
         return IntentDecision(Intent.PROMOTION_QUERY, 0.98, "promotion")
 

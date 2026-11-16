@@ -7,7 +7,7 @@
 
 - Smart Café phục vụ cà phê Việt Nam, cà phê máy, trà trái cây,
   matcha, đồ uống từ sữa, sữa chua và bánh.
-- Địa chỉ: 97 Man Thiện, Thành phố Hồ Chí Minh.
+- Địa chỉ: 97 Man Thiện, Phường Tăng Nhơn Phú, Thành phố Hồ Chí Minh.
 - Website: website Smart Café mà khách đang sử dụng.
 - Kênh hỗ trợ trực tuyến: mục **Hỗ trợ** trên website.
 - Hotline: 028 7300 9797, hoạt động từ 07:00 đến 21:30 hằng ngày.

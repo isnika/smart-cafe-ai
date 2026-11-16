@@ -439,6 +439,30 @@ def _customer_visible_hits(hits: list[SearchHit]) -> list[SearchHit]:
     return [hit for hit in hits if is_customer_visible_chunk(hit.chunk)]
 
 
+def _focus_business_hits(hits: list[SearchHit], intent: Intent) -> list[SearchHit]:
+    """Bỏ các chunk business cùng loại nhưng không liên quan đến câu hỏi."""
+    if not hits or intent not in {
+        Intent.OPENING_HOURS,
+        Intent.WIFI_QUERY,
+        Intent.LOCATION_QUERY,
+        Intent.STORE_INFO,
+        Intent.SERVICE_QUERY,
+        Intent.ORDER_INTENT,
+        Intent.ORDER_ONLINE,
+        Intent.ORDER_STATUS,
+        Intent.DELIVERY_QUERY,
+        Intent.PAYMENT_QUERY,
+        Intent.PROMOTION_QUERY,
+        Intent.CONTACT_QUERY,
+        Intent.POLICY_QUERY,
+    }:
+        return hits
+    top_score = hits[0].score
+    threshold = max(0.34, top_score * 0.62)
+    focused = [hit for hit in hits if hit.score >= threshold]
+    return focused[:6] or hits[:1]
+
+
 def _is_live_status_query(question: str, intent: Intent) -> bool:
     folded = fold_text(question)
     if re.search(r"\b(nhan tien|chuyen tien roi|xac nhan giao dich|da nhan)\b", folded):
@@ -450,6 +474,11 @@ def _is_live_status_query(question: str, intent: Intent) -> bool:
         return True
     if intent is Intent.PRODUCT_AVAILABILITY:
         return bool(re.search(r"\b(con|ton|het|so luong)\b", folded))
+    if intent is Intent.SERVICE_QUERY:
+        return bool(re.search(
+            r"\b(bay gio|hien tai|luc nay|con ban|ban trong|cho trong)\b",
+            folded,
+        ))
     if re.search(r"\b(bao nhieu diem|so diem|diem cua toi|diem tich luy)\b", folded):
         return True
     return False
@@ -460,6 +489,12 @@ def _is_mutating_request(question: str, intent: Intent) -> bool:
     if re.search(
         r"\b(dat ban|tao don|sua don|huy don|doi mon|hoan tien|hoan don)\b.*"
         r"\b(giup|cho minh|cho toi|thuc hien)\b",
+        folded,
+    ):
+        return True
+    if re.search(
+        r"\btao(?:\s+\w+){0,3}\s+don\b|\b(dat giup|dat cho minh)\b|"
+        r"\b(dat ban|giu ban)\b.*\b(giup|cho minh|cho toi|thuc hien)\b",
         folded,
     ):
         return True
@@ -481,6 +516,46 @@ def _is_channel_selection(question: str) -> bool:
             folded,
         )
     )
+
+
+def _retrieval_query_for_intent(question: str, intent: Intent) -> str:
+    """Thêm các từ khóa rõ ràng khi câu ngắn quá chung cho lexical search."""
+    folded = fold_text(question)
+    additions: list[str] = []
+    if intent is Intent.SERVICE_QUERY:
+        service_aliases = (
+            ("bao nhieu cho", "chỗ ngồi khoảng 40 chỗ trong nhà ngoài trời"),
+            ("phong rieng", "phòng riêng không gian"),
+            ("yen tinh", "học tập làm việc yên tĩnh âm lượng"),
+            ("hop online", "họp trực tuyến dùng tai nghe âm lượng"),
+            ("doi ban", "quán đông điều chỉnh chỗ ngồi"),
+            ("mang cho", "thú cưng khu vực ngoài trời dây dắt"),
+            ("thu cung", "thú cưng khu vực ngoài trời dây dắt"),
+            ("quay quang cao", "chụp ảnh thương mại quay phim thiết bị"),
+            ("thue rieng", "cho thuê riêng toàn bộ không gian"),
+            ("gui xe", "chỗ để xe máy phía trước miễn phí"),
+            ("hut thuoc", "hút thuốc thuốc lá điện tử trong nhà ngoài trời"),
+        )
+        for cue, expansion in service_aliases:
+            if cue in folded:
+                additions.append(expansion)
+    elif intent is Intent.WIFI_QUERY and any(
+        cue in folded for cue in ("livestream", "4k", "toc do", "chat luong mang")
+    ):
+        additions.append("Wi-Fi tốc độ mạng phù hợp mọi nhu cầu")
+    elif intent is Intent.DELIVERY_QUERY:
+        delivery_aliases = (
+            ("cam ket", "thời gian chuẩn bị 10 20 phút dự kiến"),
+            ("10 phut", "thời gian chuẩn bị 10 20 phút dự kiến"),
+            ("bao lau giao", "tổng thời gian giao 30 60 phút thời tiết giao thông"),
+            ("freeship", "miễn phí giao hàng mặc định"),
+        )
+        for cue, expansion in delivery_aliases:
+            if cue in folded:
+                additions.append(expansion)
+    elif intent is Intent.PROMOTION_QUERY and "diem" in folded:
+        additions.append("thành viên tích điểm 10.000đ đơn hoàn tất 12 tháng")
+    return f"{question} {' '.join(additions)}".strip() if additions else question
 
 
 def _contains_internal_guidance(text: str) -> bool:
@@ -1058,10 +1133,11 @@ class RAGPipeline:
                     [],
                 )
 
+        retrieval_query = _retrieval_query_for_intent(standalone, decision.intent)
         try:
             hits = await asyncio.to_thread(
                 self.retriever.search,
-                standalone,
+                retrieval_query,
                 self.top_k,
                 self.min_score,
                 category,
@@ -1071,7 +1147,7 @@ class RAGPipeline:
             logger.exception("Truy xuất knowledge base thất bại")
             raise
 
-        hits = _customer_visible_hits(hits)
+        hits = _focus_business_hits(_customer_visible_hits(hits), decision.intent)
         if decision.intent is Intent.ORDER_INTENT:
             # ORDER_INTENT metadata is shared by business FAQ chunks. Keep
             # booking-only answers out of an order request's context.
