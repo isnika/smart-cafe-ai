@@ -1,5 +1,7 @@
 # Java / Maven
 backend/target/
+backend/**/target/
+target/
 *.class
 
 # Node / frontend
@@ -15,5 +17,19 @@ frontend/.env*
 
 # Environment
 .env
+
 .env.*
 !.env.example
+
+
+# Logs
+backend/logs/
+*.log
+
+# Test Scripts & Postman Collections & Tools (excluded from repository)
+*.ps1
+*.sh
+*.postman_collection.json
+backend/tools/
+**/tools/
+

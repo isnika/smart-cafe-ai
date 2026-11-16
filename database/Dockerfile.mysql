@@ -1,0 +1,9 @@
+FROM mysql:8.0
+
+LABEL maintainer="smartcafe-ai"
+LABEL description="Smart Cafe MySQL with pre-seeded F&B products and relational schema"
+
+# Copy initialization and seed scripts
+# MySQL will automatically execute all .sql files in alphabetical order on first startup
+COPY smart_cafe_db.sql /docker-entrypoint-initdb.d/01-init.sql
+COPY seed_data.sql /docker-entrypoint-initdb.d/02-seed.sql

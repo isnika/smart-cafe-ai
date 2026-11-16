@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.smart-cafe-ai</groupId>
+    <artifactId>smart-cafe-backend</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>smart-cafe-backend</name>
+    <description>Smart Cafe AI backend microservices</description>
+
+    <modules>
+        <module>discovery-server</module>
+        <module>api-gateway</module>
+        <module>identity-service</module>
+        <module>catalog-service</module>
+        <module>store-service</module>
+        <module>order-service</module>
+        <module>payment-service</module>
+        <module>inventory-service</module>
+        <module>engagement-service</module>
+        <module>intelligence-service</module>
+    </modules>
+</project>
