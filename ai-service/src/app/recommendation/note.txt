@@ -1,0 +1,179 @@
+                 ┌─────────────────┐
+                 │   FastAPI API   │
+                 │  /recommendation│
+                 └────────┬────────┘
+                          ↓
+                ┌───────────────────┐
+                │ Recommendation    │
+                │     Service       │
+                └─────────┬─────────┘
+                          ↓
+             ┌────────────┴────────────┐
+             ↓                         ↓
+      Content-Based              Collaborative
+             │                         │
+       TF-IDF / cosine          User-Item Matrix
+             │                         │
+             └────────────┬────────────┘
+                          ↓
+                   Hybrid Model
+                          ↓
+                 Filter / Ranking
+                          ↓
+                   Top-K Products
+
+Dữ liệu → Baseline → Content-Based → Collaborative Filtering → Hybrid → Evaluation → API
+
+| Thành phần                      | Thư viện                                                                               |
+| ------------------------------- | -------------------------------------------------------------------------------------- |
+| Content-Based                   | `scikit-learn`                                                                         |
+| TF-IDF món                      | `TfidfVectorizer`                                                                      |
+| Similarity                      | `cosine_similarity`                                                                    |
+| Collaborative Filtering         | `scikit-surprise`                                                                      |
+| Evaluation cơ bản               | `scikit-learn`                                                                         |
+| Precision@K / Recall@K / NDCG@K | tự viết **metric nhỏ** vì sklearn không có API trực tiếp phù hợp cho recommender Top-K |
+| Data                            | `pandas`, `numpy`                                                                      |
+
+
+                    User
+                      │
+                      ▼
+              Recommendation API
+                      │
+             ┌────────┴────────┐
+             ▼                 ▼
+      Content-Based       Collaborative
+             │                 │
+      TF-IDF + Cosine       SVD / KNN
+             │                 │
+             └────────┬────────┘
+                      ▼
+                 Hybrid Score
+                      │
+                      ▼
+                 Top-K món
+
+                 CREATE DATABASE IF NOT EXISTS smart_cafe_db_V8;
+USE smart_cafe_db_V8;
+
+| Thứ tự | File                        | Làm gì                                |
+| ------ | --------------------------- | ------------------------------------- |
+| **1**  | `products_100.csv`          | Dữ liệu sản phẩm                      |
+| **2**  | `collaborative_dataset.csv` | Dữ liệu user mua sản phẩm             |
+| **3**  | `preprocessing.py`          | Làm sạch + chuẩn hóa dữ liệu          |
+| **4**  | `features.py`               | Tạo feature cho recommendation        |
+| **5**  | `content_based.py`          | TF-IDF + Cosine Similarity            |
+| **6**  | `collaborative.py`          | Collaborative Filtering               |
+| **7**  | `hybrid.py`                 | Kết hợp 2 mô hình                     |
+| **8**  | `model.py`                  | Quản lý/load model                    |
+| **9**  | `evaluator.py`              | Precision@K, Recall@K, NDCG@K         |
+| **10** | `repository.py`             | Đọc dữ liệu CSV → sau này đổi sang DB |
+| **11** | `service.py`                | Điều phối toàn bộ recommendation      |
+| **12** | `schemas.py`                | Request/Response                      |
+| **13** | `recommendation.py`         | FastAPI endpoint                      |
+
+
+B1. preprocessing: đọc, kiểm tra và làm sạch dữ liệu.
+B2. features: tạo TF-IDF matrix và User-Item Matrix.
+B3. content based: File sẽ lấy TF-IDF đã tạo ở features.py để:
+TF-IDF Matrix
+      ↓
+Cosine Similarity
+      ↓
+Độ tương đồng giữa các sản phẩm
+      ↓
+Top-K sản phẩm tương tự
+( Nhận TF-IDF của các sản phẩm → tính độ tương đồng → tìm Top-K sản phẩm tương tự một sản phẩm đã mua.)
+
+B4. collaborative:
+User
+ ↓
+đã mua những sản phẩm nào
+ ↓
+User-Item Matrix
+ ↓
+độ tương đồng giữa sản phẩm
+ ↓
+gợi ý sản phẩm
+
+(Dựa vào những món khách hàng này đã mua, những món nào có quan hệ với các món đó và có khả năng khách hàng sẽ mua tiếp?)
+
+B5.hybrid
+U001 đang xem Cà phê sữa
+              ↓
+       ┌──────┴──────┐
+       ↓             ↓
+   Content       Collaborative
+       ↓             ↓
+  món giống      món U001
+                 có thể thích
+       └──────┬──────┘
+              ↓
+            Hybrid
+
+Hybridđang kết hợp:
+- Collaborative: dựa trên user_id
+- Content-Based: dựa trên product_id
+B6. model.py
+Trước đây viết:
+
+tfidf_matrix, vectorizer = ...
+content_model = ...
+content_model.fit(...)
+
+user_item_matrix = ...
+collaborative_model = ...
+collaborative_model.fit(...)
+
+hybrid_model = ...
+hybrid_model.fit(...)
+
+Gio chỉ còn:
+
+model = RecommendationModel()
+
+model.fit(
+    products,
+    interactions
+)
+
+recommendations = model.recommend(
+    user_id="U001",
+    product_id=1,
+    top_k=5
+)
+
+B7. evaluator.py
+Đánh giá model xem đạt bao nhiêu
+
+B8.repository.py
+
+B9.
+B10.
+B11.
+
+
+1. Data mock
+      ↓
+2. Preprocessing
+      ↓
+3. Feature Engineering
+      ↓
+4. Content-Based
+      ↓
+5. Collaborative Filtering
+      ↓
+6. Hybrid Recommendation
+      ↓
+7. Cold Start / Popular
+      ↓
+8. Evaluation
+      ↓
+9. Service
+      ↓
+10. FastAPI
+      ↓
+11. Test toàn bộ
+
+
+

@@ -4,6 +4,12 @@ backend/**/target/
 target/
 *.class
 
+# Node / frontend
+**/node_modules/
+**/dist/
+frontend/.env*
+!frontend/.env.example
+
 # IDE
 .idea/
 *.iml
@@ -11,6 +17,10 @@ target/
 
 # Environment
 .env
+
+.env.*
+!.env.example
+
 
 # Logs
 backend/logs/

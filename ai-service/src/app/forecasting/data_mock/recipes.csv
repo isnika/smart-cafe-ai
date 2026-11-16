@@ -1,0 +1,13 @@
+product_id,product_name,ingredient_id,ingredient_name,quantity_required,unit
+1,Espresso,1,Coffee beans,18,g
+2,Latte,1,Coffee beans,18,g
+2,Latte,2,Fresh milk,180,ml
+3,Matcha Latte,3,Matcha powder,5,g
+3,Matcha Latte,2,Fresh milk,180,ml
+4,Cold Brew,1,Coffee beans,22,g
+5,Bạc xỉu,1,Coffee beans,12,g
+5,Bạc xỉu,2,Fresh milk,200,ml
+6,Trà đào,4,Tea concentrate,200,ml
+7,Cappuccino,1,Coffee beans,18,g
+7,Cappuccino,2,Fresh milk,120,ml
+8,Croissant,5,Croissant,1,piece

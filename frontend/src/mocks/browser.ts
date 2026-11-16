@@ -1,0 +1,59 @@
+import { setupWorker } from 'msw/browser';
+import { handlers } from './handlers';
+import { MOCK_ACCOUNTS, resetAuthMock, revokeAllTokens } from './handlers/identity';
+import { MOCK_OTP, authFlowConfig, resetAuthFlowMock } from './handlers/auth-flow';
+import { bumpVersion, db, resetDb } from './db';
+import { seedDemoOrders } from './seed';
+import { seedDemoTableSessions } from './staff-table-seed';
+import { mockConfig } from './utils';
+import { workforceConfig } from './handlers/workforce';
+import { tableSessionMock } from './handlers/staff-table-v1';
+
+export const worker = setupWorker(...handlers);
+
+export async function enableMocking(): Promise<void> {
+  await worker.start({
+    onUnhandledFrame({ frame, defaults }) {
+      // Chỉ cảnh báo với request /api chưa có handler; bỏ qua file tĩnh, HMR, điều hướng trang
+      const { request } = frame.data as { request?: Request };
+      if (request && new URL(request.url).pathname.startsWith('/api')) {
+        defaults.warn();
+      }
+    },
+  });
+
+  seedDemoOrders();
+  seedDemoTableSessions();
+
+  const resetAuth = () => {
+    resetAuthMock();
+    resetAuthFlowMock();
+  };
+  const resetWithDemoData = () => {
+    resetDb();
+    resetAuth();
+    seedDemoOrders();
+    seedDemoTableSessions();
+  };
+
+  Object.assign(window, {
+    __mock: {
+      db,
+      resetDb,
+      resetWithDemoData,
+      seedDemoOrders,
+      seedDemoTableSessions,
+      tableSessions: tableSessionMock, // vd: __mock.tableSessions.conflictNext = true → PATCH phiên kế tiếp trả 409
+      bumpVersion,
+      config: mockConfig,
+      workforce: workforceConfig, // vd: __mock.workforce.enforceWindow = true
+      auth: {
+        accounts: MOCK_ACCOUNTS, // xem/sửa tài khoản (đổi status = 'Banned' để test...)
+        otp: MOCK_OTP,
+        config: authFlowConfig, // vd: __mock.auth.config.otpTtlMs = 1000
+        revokeAllTokens, // → request kế tiếp trả 401 → test onUnauthorized
+        reset: resetAuth,
+      },
+    },
+  });
+}
