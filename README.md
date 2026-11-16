@@ -9,7 +9,8 @@
 Toàn bộ hệ thống Backend đã được đóng gói sẵn với Docker Compose. Bạn chỉ cần:
 
 ```bash
-# 1. Tạo file cấu hình môi trường
+# 1. Chuyển vào thư mục Backend và tạo file cấu hình môi trường
+cd backend
 cp .env.example .env
 
 # 2. Khởi chạy toàn bộ hệ thống

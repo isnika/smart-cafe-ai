@@ -22,10 +22,11 @@ Mở Terminal / PowerShell và chạy:
 git clone https://github.com/isnika/smart-cafe-ai.git
 cd smart-cafe-ai
 git checkout backend
+cd backend
 ```
 
 ### Bước 2: Tạo file cấu hình môi trường `.env`
-Sao chép từ file mẫu `.env.example`:
+Các lệnh dưới đây chạy trong thư mục `smart-cafe-ai/backend`. Sao chép từ file mẫu `backend/.env.example`:
 * **Trên Windows PowerShell:**
   ```powershell
   Copy-Item .env.example .env
@@ -100,6 +101,8 @@ Tất cả các tài khoản dưới đây đã được nạp sẵn vào Databa
 ---
 
 ## 6. Các Lệnh Thao Tác Hữu Ích
+
+Chạy các lệnh sau trong thư mục `smart-cafe-ai/backend`. Nếu đã khởi chạy bằng Docker Hub, thêm `-f docker-compose.hub.yml` (và `-f docker-compose.local.yml` nếu đã dùng) vào mỗi lệnh để thao tác đúng cấu hình.
 
 * **Kiểm tra trạng thái các container đang chạy:**
   ```bash

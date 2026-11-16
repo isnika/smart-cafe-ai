@@ -22,7 +22,7 @@ Hệ thống bao gồm **10 Spring Boot Microservices**, **MySQL 8.0**, và **Ra
 > Khi sửa code ở một service, thời gian build lại Docker Image chỉ mất **1 - 2 giây** vì Docker không cần tải lại bất kỳ dependency nào!
 
 ### 1.3 Tối ưu hóa RAM / Bộ nhớ JVM (Tránh nghẽn tài nguyên)
-Nếu 10 microservices chạy mặc định với JVM Heap tự do, hệ thống sẽ ngốn từ 8GB - 12GB RAM. Trong [`docker-compose.yml`](file:///c:/Users/Admin/Desktop/smart-cafe-ai/docker-compose.yml), từng container đã được cấu hình chặt chẽ:
+Nếu 10 microservices chạy mặc định với JVM Heap tự do, hệ thống sẽ ngốn từ 8GB - 12GB RAM. Trong [`backend/docker-compose.yml`](../backend/docker-compose.yml), từng container đã được cấu hình chặt chẽ:
 - **Eureka Server & API Gateway:** `-Xms64m -Xmx192m` / `-Xms128m -Xmx256m` (Netty & Discovery rất nhẹ).
 - **Core Microservices:** `-Xms128m -Xmx384m` (Bộ nhớ heap tối đa 384MB).
 - **Docker Memory Limit:** Giới hạn cgroup tối đa 512MB/service.
@@ -80,10 +80,10 @@ Thay vì để Docker tải hàng chục GB thư viện 10 lần riêng lẻ, ta
 ```bash
 cd backend
 ./mvnw clean package -DskipTests
-cd ..
 ```
 
 #### Bước 3: Build các Docker Image siêu nhẹ với Layer Caching (Chỉ ~10 - 20 giây)
+Tiếp tục chạy trong thư mục `smart-cafe-ai/backend`:
 ```bash
 docker compose build
 ```
@@ -99,6 +99,8 @@ docker compose up -d
 ---
 
 ## 4. Các Lệnh Quản Trị Hệ Thống Thường Dùng
+
+Chạy các lệnh bên dưới trong thư mục `smart-cafe-ai/backend`.
 
 ### 1. Xem trạng thái các container:
 ```bash
@@ -117,9 +119,7 @@ docker compose logs -f payment-service
 ### 3. Khởi động lại hoặc rebuild 1 service khi sửa code:
 Ví dụ bạn vừa sửa code trong `payment-service`:
 ```bash
-cd backend
 ./mvnw package -pl payment-service -DskipTests
-cd ..
 docker compose build payment-service
 docker compose up -d --no-deps payment-service
 ```
@@ -138,6 +138,6 @@ docker compose down -v
 
 ## 5. Dữ Liệu Khởi Tạo (Database Initialization)
 
-MySQL trong `docker-compose.yml` tự động mount file [`database/smart_cafe_db.sql`](file:///c:/Users/Admin/Desktop/smart-cafe-ai/database/smart_cafe_db.sql) vào `/docker-entrypoint-initdb.d/01-init.sql`.
+MySQL trong `backend/docker-compose.yml` tự động mount file [`database/smart_cafe_db.sql`](../database/smart_cafe_db.sql) qua đường dẫn `../database/smart_cafe_db.sql` vào `/docker-entrypoint-initdb.d/01-init.sql`.
 
 Trong lần đầu tiên container `smartcafe-mysql` khởi động, toàn bộ **8 cơ sở dữ liệu** cùng bảng biểu, tài khoản phân quyền và dữ liệu mẫu sẽ được tạo hoàn toàn tự động.
