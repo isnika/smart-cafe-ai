@@ -76,7 +76,6 @@ public class AuthService {
             return ApiResponse.error("CONFLICT", "Số điện thoại đã được sử dụng");
         }
         Role customerRole = roleRepository.findByName("ROLE_CUSTOMER")
-                .or(() -> roleRepository.findByName("Customer"))
                 .orElseGet(() -> roleRepository.save(Role.builder().name("ROLE_CUSTOMER").description("Khách hàng thành viên Smart Cafe").build()));
         User user = User.builder().fullName(name.getData()).email(email).phone(phone).passwordHash(passwordEncoder.encode(request.getPassword())).role(customerRole).status(UserStatus.Unverified).build();
         User savedUser = userRepository.save(user);
@@ -157,7 +156,6 @@ public class AuthService {
                         "Hãy đăng ký và xác thực email bằng OTP, sau đó đăng nhập để liên kết Google");
             }
             Role customerRole = roleRepository.findByName("ROLE_CUSTOMER")
-                    .or(() -> roleRepository.findByName("Customer"))
                     .orElseGet(() -> roleRepository.save(Role.builder().name("ROLE_CUSTOMER").description("Khách hàng thành viên Smart Cafe").build()));
             String name = identity.name() == null || identity.name().isBlank() ? "Google User" : identity.name().trim();
             String picture = identity.picture();
@@ -369,7 +367,12 @@ public class AuthService {
     }
 
     private AuthResponse issueTokens(User user, String deviceInfo) {
-        String roleName = user.getRole() != null ? user.getRole().getName() : "ROLE_CUSTOMER";
+        String roleName = (user.getRole() != null && user.getRole().getName() != null && !user.getRole().getName().isBlank())
+                ? user.getRole().getName()
+                : "ROLE_CUSTOMER";
+        if (!roleName.startsWith("ROLE_")) {
+            roleName = "ROLE_" + roleName.toUpperCase();
+        }
         String accessToken = jwtService.generateAccessToken(user.getId(), roleName);
         String refreshToken = jwtService.generateRefreshToken(user.getId());
         saveRefreshTokenInDb(user, refreshToken, deviceInfo);

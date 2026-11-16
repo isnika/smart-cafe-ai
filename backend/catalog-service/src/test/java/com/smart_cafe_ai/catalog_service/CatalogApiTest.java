@@ -181,7 +181,11 @@ class CatalogApiTest {
     }
 
     private String token(String role, long expiresIn) {
-        return "Bearer " + Jwts.builder().subject("test-user").claim("role",role)
+        String effectiveRole = role;
+        if (role != null && !role.isBlank()) {
+            effectiveRole = role.startsWith("ROLE_") ? role : "ROLE_" + role.toUpperCase();
+        }
+        return "Bearer " + Jwts.builder().subject("test-user").claim("role",effectiveRole)
                 .expiration(new Date(System.currentTimeMillis()+expiresIn))
                 .signWith(Keys.hmacShaKeyFor(Decoders.BASE64.decode(SECRET))).compact();
     }

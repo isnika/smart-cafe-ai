@@ -1,0 +1,33 @@
+services:
+  rabbitmq:
+    environment:
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "+S 2:2"
+    healthcheck:
+      interval: 30s
+      timeout: 30s
+      retries: 10
+      start_period: 120s
+  catalog-service:
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-smartcafe}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-smartcafe-local}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      start_period: 180s
+  engagement-service:
+    environment:
+      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-no-reply@smartcafe.local}
+      MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-true}
+      MAIL_STARTTLS_ENABLE: ${MAIL_STARTTLS_ENABLE:-true}
+      MAIL_SSL_ENABLE: ${MAIL_SSL_ENABLE:-false}
+    healthcheck:
+      start_period: 180s

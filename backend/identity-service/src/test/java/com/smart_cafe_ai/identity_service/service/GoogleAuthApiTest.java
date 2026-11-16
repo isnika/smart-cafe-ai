@@ -120,7 +120,7 @@ class GoogleAuthApiTest {
         ReflectionTestUtils.setField(expired, "secretKey", environment.getRequiredProperty("jwt.secret"));
         ReflectionTestUtils.setField(expired, "accessTokenExpirationMs", -60000L);
         mvc.perform(get("/api/v1/users/me").header("Authorization", "Bearer "
-                        + expired.generateAccessToken(user.getId(), "Customer")))
+                        + expired.generateAccessToken(user.getId(), "ROLE_CUSTOMER")))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
     }
@@ -129,7 +129,7 @@ class GoogleAuthApiTest {
     void profileRejectsRefreshTokenAndUnknownUser() throws Exception {
         User user = existingUser(UserStatus.Active);
         for (String token : List.of(jwt.generateRefreshToken(user.getId()),
-                jwt.generateAccessToken("nonexistent-user", "Customer"))) {
+                jwt.generateAccessToken("nonexistent-user", "ROLE_CUSTOMER"))) {
             mvc.perform(get("/api/v1/users/me").header("Authorization", "Bearer " + token))
                     .andExpect(status().isUnauthorized())
                     .andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
@@ -140,7 +140,7 @@ class GoogleAuthApiTest {
     @EnumSource(value = UserStatus.class, names = {"Unverified", "Banned", "Deactivated"})
     void profileRejectsAccountDisabledAfterTokenWasIssued(UserStatus status) throws Exception {
         User user = existingUser(UserStatus.Active);
-        String token = jwt.generateAccessToken(user.getId(), "Customer");
+        String token = jwt.generateAccessToken(user.getId(), "ROLE_CUSTOMER");
         user.setStatus(status);
         users.saveAndFlush(user);
         mvc.perform(get("/api/v1/users/me").header("Authorization", "Bearer " + token))
@@ -155,7 +155,7 @@ class GoogleAuthApiTest {
     void authenticatedCustomerWithoutAdminPermissionGetsForbiddenJson() throws Exception {
         User user = existingUser(UserStatus.Active);
         mvc.perform(get("/api/v1/admin/users").header("Authorization", "Bearer "
-                        + jwt.generateAccessToken(user.getId(), "Customer")))
+                        + jwt.generateAccessToken(user.getId(), "ROLE_CUSTOMER")))
                 .andExpect(status().isForbidden())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.success").value(false))
@@ -237,8 +237,8 @@ class GoogleAuthApiTest {
     }
 
     private User existingUser(UserStatus status) {
-        Role role = roles.findByName("Customer").orElseGet(() ->
-                roles.save(Role.builder().name("Customer").description("Customer").build()));
+        Role role = roles.findByName("ROLE_CUSTOMER").orElseGet(() ->
+                roles.save(Role.builder().name("ROLE_CUSTOMER").description("ROLE_CUSTOMER").build()));
         return users.saveAndFlush(User.builder().email("api-test@gmail.com").fullName("Existing customer")
                 .passwordHash(passwords.encode("Password123!")).role(role).status(status).build());
     }

@@ -26,7 +26,7 @@ class UserStatusEventsTest {
     @Autowired PlatformTransactionManager transactions;
 
     private User account() {
-        Role role = roles.findByName("Customer").orElseGet(() -> roles.save(Role.builder().name("Customer").build()));
+        Role role = roles.findByName("ROLE_CUSTOMER").orElseGet(() -> roles.save(Role.builder().name("ROLE_CUSTOMER").build()));
         return users.save(User.builder().fullName("Status Test").role(role).status(UserStatus.Active)
                 .email(UUID.randomUUID() + "@example.com").build());
     }

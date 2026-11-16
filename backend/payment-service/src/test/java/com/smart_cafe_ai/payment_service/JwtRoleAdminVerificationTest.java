@@ -22,9 +22,9 @@ public class JwtRoleAdminVerificationTest {
         SecretKey key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret));
 
         // Giả lập token sinh ra từ Identity Service cho tài khoản ADMIN:
-        // claims.put("role", "ADMIN");
+        // claims.put("role", "ROLE_ADMIN");
         Map<String, Object> claims = new HashMap<>();
-        claims.put("role", "ADMIN");
+        claims.put("role", "ROLE_ADMIN");
         claims.put("branch_id", 1);
 
         String token = Jwts.builder()
@@ -43,6 +43,6 @@ public class JwtRoleAdminVerificationTest {
 
         List<String> roles = jwtService.extractRoles(token);
         System.out.println("Extracted Roles from Token: " + roles);
-        assertTrue(roles.contains("ADMIN"), "Phải chứa role ADMIN");
+        assertTrue(roles.contains("ROLE_ADMIN") || roles.contains("ADMIN"), "Phải chứa role ROLE_ADMIN");
     }
 }

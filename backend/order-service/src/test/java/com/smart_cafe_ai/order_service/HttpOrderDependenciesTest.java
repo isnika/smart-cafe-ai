@@ -37,5 +37,5 @@ class HttpOrderDependenciesTest {
         var result=client.resolve(1,List.of(new Item(1,2,null,List.of(new Option(5,2)))));assertThat(result.get(0).options().get(0).quantity()).isEqualTo(2);assertThat(path.get()).endsWith("/resolve");assertThat(body.get()).contains("\"branch_id\":1").doesNotContain("\"quantity\":2,\"note\"");
         response=response.replace("\"variant_id\":1","\"variant_id\":2");assertThatThrownBy(()->client.resolve(1,List.of(new Item(1,2,null,List.of(new Option(5,2)))))).isInstanceOf(ApiException.class);
     }
-    @Test void posCustomerLookupUsesIdentityBatchIdsAndRoleName(){response="{\"success\":true,\"data\":[{\"id\":\"customer\",\"status\":\"Active\",\"role_name\":\"Customer\"}]}";client.requireCustomer("customer");assertThat(body.get()).isEqualTo("{\"ids\":[\"customer\"]}");assertThat(path.get()).endsWith("/users/batch");}
+    @Test void posCustomerLookupUsesIdentityBatchIdsAndRoleName(){response="{\"success\":true,\"data\":[{\"id\":\"customer\",\"status\":\"Active\",\"role_name\":\"ROLE_CUSTOMER\"}]}";client.requireCustomer("customer");assertThat(body.get()).isEqualTo("{\"ids\":[\"customer\"]}");assertThat(path.get()).endsWith("/users/batch");}
 }

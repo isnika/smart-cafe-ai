@@ -29,13 +29,13 @@ public class ReviewService {
     }
     @Transactional(readOnly=true)
     public ApiResponse list(Integer product,String user,ReviewStatus status,int page,int size,String sort,Actor moderator) {
-        if(moderator!=null&&"Manager".equals(moderator.role())&&moderator.branchId()==null) throw ApiException.forbidden();
+        if(moderator!=null&&"ROLE_MANAGER".equals(moderator.role())&&moderator.branchId()==null) throw ApiException.forbidden();
         return ApiResponse.page(reviews.findAll((r,q,cb)->{
             var p=cb.conjunction();
             if(product!=null) p=cb.and(p,cb.equal(r.get("productId"),product));
             if(user!=null) p=cb.and(p,cb.equal(r.get("userId"),user));
             if(status!=null) p=cb.and(p,cb.equal(r.get("status"),status));
-            if(moderator!=null&&"Manager".equals(moderator.role())) {
+            if(moderator!=null&&"ROLE_MANAGER".equals(moderator.role())) {
                 var sub=q.subquery(Long.class); var vp=sub.from(VerifiedPurchase.class);
                 sub.select(vp.get("orderItemId")).where(cb.equal(vp.get("branchId"),moderator.branchId()));
                 p=cb.and(p,r.get("orderItemId").in(sub));
@@ -47,7 +47,7 @@ public class ReviewService {
     public ProductReview moderate(Long id,ReviewStatus status,Actor actor) {
         if(status==ReviewStatus.Pending) throw ApiException.invalid("Chỉ chấp nhận Approved hoặc Hidden.");
         var review=reviews.lockById(id).orElseThrow(ApiException::missing);
-        if("Manager".equals(actor.role())) {
+        if("ROLE_MANAGER".equals(actor.role())) {
             var purchase=purchases.findById(review.orderItemId).orElseThrow(ApiException::missing);
             if(actor.branchId()==null||!actor.branchId().equals(purchase.branchId)) throw ApiException.forbidden();
         }

@@ -32,7 +32,18 @@ public class UserResponse {
         if (user == null) {
             return null;
         }
-        return UserResponse.builder().id(user.getId()).fullName(user.getFullName()).email(user.getEmail()).phone(user.getPhone()).avatar(user.getAvatar()).roleId(user.getRole() != null ? user.getRole().getId() : null).roleName(user.getRole() != null ? user.getRole().getName() : null).status(user.getStatus()).emailVerifiedAt(user.getEmailVerifiedAt()).phoneVerifiedAt(user.getPhoneVerifiedAt()).lastLoginAt(user.getLastLoginAt()).createdAt(user.getCreatedAt()).updatedAt(user.getUpdatedAt()).build();
+        String roleName = "ROLE_CUSTOMER";
+        Integer roleId = null;
+        if (user.getRole() != null) {
+            roleId = user.getRole().getId();
+            if (user.getRole().getName() != null && !user.getRole().getName().isBlank()) {
+                roleName = user.getRole().getName();
+            }
+        }
+        if (!roleName.startsWith("ROLE_")) {
+            roleName = "ROLE_" + roleName.toUpperCase();
+        }
+        return UserResponse.builder().id(user.getId()).fullName(user.getFullName()).email(user.getEmail()).phone(user.getPhone()).avatar(user.getAvatar()).roleId(roleId).roleName(roleName).status(user.getStatus()).emailVerifiedAt(user.getEmailVerifiedAt()).phoneVerifiedAt(user.getPhoneVerifiedAt()).lastLoginAt(user.getLastLoginAt()).createdAt(user.getCreatedAt()).updatedAt(user.getUpdatedAt()).build();
     }
     public static class UserResponseBuilder {
         private String id;

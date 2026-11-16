@@ -41,7 +41,11 @@ class IdentityEventsApiTest {
     @BeforeEach void setup() { user = UUID.randomUUID().toString(); }
 
     private String token(String role) {
-        return "Bearer " + Jwts.builder().subject(user).claim("role", role)
+        String effectiveRole = role;
+        if (role != null && !role.isBlank()) {
+            effectiveRole = role.startsWith("ROLE_") ? role : "ROLE_" + role.toUpperCase();
+        }
+        return "Bearer " + Jwts.builder().subject(user).claim("role", effectiveRole)
                 .expiration(Date.from(Instant.now().plusSeconds(600)))
                 .signWith(Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret))).compact();
     }
@@ -63,7 +67,7 @@ class IdentityEventsApiTest {
     }
 
     @Test void previouslyIssuedTokenIsDeniedAfterBanAndAllowedAfterReactivation() throws Exception {
-        String jwt = token("Customer");
+        String jwt = token("ROLE_CUSTOMER");
         mvc.perform(get("/api/v1/orders/me").header("Authorization", jwt)).andExpect(status().isOk());
         deliver(event("Banned", 1));
         mvc.perform(get("/api/v1/orders/me").header("Authorization", jwt))
@@ -74,7 +78,7 @@ class IdentityEventsApiTest {
 
     @Test void deactivatedStaffTokenCannotAccessOrderApis() throws Exception {
         deliver(event("Deactivated", 1));
-        mvc.perform(get("/api/v1/orders").header("Authorization", token("Staff")))
+        mvc.perform(get("/api/v1/orders").header("Authorization", token("ROLE_STAFF")))
                 .andExpect(status().isForbidden()).andExpect(jsonPath("$.error.code").value("ACCOUNT_DEACTIVATED"));
     }
 

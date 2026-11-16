@@ -137,7 +137,7 @@ public class VoucherService {
                 ||(amount!=null&&(amount.signum()<0||amount.stripTrailingZeros().scale()>0||amount.precision()-amount.scale()>15))) throw ApiException.invalid("Thông tin chi nhánh, hình thức nhận hoặc số tiền không hợp lệ.");
     }
     private Integer managerBranch(Actor actor,Integer branch,boolean write) {
-        if("Admin".equals(actor.role())) return branch;
+        if("ROLE_ADMIN".equals(actor.role())) return branch;
         if(actor.branchId()==null) throw ApiException.forbidden();
         if((write&&branch==null)||(branch!=null&&!actor.branchId().equals(branch))) throw ApiException.forbidden();
         return actor.branchId();

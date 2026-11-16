@@ -46,7 +46,7 @@ class OrderApiTest {
     @Autowired EngagementCheckoutRepository checkouts;
     @Autowired EngagementCheckoutRecovery recovery;
     @Autowired org.springframework.transaction.PlatformTransactionManager transactions;
-    final String customer=token("customer-1","Customer"),other=token("customer-2","Customer"),staff=token("staff-1","Staff"),manager=token("manager-1","Manager"),admin=token("admin-1","Admin");
+    final String customer=token("customer-1","ROLE_CUSTOMER"),other=token("customer-2","ROLE_CUSTOMER"),staff=token("staff-1","ROLE_STAFF"),manager=token("manager-1","ROLE_MANAGER"),admin=token("admin-1","ROLE_ADMIN");
 
     @BeforeEach void setup(){
         checkouts.deleteAll();
@@ -64,7 +64,12 @@ class OrderApiTest {
             return items.stream().map(item->new ResolvedItem(item.variantId(),100,"Ca phe","Size M",new BigDecimal("30000"),item.options().stream().map(o->new ResolvedOption(o.optionId(),"Topping",new BigDecimal("5000"),o.quantity())).toList())).toList();
         });
     }
-    static String token(String user,String role){return "Bearer "+Jwts.builder().subject(user).claim("role",role).issuedAt(new Date()).expiration(Date.from(Instant.now().plusSeconds(3600))).signWith(Keys.hmacShaKeyFor(Decoders.BASE64.decode("404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970"))).compact();}
+    static String token(String user,String role){
+        String effectiveRole = role;
+        if(role != null && !role.isBlank()){
+            effectiveRole = role.startsWith("ROLE_") ? role : "ROLE_" + role.toUpperCase();
+        }
+        return "Bearer "+Jwts.builder().subject(user).claim("role",effectiveRole).issuedAt(new Date()).expiration(Date.from(Instant.now().plusSeconds(3600))).signWith(Keys.hmacShaKeyFor(Decoders.BASE64.decode("404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970"))).compact();}
     JsonNode data(MvcResult result) throws Exception{return json.readTree(result.getResponse().getContentAsString()).path("data");}
     ResultActions call(MockHttpServletRequestBuilder r,String auth,String body) throws Exception {if(auth!=null)r.header("Authorization",auth);if(body!=null)r.contentType(MediaType.APPLICATION_JSON).content(body);return mvc.perform(r);}
     long cart() throws Exception {long id=data(call(post("/api/v1/carts"),customer,"{\"cart_source\":\"Online\",\"branch_id\":1,\"fulfillment_type\":\"Pickup\"}").andExpect(status().isCreated()).andReturn()).path("id").asLong();
@@ -86,6 +91,40 @@ class OrderApiTest {
     @Test void createCartReturnsExistingAndRejectsContextChange() throws Exception {
         long id=cart();call(post("/api/v1/carts"),customer,"{\"cart_source\":\"Online\",\"branch_id\":1,\"fulfillment_type\":\"Pickup\"}").andExpect(status().isOk()).andExpect(jsonPath("$.data.id").value(id));
         call(post("/api/v1/carts"),customer,"{\"cart_source\":\"Online\",\"branch_id\":2,\"fulfillment_type\":\"Pickup\"}").andExpect(status().isConflict());
+    }
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"Online,Pickup", "QR,Dine_In"})
+    void addingIdenticalItemTwiceCreatesSeparateLines(String source,String fulfillment) throws Exception {
+        String auth=source.equals("Online")?customer:null;
+        var created=data(call(post("/api/v1/carts")
+                .header("X-Table-Session-Code","session").header("X-Client-Key","duplicate-item-test"),auth,
+                "{\"cart_source\":\""+source+"\",\"branch_id\":1,\"fulfillment_type\":\""+fulfillment+"\"}")
+                .andExpect(status().isCreated()).andReturn());
+        long cartId=created.path("id").asLong();
+        String body="{\"variant_id\":1,\"quantity\":1,\"note\":\"same note\",\"options\":[{\"option_id\":5,\"quantity\":1}]}";
+        for(int count=1;count<=2;count++) {
+            call(post("/api/v1/carts/current/items?source="+source)
+                    .header("X-Table-Session-Code","session").header("X-Client-Key","duplicate-item-test"),auth,body)
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.data.id").value(cartId))
+                    .andExpect(jsonPath("$.data.items.length()").value(count));
+        }
+        var current=data(call(get("/api/v1/carts/current?source="+source)
+                .header("X-Table-Session-Code","session").header("X-Client-Key","duplicate-item-test"),auth,null)
+                .andExpect(status().isOk()).andReturn());
+        var items=current.path("items");
+        assertThat(items.size()).isEqualTo(2);
+        assertThat(items.get(0).path("id").asLong()).isNotEqualTo(items.get(1).path("id").asLong());
+        for(var item:items) {
+            assertThat(item.path("variant_id").asInt()).isEqualTo(1);
+            assertThat(item.path("quantity").asInt()).isEqualTo(1);
+            assertThat(item.path("note").asText()).isEqualTo("same note");
+        }
+        assertThat(current.path("pricing").path("sub_total").asInt()).isEqualTo(70000);
+        assertThat(jdbc.queryForObject("select count(*) from Cart_Items where cart_id=?",Long.class,cartId)).isEqualTo(2);
+        assertThat(jdbc.queryForList("select quantity from Cart_Items where cart_id=? order by id",Integer.class,cartId))
+                .containsExactly(1,1);
+        System.out.println("Duplicate item verification ["+source+"]: "+current);
     }
     @Test void orderSnapshotIdempotencyAndAtomicConversion() throws Exception {
         long cart=cart();String body=orderBody(cart,null),key="checkout-key";

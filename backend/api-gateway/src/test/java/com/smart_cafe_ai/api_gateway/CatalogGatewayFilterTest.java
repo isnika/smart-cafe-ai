@@ -23,8 +23,8 @@ class CatalogGatewayFilterTest {
         client.get().uri("/api/v1/catalog/products").exchange().expectStatus().isOk();
         client.get().uri("/api/v1/catalog/admin/products").exchange().expectStatus().isUnauthorized();
         client.get().uri("/api/v1/catalog/categories?status=Inactive").exchange().expectStatus().isUnauthorized();
-        client.post().uri("/api/v1/catalog/products").header("Authorization",token("Customer")).exchange().expectStatus().isForbidden();
-        client.post().uri("/api/v1/catalog/products").header("Authorization",token("Manager")).exchange().expectStatus().isOk();
+        client.post().uri("/api/v1/catalog/products").header("Authorization",token("ROLE_CUSTOMER")).exchange().expectStatus().isForbidden();
+        client.post().uri("/api/v1/catalog/products").header("Authorization",token("ROLE_MANAGER")).exchange().expectStatus().isOk();
         client.post().uri("/api/v1/catalog/products").header("Authorization","Bearer invalid").exchange().expectStatus().isUnauthorized();
     }
     @Test void propagatesValidatedTraceId(){client.get().uri("/api/v1/catalog/products").header("X-Trace-Id","c4c809f0-b29b-4cce-83c5-247e4e577632").exchange()

@@ -94,8 +94,14 @@ public class AdminUserService {
             return ApiResponse.error("CONFLICT", "Số điện thoại đã được sử dụng");
         }
 
-        Role role = roleRepository.findById(request.getRoleId())
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy vai trò"));
+        Role role;
+        if (request.getRoleId() != null) {
+            role = roleRepository.findById(request.getRoleId())
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy vai trò"));
+        } else {
+            role = roleRepository.findByName("ROLE_CUSTOMER")
+                    .orElseGet(() -> roleRepository.save(Role.builder().name("ROLE_CUSTOMER").description("Khách hàng thành viên Smart Cafe").build()));
+        }
 
         User user = User.builder()
                 .fullName(request.getFullName())
@@ -130,8 +136,14 @@ public class AdminUserService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy tài khoản"));
 
-        Role role = roleRepository.findById(request.getRoleId())
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy vai trò"));
+        Role role;
+        if (request.getRoleId() != null) {
+            role = roleRepository.findById(request.getRoleId())
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy vai trò"));
+        } else {
+            role = roleRepository.findByName("ROLE_CUSTOMER")
+                    .orElseGet(() -> roleRepository.save(Role.builder().name("ROLE_CUSTOMER").description("Khách hàng thành viên Smart Cafe").build()));
+        }
 
         user.setRole(role);
 

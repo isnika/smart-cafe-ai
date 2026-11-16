@@ -1,6 +1,31 @@
 server:
   port: 8080
 
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    urls:
+      - name: 1. Identity Service
+        url: /v3/api-docs/identity-service
+      - name: 2. Catalog Service
+        url: /v3/api-docs/catalog-service
+      - name: 3. Store Service
+        url: /v3/api-docs/store-service
+      - name: 4. Order Service
+        url: /v3/api-docs/order-service
+      - name: 5. Payment Service
+        url: /v3/api-docs/payment-service
+      - name: 6. Inventory Service
+        url: /v3/api-docs/inventory-service
+      - name: 7. Engagement Service
+        url: /v3/api-docs/engagement-service
+      - name: 8. Intelligence Service
+        url: /v3/api-docs/intelligence-service
+
 spring:
   application:
     name: api-gateway
@@ -13,6 +38,63 @@ spring:
           lower-case-service-id: true
 
       routes:
+        # Swagger OpenAPI Documentation Routes
+        - id: identity-service-docs
+          uri: lb://IDENTITY-SERVICE
+          predicates:
+            - Path=/v3/api-docs/identity-service
+          filters:
+            - SetPath=/v3/api-docs
+
+        - id: catalog-service-docs
+          uri: lb://CATALOG-SERVICE
+          predicates:
+            - Path=/v3/api-docs/catalog-service
+          filters:
+            - SetPath=/v3/api-docs
+
+        - id: store-service-docs
+          uri: lb://STORE-SERVICE
+          predicates:
+            - Path=/v3/api-docs/store-service
+          filters:
+            - SetPath=/v3/api-docs
+
+        - id: order-service-docs
+          uri: lb://ORDER-SERVICE
+          predicates:
+            - Path=/v3/api-docs/order-service
+          filters:
+            - SetPath=/v3/api-docs
+
+        - id: payment-service-docs
+          uri: lb://PAYMENT-SERVICE
+          predicates:
+            - Path=/v3/api-docs/payment-service
+          filters:
+            - SetPath=/v3/api-docs
+
+        - id: inventory-service-docs
+          uri: lb://INVENTORY-SERVICE
+          predicates:
+            - Path=/v3/api-docs/inventory-service
+          filters:
+            - SetPath=/v3/api-docs
+
+        - id: engagement-service-docs
+          uri: lb://ENGAGEMENT-SERVICE
+          predicates:
+            - Path=/v3/api-docs/engagement-service
+          filters:
+            - SetPath=/v3/api-docs
+
+        - id: intelligence-service-docs
+          uri: lb://INTELLIGENCE-SERVICE
+          predicates:
+            - Path=/v3/api-docs/intelligence-service
+          filters:
+            - SetPath=/v3/api-docs
+
         # Identity Service Routes
         - id: identity-service
           uri: lb://IDENTITY-SERVICE
@@ -47,7 +129,7 @@ spring:
         - id: inventory-service
           uri: lb://INVENTORY-SERVICE
           predicates:
-            - Path=/api/v1/inventory/**
+            - Path=/api/v1/inventory/**, /inventory/**
 
         # Engagement Service Routes
         - id: engagement-service

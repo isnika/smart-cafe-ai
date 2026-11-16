@@ -38,8 +38,8 @@ class RegistrationOtpChannelTest {
         RoleRepository roles = mock(RoleRepository.class);
         OtpService otpService = mock(OtpService.class);
         PasswordEncoder encoder = mock(PasswordEncoder.class);
-        Role role = Role.builder().name("Customer").build();
-        when(roles.findByName("Customer")).thenReturn(Optional.of(role));
+        Role role = Role.builder().name("ROLE_CUSTOMER").build();
+        when(roles.findByName("ROLE_CUSTOMER")).thenReturn(Optional.of(role));
         when(encoder.encode("Password123!")).thenReturn("hashed-password");
         when(users.save(any(User.class))).thenAnswer(invocation -> {
             User user = invocation.getArgument(0);

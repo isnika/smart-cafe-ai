@@ -68,10 +68,10 @@ class ChangePasswordApiTest {
     @BeforeEach
     void setUp() {
         email = "change-" + UUID.randomUUID() + "@example.com";
-        Role role = roles.findByName("Customer").orElseGet(() -> roles.save(Role.builder().name("Customer").build()));
+        Role role = roles.findByName("ROLE_CUSTOMER").orElseGet(() -> roles.save(Role.builder().name("ROLE_CUSTOMER").build()));
         user = users.saveAndFlush(User.builder().fullName("Change password test").email(email)
                 .passwordHash(passwords.encode(OLD)).role(role).status(UserStatus.Active).build());
-        accessToken = jwt.generateAccessToken(user.getId(), "Customer");
+        accessToken = jwt.generateAccessToken(user.getId(), "ROLE_CUSTOMER");
     }
 
     @AfterEach
@@ -87,8 +87,8 @@ class ChangePasswordApiTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"/auth, Customer", "/api/auth, Customer", "/api/v1/auth, Customer",
-            "/auth, Staff", "/api/auth, Staff", "/api/v1/auth, Staff"})
+    @CsvSource({"/auth, ROLE_CUSTOMER", "/api/auth, ROLE_CUSTOMER", "/api/v1/auth, ROLE_CUSTOMER",
+            "/auth, ROLE_STAFF", "/api/auth, ROLE_STAFF", "/api/v1/auth, ROLE_STAFF"})
     void changesPasswordWithoutOtpAndRevokesOldRefreshTokens(String prefix, String roleName) throws Exception {
         user.setRole(roles.findByName(roleName).orElseGet(() -> roles.save(Role.builder().name(roleName).build())));
         users.saveAndFlush(user);
@@ -251,6 +251,6 @@ class ChangePasswordApiTest {
         JwtService expired = new JwtService();
         ReflectionTestUtils.setField(expired, "secretKey", environment.getRequiredProperty("jwt.secret"));
         ReflectionTestUtils.setField(expired, "accessTokenExpirationMs", -60000L);
-        return expired.generateAccessToken(user.getId(), "Customer");
+        return expired.generateAccessToken(user.getId(), "ROLE_CUSTOMER");
     }
 }
