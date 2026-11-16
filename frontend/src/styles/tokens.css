@@ -1,0 +1,46 @@
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --chat-panel-w: 380px;
+  --chat-panel-h: 600px;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: #fafaf9; /* gray-50 */
+  color: #1c1917; /* gray-900 */
+  font-family: "Inter Variable", Inter, system-ui, sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family:
+    "Plus Jakarta Sans Variable", "Plus Jakarta Sans", system-ui, sans-serif;
+}
+
+:focus-visible {
+  outline: 2px solid #a9683b;
+  outline-offset: 2px;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
