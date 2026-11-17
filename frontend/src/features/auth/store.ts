@@ -133,12 +133,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: async () => {
     const refreshToken = get().refreshToken;
+    get().clear();
     try {
-      await identityApi.logout(refreshToken); // cần refresh token để thu hồi phiên server trước khi clear
+      await identityApi.logout(refreshToken); // revoke the captured session while the UI is already signed out
     } catch {
       /* token có thể đã hết hạn / mất mạng — vẫn đăng xuất phía client */
     }
-    get().clear();
   },
 
   hydrate: async () => {

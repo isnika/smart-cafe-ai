@@ -48,7 +48,7 @@ export function useOnlinePricing() {
     enabled: useServerCart,
     retry: false,
     staleTime: 0,
-    queryFn: () => syncOnlineCart({ fulfillmentType: fulfillmentType!, branchId: ONLINE_BRANCH_ID, lines }),
+    queryFn: () => syncOnlineCart({ fulfillmentType: fulfillmentType!, branchId: ONLINE_BRANCH_ID, lines, userId }),
   });
 
   const subTotal = cart.data?.pricing?.subTotal ?? calcSubTotal(lines);

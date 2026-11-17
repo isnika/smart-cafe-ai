@@ -21,13 +21,20 @@ export interface DeliveryDetails {
   longitude?: number;
 }
 
-interface OnlineCartState {
+interface CartSnapshot {
   /** null = khách đang duyệt món/chỉnh giỏ, chưa chọn cách nhận hàng. */
   fulfillmentType: OnlineFulfillment | null;
   lines: DineInCartLine[];
   /** Mã đã được người dùng nhập; mức giảm thật luôn do server (validate) trả, không lưu ở đây. */
   voucherCode: string | null;
   delivery: DeliveryDetails | null;
+}
+
+interface OnlineCartState extends CartSnapshot {
+  ownerId: string | null;
+  savedCarts: Record<string, CartSnapshot>;
+  /** Bind the local cart to an authenticated user, or to the anonymous shopping session. */
+  bindOwner: (ownerId: string | null) => void;
 
   setFulfillment: (type: OnlineFulfillment | null) => void;
   addLine: (line: NewCartLine, quantity?: number) => void;
@@ -42,13 +49,31 @@ interface OnlineCartState {
 }
 
 const clamp = (n: number) => Math.min(MAX_LINE_QUANTITY, n);
+const emptyCart = (): CartSnapshot => ({ fulfillmentType: null, lines: [], voucherCode: null, delivery: null });
+const cartSnapshot = (state: CartSnapshot): CartSnapshot => ({
+  fulfillmentType: state.fulfillmentType, lines: state.lines,
+  voucherCode: state.voucherCode, delivery: state.delivery,
+});
+const ownerKey = (id: string | null) => id === null ? 'guest' : `user:${id}`;
 
 // Giỏ Online TÁCH HẲN giỏ Dine-in (store khác, không chung state). Tổng tiền không lưu: suy ra từ `lines` (cart.ts).
 export const useOnlineCartStore = create<OnlineCartState>()(persist((set) => ({
+  ownerId: null,
+  savedCarts: {},
   fulfillmentType: null,
   lines: [],
   voucherCode: null,
   delivery: null,
+
+  bindOwner: (ownerId) => set((state) => {
+    if (state.ownerId === ownerId) return state;
+    const savedCarts = { ...state.savedCarts, [ownerKey(state.ownerId)]: cartSnapshot(state) };
+    // Only an anonymous shopping cart can be adopted on login. Never transfer another user's cart.
+    const target = savedCarts[ownerKey(ownerId)]
+      ?? (state.ownerId === null && ownerId !== null ? cartSnapshot(state) : emptyCart());
+    if (state.ownerId === null && ownerId !== null) delete savedCarts.guest;
+    return { ...target, ownerId, savedCarts };
+  }),
 
   setFulfillment: (fulfillmentType) => set({ fulfillmentType }),
 
@@ -87,11 +112,16 @@ export const useOnlineCartStore = create<OnlineCartState>()(persist((set) => ({
   clearOrder: () => set({ lines: [], voucherCode: null }),
 }), {
   name: 'smartcafe.online-cart.v1',
+  version: 1,
+  // Legacy carts have no owner. Discard them instead of assigning private data to the next login.
+  migrate: () => ({ ...emptyCart(), ownerId: null, savedCarts: {} }),
   storage: createJSONStorage(() => localStorage),
   partialize: (state) => ({
+    ownerId: state.ownerId,
+    savedCarts: state.savedCarts,
     fulfillmentType: state.fulfillmentType,
     lines: state.lines,
     voucherCode: state.voucherCode,
     delivery: state.delivery,
-  }) as OnlineCartState,
+  }),
 }));

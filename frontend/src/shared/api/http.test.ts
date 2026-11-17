@@ -22,7 +22,7 @@ beforeEach(() => {
     token = 'new';
     return true;
   });
-  configureHttp({ getToken: () => token, onUnauthorized, refresh });
+  configureHttp({ getToken: () => token, getAccountId: () => null, onUnauthorized, refresh });
 });
 
 const envelope = (data: unknown, meta: unknown = null) => HttpResponse.json({ success: true, data, meta, trace_id: 't-1' });
@@ -72,6 +72,34 @@ describe('http: envelope', () => {
     );
     await http.post('/b', { fullName: 'A', otpCode: '1' }, { snake: true });
     expect(body).toEqual({ full_name: 'A', otp_code: '1' });
+  });
+});
+
+describe('http: account changes during requests', () => {
+  it.each([200, 401])('discards an old account response (%i) without retrying or clearing the new session', async (status) => {
+    let account = 'A';
+    configureHttp({ getAccountId: () => account });
+    let release!: () => void;
+    let entered!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const started = new Promise<void>((resolve) => { entered = resolve; });
+    let requests = 0;
+    server.use(mswHttp.get(U('/account-cart'), async () => {
+      requests++;
+      entered();
+      await gate;
+      return HttpResponse.json({ items: ['product-of-A'] }, { status });
+    }));
+    const pending = http.get('/account-cart').catch((error: unknown) => error);
+    await started;
+    account = 'B';
+    token = 'access-for-B';
+    release();
+    expect(await pending).toMatchObject({ code: 'ACCOUNT_CHANGED' });
+    expect(requests).toBe(1);
+    expect(refresh).not.toHaveBeenCalled();
+    expect(onUnauthorized).not.toHaveBeenCalled();
+    expect(token).toBe('access-for-B');
   });
 });
 
