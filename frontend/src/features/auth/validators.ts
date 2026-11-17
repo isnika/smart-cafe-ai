@@ -1,5 +1,5 @@
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_RE = /^(0|\+84)\d{9}$/;
+const EMAIL_RE = /^[A-Za-z0-9_%+-]+(?:\.[A-Za-z0-9_%+-]+)*@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
+const PHONE_RE = /^(?:\+84|0)[35789][0-9]{8}$/;
 
 export const PASSWORD_MIN = 8;
 
@@ -7,7 +7,7 @@ export const PASSWORD_MIN = 8;
 export const normalizePhone = (v: string) => v.replace(/[\s.\-()]/g, "");
 
 export const isEmail = (v: string) => EMAIL_RE.test(v.trim());
-export const isPhone = (v: string) => PHONE_RE.test(normalizePhone(v));
+export const isPhone = (v: string) => PHONE_RE.test(v.trim());
 
 /** Chuẩn hoá trước khi gửi API: email giữ nguyên (đã trim), số điện thoại bỏ ký tự phân tách. */
 export function normalizeIdentifier(v: string): string {
@@ -23,12 +23,12 @@ export function validateIdentifier(v: string): string | undefined {
 
 export function validateEmail(v: string): string | undefined {
   if (!v.trim()) return "Vui lòng nhập email";
-  if (!isEmail(v)) return "Email không hợp lệ";
+  if (!isEmail(v)) return "Email chưa đúng định dạng, ví dụ: ten@example.com";
 }
 
 export function validatePhone(v: string): string | undefined {
   if (!v.trim()) return "Vui lòng nhập số điện thoại";
-  if (!isPhone(v)) return "Số điện thoại không hợp lệ (vd: 0901234567)";
+  if (!isPhone(v)) return "Số điện thoại chưa đúng định dạng, ví dụ: 0901234567 hoặc +84901234567";
 }
 
 export function validateFullName(v: string): string | undefined {
