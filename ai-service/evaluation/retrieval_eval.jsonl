@@ -1,0 +1,16 @@
+{"id":"menu-001","group":"menu","query":"Cho mình xem thực đơn","history":[],"expected_terms":["products.csv"]}
+{"id":"menu-002","group":"menu","query":"Quán có những món cà phê nào?","history":[],"expected_terms":["products.csv"]}
+{"id":"menu-003","group":"menu","query":"Có món nào ngon để thử không?","history":[],"expected_terms":["products.csv"]}
+{"id":"menu-004","group":"menu","query":"Cho mình xem các loại matcha","history":[],"expected_terms":["products.csv","Matcha"]}
+{"id":"price-001","group":"price","query":"Cà phê sữa giá bao nhiêu?","history":[],"expected_terms":["products.csv","Cà phê sữa"]}
+{"id":"price-002","group":"price","query":"Bạc xỉu bao nhiêu tiền?","history":[],"expected_terms":["products.csv","Bạc xỉu"]}
+{"id":"price-003","group":"price","query":"Mát cha latte giá bn","history":[],"expected_terms":["products.csv","Matcha latte"]}
+{"id":"price-004","group":"price","query":"Cà phê đen đá mấy đồng?","history":[],"expected_terms":["products.csv","Cà phê đen đá"]}
+{"id":"policy-001","group":"policy","query":"Quán có hoàn đơn không?","history":[],"expected_terms":["refund.md"]}
+{"id":"policy-002","group":"policy","query":"Tôi muốn hủy đơn hàng","history":[],"expected_terms":["refund.md"]}
+{"id":"policy-003","group":"policy","query":"Tôi bị trừ tiền hai lần","history":[],"expected_terms":["payment.md"]}
+{"id":"policy-004","group":"policy","query":"Quán có nhận chuyển khoản không?","history":[],"expected_terms":["payment.md"]}
+{"id":"follow-up-001","group":"follow-up","query":"Bao nhiêu tiền?","history":[{"role":"user","content":"Quán có Cà phê sữa không?"},{"role":"assistant","content":"Dạ, Cà phê sữa có trong menu hiện tại."}],"expected_terms":["products.csv","Cà phê sữa"]}
+{"id":"follow-up-002","group":"follow-up","query":"Còn món này không?","history":[{"role":"user","content":"Matcha latte giá bao nhiêu?"},{"role":"assistant","content":"Matcha latte có giá tham khảo 55.000đ."}],"expected_terms":["products.csv","Matcha latte"]}
+{"id":"follow-up-003","group":"follow-up","query":"Đóng cửa lúc mấy giờ?","history":[{"role":"user","content":"Quán mở cửa lúc mấy giờ?"},{"role":"assistant","content":"Smart Café mở cửa từ 7h đến 22h."}],"expected_terms":["faq.md","Giờ hoạt động"]}
+{"id":"follow-up-004","group":"follow-up","query":"Nếu đã thanh toán thì sao?","history":[{"role":"user","content":"Quán có hoàn đơn không?"},{"role":"assistant","content":"Việc hoàn hoặc hủy cần kiểm tra theo trạng thái đơn."}],"expected_terms":["payment.md"]}

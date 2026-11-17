@@ -1,0 +1,129 @@
+{
+  "source_mode": "demo",
+  "branch_id": 1,
+  "data_version": "demo-orders.csv:4420651:1794322668715521100|order_items.csv:4987851:1794322668691470000|recipes.csv:483:1794322668717549000|inventory.csv:310:1794322668665817100",
+  "snapshot_generated_at": "2026-11-10 14:57:48.717549+00:00",
+  "data_cutoff_date": "2026-10-18",
+  "timezone": "Asia/Ho_Chi_Minh",
+  "model_version": "revenue-forecast-v3",
+  "selected_model": "WeekdayMean8Weeks",
+  "validation": {
+    "SeasonalNaive": {
+      "mae": 708750.0,
+      "rmse": 879430.1210767931,
+      "wape": 0.16921779511216808
+    },
+    "WeekdayMean8Weeks": {
+      "mae": 534936.1607142857,
+      "rmse": 713465.0974458649,
+      "wape": 0.1277188255969521
+    },
+    "RandomForestRegressor": {
+      "mae": 554060.5426587494,
+      "rmse": 712093.9357489613,
+      "wape": 0.13228487250421858
+    },
+    "ExtraTreesRegressor": {
+      "mae": 571051.2871446259,
+      "rmse": 736020.4643659813,
+      "wape": 0.136341502231505
+    },
+    "HistGradientBoostingRegressor": {
+      "mae": 564740.4147003554,
+      "rmse": 703344.7837724191,
+      "wape": 0.13483474819940117
+    }
+  },
+  "test": {
+    "SeasonalNaive": {
+      "mae": 776000.0,
+      "rmse": 927193.1313686178,
+      "wape": 0.19550046607714205
+    },
+    "WeekdayMean8Weeks": {
+      "mae": 464001.78571428574,
+      "rmse": 624881.5220382352,
+      "wape": 0.11689763578320754
+    },
+    "RandomForestRegressor": {
+      "mae": 610819.1611297646,
+      "rmse": 705632.2449119373,
+      "wape": 0.15388586429087361
+    },
+    "ExtraTreesRegressor": {
+      "mae": 595850.7336969386,
+      "rmse": 694396.0557610206,
+      "wape": 0.15011481462649298
+    },
+    "HistGradientBoostingRegressor": {
+      "mae": 655544.179823208,
+      "rmse": 775391.1820753894,
+      "wape": 0.1651535988267977
+    }
+  },
+  "folds": [
+    {
+      "fold": 1,
+      "cutoff": "2026-07-13",
+      "test_start": "2026-07-14",
+      "test_end": "2026-07-20",
+      "train_days": 925,
+      "test_days": 7
+    },
+    {
+      "fold": 2,
+      "cutoff": "2026-08-10",
+      "test_start": "2026-08-11",
+      "test_end": "2026-08-17",
+      "train_days": 953,
+      "test_days": 7
+    },
+    {
+      "fold": 3,
+      "cutoff": "2026-09-07",
+      "test_start": "2026-09-08",
+      "test_end": "2026-09-14",
+      "train_days": 981,
+      "test_days": 7
+    },
+    {
+      "fold": 4,
+      "cutoff": "2026-10-05",
+      "test_start": "2026-10-06",
+      "test_end": "2026-10-12",
+      "train_days": 1009,
+      "test_days": 7
+    },
+    {
+      "fold": 5,
+      "cutoff": "2026-10-11",
+      "test_start": "2026-10-12",
+      "test_end": "2026-10-18",
+      "train_days": 1015,
+      "test_days": 7
+    }
+  ],
+  "fallback_reason": null,
+  "quality": {
+    "orders_invalid_removed": 0,
+    "orders_duplicate_ids": 0,
+    "refund_amount_available": false,
+    "order_items_invalid_removed": 0,
+    "order_items_exact_duplicates_removed": 3133,
+    "recipes_invalid_removed": 0,
+    "inventory_invalid_removed": 0,
+    "demo_product_recipe_mapping": true,
+    "orders_rows": 81629,
+    "order_items_rows": 105446,
+    "recipes_rows": 12,
+    "inventory_rows": 5,
+    "revenue_basis": "order_total_vnd after status/payment/refund rules",
+    "demand_basis": "completed order items; refund does not erase completed consumption",
+    "coverage_complete": true,
+    "revenue_excluded_status_counts": {},
+    "revenue_excluded_payment_counts": {},
+    "revenue_observed_days": 1022,
+    "revenue_filled_zero_days": 0,
+    "revenue_cutoff_date": "2026-10-18"
+  }
+}

@@ -4,6 +4,12 @@ backend/**/target/
 target/
 *.class
 
+# Node / frontend
+**/node_modules/
+**/dist/
+frontend/.env*
+!frontend/.env.example
+
 # IDE
 .idea/
 *.iml
@@ -11,6 +17,10 @@ target/
 
 # Environment
 .env
+
+.env.*
+!.env.example
+
 
 # Logs
 backend/logs/
@@ -22,9 +32,3 @@ backend/logs/
 *.postman_collection.json
 backend/tools/
 **/tools/
-
-# Whitelist Docker scripts in backend
-!backend/build-docker.ps1
-!backend/build-docker.sh
-!backend/push-docker.ps1
-!backend/push-docker.sh

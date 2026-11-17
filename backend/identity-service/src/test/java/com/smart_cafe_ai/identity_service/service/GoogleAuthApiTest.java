@@ -92,6 +92,48 @@ class GoogleAuthApiTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void differentGoogleSubjectsHaveIndependentAccountsProfilesAndTokensEvenWithOldBearer() throws Exception {
+        User existing = existingUser(UserStatus.Active);
+        JsonNode first = login("/api/v1/auth");
+        assertEquals(existing.getId(), first.path("user").path("id").asText());
+        long userCount = users.count();
+
+        when(google.verify("new-google-token")).thenReturn(new GoogleIdentity("new-google-subject",
+                "new-google-user@gmail.com", true, "New Google Customer", null, null));
+        String json = mvc.perform(post("/api/v1/auth/google")
+                        .header("Authorization", "Bearer " + first.path("access_token").asText())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"id_token\":\"new-google-token\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.is_new_user").value(true))
+                .andExpect(jsonPath("$.data.user.email").value("new-google-user@gmail.com"))
+                .andExpect(jsonPath("$.data.user.full_name").value("New Google Customer"))
+                .andReturn().getResponse().getContentAsString();
+        JsonNode second = mapper.readTree(json).path("data");
+        String newUserId = second.path("user").path("id").asText();
+        assertNotEquals(existing.getId(), newUserId);
+        assertEquals(userCount + 1, users.count());
+        assertEquals(newUserId, users.findByGoogleId("new-google-subject").orElseThrow().getId());
+        assertEquals(existing.getId(), users.findByGoogleId("api-google-id").orElseThrow().getId());
+        assertEquals(newUserId, jwt.extractUserId(second.path("access_token").asText()));
+        assertEquals(newUserId, jwt.extractUserId(second.path("refresh_token").asText()));
+
+        mvc.perform(get("/api/v1/users/me").header("Authorization", "Bearer " + second.path("access_token").asText()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.id").value(newUserId))
+                .andExpect(jsonPath("$.data.email").value("new-google-user@gmail.com"));
+        mvc.perform(get("/api/v1/users/me").header("Authorization", "Bearer " + first.path("access_token").asText()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.id").value(existing.getId()))
+                .andExpect(jsonPath("$.data.email").value("api-test@gmail.com"));
+        mvc.perform(post("/api/v1/auth/refresh").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refresh_token\":\"" + second.path("refresh_token").asText() + "\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.user.id").value(newUserId));
+        mvc.perform(post("/api/v1/auth/google").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"id_token\":\"new-google-token\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.is_new_user").value(false))
+                .andExpect(jsonPath("$.data.user.id").value(newUserId));
+        assertEquals(userCount + 1, users.count());
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"/users/me", "/api/v1/users/me"})
     void profileWithoutTokenReturnsUnauthorizedJson(String path) throws Exception {
@@ -175,11 +217,39 @@ class GoogleAuthApiTest {
         verifyNoInteractions(google);
     }
 
-    @Test
-    void existingUserMustLoginBeforeLinkingAndCanThenUseGoogle() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"/auth", "/api/auth", "/api/v1/auth"})
+    void existingEmailCanLoginWithGoogleImmediatelyAndStillUsePassword(String prefix) throws Exception {
         User user = existingUser(UserStatus.Active);
-        mvc.perform(post("/api/v1/auth/google").contentType(MediaType.APPLICATION_JSON).content(BODY))
-                .andExpect(status().isConflict()).andExpect(jsonPath("$.error.code").value("ACCOUNT_LINK_REQUIRED"));
+        String passwordHash = user.getPasswordHash();
+        var verifiedAt = java.time.LocalDateTime.now().minusDays(1).withNano(0);
+        user.setEmailVerifiedAt(verifiedAt);
+        user.setPhone("0901234567");
+        users.saveAndFlush(user);
+        long count = users.count();
+
+        JsonNode session = login(prefix);
+        assertEquals(user.getId(), session.path("user").path("id").asText());
+        assertFalse(session.path("is_new_user").asBoolean());
+        assertEquals(count, users.count());
+        User linked = users.findById(user.getId()).orElseThrow();
+        assertEquals("api-google-id", linked.getGoogleId());
+        assertEquals(passwordHash, linked.getPasswordHash());
+        assertEquals("Existing customer", linked.getFullName());
+        assertEquals("0901234567", linked.getPhone());
+        assertEquals(verifiedAt, linked.getEmailVerifiedAt());
+
+        mvc.perform(post(prefix + "/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"identifier\":\"api-test@gmail.com\",\"password\":\"Password123!\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.user.id").value(user.getId()));
+        assertEquals(user.getId(), login(prefix).path("user").path("id").asText());
+        mvc.perform(get("/api/v1/users/me").header("Authorization", "Bearer " + session.path("access_token").asText()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.id").value(user.getId()));
+    }
+
+    @Test
+    void explicitGoogleLinkRemainsAvailable() throws Exception {
+        User user = existingUser(UserStatus.Active);
         String result = mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"identifier\":\"api-test@gmail.com\",\"password\":\"Password123!\"}"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
@@ -191,23 +261,41 @@ class GoogleAuthApiTest {
         assertEquals(user.getId(), login("/api/v1/auth").path("user").path("id").asText());
     }
 
-    @Test
-    void bannedAccountGetsForbiddenAndNoLink() throws Exception {
-        User user = existingUser(UserStatus.Banned);
+    @ParameterizedTest
+    @EnumSource(value = UserStatus.class, names = {"Banned", "Deactivated", "Unverified"})
+    void inactiveAccountGetsForbiddenAndNoLink(UserStatus status) throws Exception {
+        User user = existingUser(status);
+        String code = switch (status) {
+            case Banned -> "ACCOUNT_BANNED";
+            case Deactivated -> "ACCOUNT_DEACTIVATED";
+            default -> "ACCOUNT_UNVERIFIED";
+        };
         mvc.perform(post("/api/v1/auth/google").contentType(MediaType.APPLICATION_JSON).content(BODY))
-                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error.code").value("ACCOUNT_BANNED"));
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error.code").value(code));
         assertNull(user.getGoogleId());
     }
 
     @Test
-    void existingMixedCaseEmailRequiresLinkInsteadOfCreatingDuplicateUser() throws Exception {
+    void existingMixedCaseEmailAutoLinksInsteadOfCreatingDuplicateUser() throws Exception {
         User user = existingUser(UserStatus.Active);
         user.setEmail("API-Test@Gmail.com");
         users.saveAndFlush(user);
         long count = users.count();
         mvc.perform(post("/api/v1/auth/google").contentType(MediaType.APPLICATION_JSON).content(BODY))
-                .andExpect(status().isConflict()).andExpect(jsonPath("$.error.code").value("ACCOUNT_LINK_REQUIRED"));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.user.id").value(user.getId()))
+                .andExpect(jsonPath("$.data.is_new_user").value(false));
         assertEquals(count, users.count());
+        assertEquals("api-google-id", users.findById(user.getId()).orElseThrow().getGoogleId());
+    }
+
+    @Test
+    void matchingEmailCannotReplaceExistingGoogleLink() throws Exception {
+        User user = existingUser(UserStatus.Active);
+        user.setGoogleId("another-google-id");
+        users.saveAndFlush(user);
+        mvc.perform(post("/api/v1/auth/google").contentType(MediaType.APPLICATION_JSON).content(BODY))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.error.code").value("GOOGLE_ACCOUNT_CONFLICT"));
+        assertEquals("another-google-id", users.findById(user.getId()).orElseThrow().getGoogleId());
     }
 
     @Test
