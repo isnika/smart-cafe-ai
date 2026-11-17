@@ -52,7 +52,13 @@ Copy-Item .env.example .env
 docker compose up -d --build
 ```
 
-To run published Docker Hub images with the local overrides, run from `backend/`:
+To run published Docker Hub images, run from `backend/`:
+
+```powershell
+docker compose -f docker-compose.hub.yml up -d
+```
+
+To also apply the local resource and environment overrides:
 
 ```powershell
 docker compose -f docker-compose.hub.yml -f docker-compose.local.yml up -d
@@ -65,5 +71,15 @@ docker compose --env-file backend/.env -f backend/docker-compose.hub.yml -f back
 ```
 
 The project name remains `smart-cafe-ai` so existing Compose volumes and networks keep the same names. Database initialization scripts remain in `../database/`.
+
+When editing Identity locally while using the Docker Hub stack, package the service and build the image under the same name referenced by `docker-compose.hub.yml`. Run from `backend/`:
+
+```powershell
+.\identity-service\mvnw.cmd -f identity-service/pom.xml package -DskipTests
+docker build -t nguyenchanhkhue/smartcafe-identity-service:latest ./identity-service
+docker compose -f docker-compose.hub.yml up -d
+```
+
+The Identity Dockerfile copies `target/*.jar`, so source changes require packaging before building the image. If `DOCKERHUB_USERNAME` or `TAG` is customized in `backend/.env`, use that repository and tag in the build command. `up -d` recreates the container when its image changes; it does not compile Java or build images. To distribute the update to other machines, publish the updated image to Docker Hub, then pull it on those machines before running `up -d`.
 
 OTP email delivery (Identity → RabbitMQ → Engagement → SMTP): see [setup and testing](engagement-service/README.md).

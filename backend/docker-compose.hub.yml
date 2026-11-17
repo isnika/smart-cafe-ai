@@ -134,6 +134,8 @@ services:
   # ============================================================================
 
   identity-service:
+    # Local source changes must be packaged and built with this image name/tag
+    # before running up -d; see the Identity update commands in README.md.
     image: ${DOCKERHUB_USERNAME:-nguyenchanhkhue}/smartcafe-identity-service:${TAG:-latest}
     container_name: smartcafe-identity-service
     restart: unless-stopped
