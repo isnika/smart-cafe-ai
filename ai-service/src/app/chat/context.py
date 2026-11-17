@@ -8,7 +8,12 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from .intent import Intent, classify_intent
+from .intent import (
+    Intent,
+    classify_intent,
+    is_booking_detail_submission,
+    is_booking_query,
+)
 from .normalize import fold_text, is_contextual_followup
 
 
@@ -20,6 +25,7 @@ class ConversationContext:
     last_intent: Intent
     pending_question: str | None
     pending_intent: Intent | None
+    booking_details_followup: bool
     candidate_products: tuple[str, ...]
     last_assistant_question: str | None
     last_assistant_message: str | None
@@ -83,6 +89,11 @@ def build_conversation_context(
             break
 
     pending = question if is_contextual_followup(question) else None
+    booking_topic = any(
+        item.get("role") == "user" and is_booking_query(str(item.get("content", "")))
+        for item in history[-4:]
+    )
+    booking_details_followup = booking_topic and is_booking_detail_submission(question)
     last_assistant_question = None
     last_assistant_message = None
     for item in reversed(history):
@@ -100,6 +111,7 @@ def build_conversation_context(
         last_intent=last_intent,
         pending_question=pending,
         pending_intent=_pending_intent(last_assistant_message, last_intent),
+        booking_details_followup=booking_details_followup,
         candidate_products=candidate_products,
         last_assistant_question=last_assistant_question,
         last_assistant_message=last_assistant_message,

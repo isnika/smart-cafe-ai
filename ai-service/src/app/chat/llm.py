@@ -45,7 +45,7 @@ class OpenAICompatLLM:
         ).rstrip("/")
 
         self.api_key = api_key or os.getenv("LLM_API_KEY", "ollama")
-        self.model = model or os.getenv("LLM_MODEL", "qwen2.5:3b")
+        self.model = model or os.getenv("LLM_MODEL", "qwen2.5:7b")
         self.timeout = timeout if timeout is not None else float(
             os.getenv("LLM_TIMEOUT_SECONDS", "45")
         )

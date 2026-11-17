@@ -62,7 +62,8 @@
 - Có chỗ để xe máy phía trước quán, miễn phí cho khách.
 - Chỗ để xe có giới hạn; khách gửi xe theo hướng dẫn của nhân viên.
 - Quán không có bãi đỗ ô tô riêng.
-- Có nhà vệ sinh và nước lọc miễn phí tại khu vực tự phục vụ.
+- Có nhà vệ sinh 
+- Nước lọc miễn phí tại khu vực tự phục vụ.
 - Không có khu vui chơi trẻ em hoặc ghế em bé chuyên dụng.
 - Khách cần hỗ trợ di chuyển có thể nhờ nhân viên.
 

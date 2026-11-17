@@ -93,6 +93,45 @@ def _contains(text: str, *patterns: str) -> bool:
     return any(re.search(pattern, text) for pattern in patterns)
 
 
+def price_sort_direction(query: str) -> str | None:
+    """Nhận diện yêu cầu chọn món theo giá, thay vì chỉ tìm keyword menu."""
+    folded = fold_text(canonicalize_query(query))
+    if not _contains(folded, r"\b(mon|menu|thuc don|san pham|do uong|nuoc)\b"):
+        return None
+    if _contains(folded, r"\b(dat nhat|mac nhat|gia cao nhat|cao nhat)\b"):
+        return "desc"
+    if _contains(folded, r"\b(re nhat|gia thap nhat|thap nhat)\b"):
+        return "asc"
+    return None
+
+
+def is_booking_query(query: str) -> bool:
+    """Nhận diện câu hỏi/chủ đề đặt bàn mà không biến nó thành đặt món online."""
+    folded = fold_text(query)
+    return _contains(
+        folded,
+        r"\b(dat ban|giu ban)\b",
+        r"\bden tre\b.*\b(giu|ban)\b",
+        r"\b(tre gio|sau gio)\b.*\b(giu|ban)\b",
+    )
+
+
+def is_booking_detail_submission(query: str) -> bool:
+    """Nhận diện một lượt gửi đủ slot đặt bàn, không coi là câu hỏi tiện ích."""
+    folded = fold_text(query)
+    signals = sum(
+        bool(pattern.search(folded))
+        for pattern in (
+            re.compile(r"\b\d{9,11}\b"),
+            re.compile(r"\b\d+\s*nguoi\b"),
+            re.compile(r"\b\d{1,2}/\d{1,2}/\d{2,4}\b"),
+            re.compile(r"\b\d{1,2}(?::\d{2}|\s*(?:h|gio))\b"),
+            re.compile(r"\bngay\s+(?:mai|nay|kia)\b"),
+        )
+    )
+    return signals >= 3 and bool(re.search(r"\b\d+\s*nguoi\b", folded))
+
+
 def classify_intent(query: str) -> IntentDecision:
     """Phân loại deterministic, ưu tiên intent có rủi ro retrieval cao."""
     canonical = canonicalize_query(query)
@@ -255,7 +294,7 @@ def classify_intent(query: str) -> IntentDecision:
         r"\b(cho ngoi|ban ghe|phong rieng|so cho|bao nhieu cho|con ban|ban trong)\b",
         r"\b(gui xe|giu xe|bai xe|bai do|nha ve sinh|nuoc loc|ghe em be|khu vui choi|ho tro di chuyen)\b",
         r"\b(o cam|o dien|sac dien|am dun|cong suat lon|laptop|phu thu|gioi han ngoi|yen tinh|hop online|bat loa|doi ban)\b",
-        r"\b(vape|hut thuoc|thuoc la|ngoai troi|thu cung|mang cho|cho den quan|cho cung|thue rieng|cho thue rieng|chup anh|quay quang cao|dung den|che loi di|ghep ban|do uong ben ngoai|tra sua quan khac|banh sinh nhat|phao|trang tri sinh nhat)\b",
+        r"\b(vape|hut thuoc|thuoc la|ngoai troi|thu cung|mang cho|cho den quan|cho cung|thue rieng|thue ca quan|thue toan bo|cho thue rieng|chup anh|quay quang cao|dung den|che loi di|ghep ban|do uong ben ngoai|tra sua quan khac|banh sinh nhat|phao|trang tri sinh nhat)\b",
     ):
         return IntentDecision(Intent.SERVICE_QUERY, 0.97, "service-fact")
 
@@ -320,6 +359,11 @@ def classify_intent(query: str) -> IntentDecision:
         r"\b(o cam|o dien|sac dien|cho sac)\b",
     ):
         return IntentDecision(Intent.SERVICE_QUERY, 0.96, "service")
+
+    price_direction = price_sort_direction(query)
+    if price_direction:
+        matched_rule = "highest-price" if price_direction == "desc" else "lowest-price"
+        return IntentDecision(Intent.PRODUCT_FILTER, 0.97, matched_rule)
 
     if _contains(
         folded,

@@ -27,6 +27,7 @@ from .intent import (
     DocumentType,
     Intent,
     allowed_document_types,
+    price_sort_direction,
 )
 from .normalize import canonicalize_query, fold_text, search_tokens
 
@@ -70,6 +71,7 @@ _RERANK_SYNONYM_GROUPS = (
     ("giao hang", "ship", "shipping", "mang di", "take away"),
     ("khuyen mai", "giam gia", "voucher", "uu dai"),
     ("thanh toan", "chuyen khoan", "tien mat", "vi dien tu"),
+    ("den tre", "tre gio", "sau gio", "giu toi da"),
 )
 
 # Các từ mô tả thuộc tính không phải là tên sản phẩm. Loại chúng ra khỏi
@@ -987,6 +989,27 @@ class Retriever:
 
         if not mask.any():
             return []
+
+        # "Món đắt/rẻ nhất" là một phép toán trên toàn bộ catalog, không phải
+        # một truy vấn semantic/keyword thông thường. Chọn trực tiếp theo
+        # giá để không trả về vài chunk đầu tiên của menu.
+        price_direction = price_sort_direction(query)
+        if price_direction in {"asc", "desc"}:
+            priced_products: list[tuple[int, int]] = []
+            for index, chunk in enumerate(self.chunks):
+                if not mask[index] or not self._is_product_record(chunk):
+                    continue
+                price = self._product_price(chunk)
+                if price is not None:
+                    priced_products.append((index, price))
+            if price_direction == "desc":
+                priced_products.sort(key=lambda item: (-item[1], item[0]))
+            else:
+                priced_products.sort(key=lambda item: (item[1], item[0]))
+            return [
+                SearchHit(self.chunks[index], 1.0)
+                for index, _ in priced_products[:top_k]
+            ]
 
         # Fact lookup có lexical match mạnh và đã được metadata-filter không cần
         # nạp model embedding. Fast path này loại cold-start và không ảnh hưởng

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 
-from .intent import Intent
+from .intent import Intent, is_booking_query, price_sort_direction
 from .normalize import fold_text, search_tokens
 
 
@@ -167,9 +167,56 @@ def _fact_score(question: str, fact: str) -> float:
         phrase_bonus += 4.0
     if "doi ban" in folded_question and "dieu chinh cho ngoi" in folded_fact:
         phrase_bonus += 4.0
-    if "thue rieng" in folded_question and "cho thue rieng" in folded_fact:
+    if (
+        any(term in folded_question for term in ("thue rieng", "thue ca quan", "thue toan bo"))
+        and "cho thue rieng" in folded_fact
+    ):
         phrase_bonus += 4.0
     return overlap + phrase_bonus
+
+
+def _booking_answer(question: str, blocks: list[tuple[str, str]]) -> str:
+    """Chọn đúng fact đặt bàn thay vì Q/A online có cụm "bàn được giữ"."""
+    folded = fold_text(question)
+    facts = _fact_lines(blocks)
+
+    if re.search(r"\b(den tre|tre gio|giu ban bao lau|bao lau.*giu)\b", folded):
+        fact = next(
+            (
+                item for item in facts
+                if "giu toi da" in fold_text(item) and "15 phut" in fold_text(item)
+            ),
+            None,
+        )
+        if fact:
+            return _clean_business_answer(fact)
+
+    if re.search(r"\b(phi|mat phi|chi phi)\b", folded):
+        fact = next(
+            (
+                item for item in facts
+                if "dat ban" in fold_text(item) and "khong mat phi" in fold_text(item)
+            ),
+            None,
+        )
+        if fact:
+            return _clean_business_answer(fact)
+
+    number = re.search(r"\b(\d+)\s*nguoi\b", folded)
+    if number and int(number.group(1)) > 6:
+        fact = next((item for item in facts if "tren 6 nguoi" in fold_text(item)), None)
+        if fact:
+            return _clean_business_answer(fact)
+
+    if "thong tin" in folded and "dat ban" in folded:
+        fact = next(
+            (item for item in facts if fold_text(item).startswith("thong tin can co")),
+            None,
+        )
+        if fact:
+            return _clean_business_answer(fact)
+
+    return ""
 
 
 def _best_facts(
@@ -424,12 +471,17 @@ def _comparison_answer(blocks: list[tuple[str, str]]) -> str:
     return "So sánh theo menu hiện có: " + ". ".join(rows) + "."
 
 
-def _filter_answer(blocks: list[tuple[str, str]]) -> str:
+def _filter_answer(blocks: list[tuple[str, str]], question: str = "") -> str:
     rows: list[str] = []
     for heading, body in _product_blocks(blocks)[:6]:
         price = _field(body, "Giá") or _field(body, "Giá mẫu")
         display_price = re.sub(r"\s*VND\b", "đ", price, flags=re.I) if price else "chưa có giá"
         rows.append(f"{_display_heading(heading)} ({display_price})")
+    price_direction = price_sort_direction(question)
+    if rows and price_direction == "desc":
+        return f"Món đắt nhất trong menu hiện tại là {rows[0]}."
+    if rows and price_direction == "asc":
+        return f"Món rẻ nhất trong menu hiện tại là {rows[0]}."
     return "Các món phù hợp: " + "; ".join(rows) + "." if rows else ""
 
 
@@ -654,6 +706,10 @@ def build_extractive_answer(prompt_content: str) -> str:
             promotion = _promotion_answer(question, blocks)
             if promotion:
                 return _clean_business_answer(promotion)
+        if intent is Intent.SERVICE_QUERY and is_booking_query(question):
+            booking = _booking_answer(question, blocks)
+            if booking:
+                return booking
         if intent is Intent.WIFI_QUERY:
             folded_question = fold_text(question)
             if any(term in folded_question for term in ("livestream", "4k", "toc do", "chat luong mang")):
@@ -719,7 +775,7 @@ def build_extractive_answer(prompt_content: str) -> str:
         if intent is Intent.PRODUCT_COMPARISON:
             return _comparison_answer(blocks)
         if intent is Intent.PRODUCT_FILTER:
-            return _filter_answer(blocks)
+            return _filter_answer(blocks, question)
         if intent is Intent.PRODUCT_RECOMMENDATION:
             recommendation = _recommendation_answer(blocks)
             if recommendation:

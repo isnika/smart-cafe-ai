@@ -28,6 +28,8 @@ _QUERY_REPLACEMENTS = (
     (re.compile(r"\b(?:onl|online)\b", re.I), "online"),
     (re.compile(r"\b(?:dat|đặt)\s*(?:don|đơn)\b", re.I), "đặt hàng"),
     (re.compile(r"\b(?:bao\s*nhiu|bao\s*nhieu|bi\s*nhiu|bn|bnh)\b", re.I), "bao nhiêu"),
+    # Lỗi đảo phím thường gặp trong "chi phsi"; giữ nguyên ý phí đặt bàn.
+    (re.compile(r"\bphs[ií]\b", re.I), "phí"),
     (re.compile(r"\b(?:mấy\s*đồng|bao\s*nhiêu\s*tiền)\b", re.I), "giá bao nhiêu"),
     (re.compile(r"\b(?:wi[\s-]?fi|wf|wife|internet|mạng)\b", re.I), "wifi"),
     # "mang" không dấu chỉ là mạng khi có ngữ cảnh; không sửa
@@ -48,7 +50,7 @@ _STOP_WORDS = {
 _FOLLOWUP_PHRASES = (
     "bao nhiêu", "giá", "món đó", "món này", "loại đó", "loại kia",
     "cái đó", "cái này", "nó", "còn không", "còn món", "còn loại",
-    "thứ hai", "thứ 2", "vậy", "thế", "còn cái",
+    "thứ hai", "thứ 2", "vậy", "thế", "còn", "còn cái",
     "tại sao", "vì sao", "sao vậy",
     "đóng cửa", "mở cửa",
 )
@@ -116,6 +118,20 @@ def is_contextual_followup(question: str) -> bool:
         _has_phrase(folded, phrase) for phrase in _ATTRIBUTE_FOLLOWUP_PHRASES
     )
     attribute_only = bool(tokens) and all(token in _SHORT_ATTRIBUTE_TOKENS for token in tokens)
+    # "Vậy thì Đến trễ thì giữ bàn bao lâu?" và các câu tương tự đã có
+    # chủ đề + mốc cần tra cứu. Không ghép nguyên lượt trước vào chúng, vì
+    # các từ như "online/website" trong FAQ trước đó có thể át câu hỏi mới.
+    leading_discourse = re.match(r"^\s*(?:vậy|thế)(?:\s+thì)?\s+", canonical)
+    leading_con = re.match(r"^\s*còn\s+", canonical)
+    if leading_discourse or leading_con:
+        remainder = canonical[(leading_discourse or leading_con).end():]
+        remainder_tokens = search_tokens(remainder)
+        if len(remainder_tokens) >= 4 and not any(
+            _has_phrase(fold_text(remainder), phrase)
+            for phrase in _REFERENCE_PHRASES
+            if phrase not in {"vậy", "thế"}
+        ):
+            return False
     # Khi câu đã có tên món (vd. "Matcha Latte có caffeine không?") thì
     # không ghép chủ đề cũ. Câu thuộc tính rút gọn thường chỉ còn 1–2 token.
     return (

@@ -6,7 +6,7 @@ import hashlib
 import logging
 import os
 import re
-from typing import Protocol
+from typing import Callable, Protocol
 
 from src.app.core.config import get_settings
 
@@ -18,6 +18,9 @@ from .intent import (
     classify_compound_intents,
     classify_intent,
     fallback_for_intent,
+    is_booking_detail_submission,
+    is_booking_query,
+    price_sort_direction,
 )
 from .live_data import OperationalDataClient, format_catalog_answer, format_order_answer
 from .llm import ExtractiveLLM, get_llm
@@ -70,6 +73,11 @@ LIVE_STATUS_UNAVAILABLE = (
 ACTION_UNAVAILABLE = (
     "Mình chưa thể thực hiện thao tác này trong cuộc chat vì chưa có kết nối "
     "hệ thống tương ứng. Bạn vui lòng thực hiện trên website hoặc liên hệ nhân viên nhé."
+)
+BOOKING_ACTION_UNAVAILABLE = (
+    "Mình chưa thể thực hiện hoặc xác nhận yêu cầu đặt bàn trong cuộc chat này vì "
+    "chưa có công cụ gửi yêu cầu. Bạn vui lòng gửi qua mục Đặt bàn hoặc Hỗ trợ trên "
+    "website nhé."
 )
 
 # Các intent fact lookup có thể format trực tiếp từ context. Việc không gọi
@@ -463,6 +471,28 @@ def _focus_business_hits(hits: list[SearchHit], intent: Intent) -> list[SearchHi
     return focused[:6] or hits[:1]
 
 
+def _focus_booking_hits(hits: list[SearchHit], question: str) -> list[SearchHit]:
+    """Giữ FAQ/fact đúng ý đặt bàn trước khi format câu trả lời."""
+    folded = fold_text(question)
+    predicates: list[Callable[[str], bool]] = []
+    if re.search(r"\b(den tre|tre gio|giu ban bao lau|bao lau.*giu)\b", folded):
+        predicates.append(lambda text: "giu toi da" in text and "15 phut" in text)
+    elif re.search(r"\b(phi|mat phi|chi phi)\b", folded):
+        predicates.append(lambda text: "dat ban" in text and "khong mat phi" in text)
+    elif re.search(r"\bonline\b|\bwebsite\b", folded):
+        predicates.append(lambda text: "dat ban" in text and "online" in text)
+    elif re.search(r"\bthong tin\b", folded):
+        predicates.append(lambda text: "thong tin can co" in text)
+    elif re.search(r"\b(giu ban|dat ban)\b", folded):
+        predicates.append(lambda text: "dat ban" in text or "giu ban" in text)
+
+    for predicate in predicates:
+        focused = [hit for hit in hits if predicate(fold_text(hit.chunk.text))]
+        if focused:
+            return focused[:4]
+    return hits
+
+
 def _is_live_status_query(question: str, intent: Intent) -> bool:
     folded = fold_text(question)
     if re.search(r"\b(nhan tien|chuyen tien roi|xac nhan giao dich|da nhan)\b", folded):
@@ -504,6 +534,48 @@ def _is_mutating_request(question: str, intent: Intent) -> bool:
     ))
 
 
+def _is_booking_action_request(question: str) -> bool:
+    """Phân biệt yêu cầu thực hiện đặt bàn với câu hỏi về chính sách đặt bàn."""
+    folded = fold_text(question)
+    if not is_booking_query(question):
+        return False
+    if re.search(r"\b(co the|nhan|co)\b.*\b(dat ban|giu ban)\b", folded):
+        return False
+    return bool(
+        re.search(r"\b(muon|xin|can)\s+(?:dat ban|giu ban)\b", folded)
+        or re.search(
+            r"\b(dat ban|giu ban)\b.*\b(cho minh|cho toi|nhom\s*\d+|\d+\s*nguoi|hom nay|toi nay|nhe)\b",
+            folded,
+        )
+    )
+
+
+def _looks_like_booking_details(question: str) -> bool:
+    """Nhận diện slot đặt bàn đã gửi để không hỏi tiếp khi không có tool."""
+    folded = fold_text(question)
+    return bool(
+        re.search(r"\b\d{9,11}\b", folded)
+        or re.search(r"\b\d+\s*nguoi\b", folded)
+        or re.search(r"\b(ngay|thu|luc|gio|h)\b", folded)
+        or ("," in question and len(search_tokens(question)) >= 2)
+    )
+
+
+def _looks_like_complete_booking_submission(question: str) -> bool:
+    """Nhận diện đủ slot đặt bàn ngay cả khi client gửi thiếu history."""
+    return is_booking_detail_submission(question)
+
+
+def _booking_action_answer(question: str) -> str:
+    number = re.search(r"\b(\d+)\s*nguoi\b", fold_text(question))
+    if number and int(number.group(1)) > 6:
+        return (
+            "Nhóm trên 6 người cần nhân viên xác nhận khả năng sắp xếp. "
+            f"{BOOKING_ACTION_UNAVAILABLE}"
+        )
+    return BOOKING_ACTION_UNAVAILABLE
+
+
 def _is_channel_selection(question: str) -> bool:
     folded = fold_text(question)
     return bool(
@@ -523,6 +595,17 @@ def _retrieval_query_for_intent(question: str, intent: Intent) -> str:
     folded = fold_text(question)
     additions: list[str] = []
     if intent is Intent.SERVICE_QUERY:
+        if is_booking_query(question):
+            if re.search(r"\b(den tre|tre gio|giu ban bao lau|bao lau.*giu)\b", folded):
+                additions.append(
+                    "đến trễ sau giờ đã xác nhận bàn được giữ tối đa 15 phút"
+                )
+            elif re.search(r"\b(phi|mat phi|chi phi)\b", folded):
+                additions.append("đặt bàn thông thường không mất phí")
+            else:
+                additions.append(
+                    "đặt bàn nhóm giữ bàn tối đa 15 phút không mất phí Đặt bàn Hỗ trợ"
+                )
         service_aliases = (
             ("bao nhieu cho", "chỗ ngồi khoảng 40 chỗ trong nhà ngoài trời"),
             ("phong rieng", "phòng riêng không gian"),
@@ -535,6 +618,8 @@ def _retrieval_query_for_intent(question: str, intent: Intent) -> str:
             ("thue rieng", "cho thuê riêng toàn bộ không gian"),
             ("gui xe", "chỗ để xe máy phía trước miễn phí"),
             ("hut thuoc", "hút thuốc thuốc lá điện tử trong nhà ngoài trời"),
+            ("thue ca quan", "cho thuê riêng toàn bộ không gian"),
+            ("thue toan bo", "cho thuê riêng toàn bộ không gian"),
         )
         for cue, expansion in service_aliases:
             if cue in folded:
@@ -734,7 +819,10 @@ class RAGPipeline:
                 if live_catalog is None:
                     continue
                 live_answer, live_sources = format_catalog_answer(
-                    decision.intent, live_catalog.products, branch_id
+                    decision.intent,
+                    live_catalog.products,
+                    branch_id,
+                    price_sort_direction(focused_question),
                 )
                 if live_answer:
                     answers.append(live_answer.rstrip(".!? "))
@@ -873,6 +961,19 @@ class RAGPipeline:
                 decision.intent.value,
             )
             return LIVE_STATUS_UNAVAILABLE, []
+        if (
+            decision.intent in {Intent.UNKNOWN, Intent.FOLLOW_UP, Intent.SERVICE_QUERY}
+            and _looks_like_booking_details(question)
+            and (
+                conversation.booking_details_followup
+                or _looks_like_complete_booking_submission(question)
+            )
+        ):
+            logger.info("Booking details received without booking tool; no personal data logged")
+            return _booking_action_answer(question), []
+        if _is_booking_action_request(question):
+            logger.info("Booking action requested without booking tool")
+            return _booking_action_answer(question), []
         if _is_mutating_request(question, decision.intent):
             logger.info(
                 "Chat guard intent=%s branch=mutation_without_tool",
@@ -1115,7 +1216,10 @@ class RAGPipeline:
             )
             if live_catalog is not None:
                 live_answer, live_sources = format_catalog_answer(
-                    decision.intent, live_catalog.products, branch_id
+                    decision.intent,
+                    live_catalog.products,
+                    branch_id,
+                    price_sort_direction(standalone),
                 )
                 live_context = "\n".join(source.content for source in live_sources)
                 live_answer = await self._naturalize(
@@ -1148,6 +1252,8 @@ class RAGPipeline:
             raise
 
         hits = _focus_business_hits(_customer_visible_hits(hits), decision.intent)
+        if decision.intent is Intent.SERVICE_QUERY and is_booking_query(standalone):
+            hits = _focus_booking_hits(hits, standalone)
         if decision.intent is Intent.ORDER_INTENT:
             # ORDER_INTENT metadata is shared by business FAQ chunks. Keep
             # booking-only answers out of an order request's context.
