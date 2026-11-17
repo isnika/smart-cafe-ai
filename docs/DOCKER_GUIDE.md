@@ -54,13 +54,17 @@ Nếu 10 microservices chạy mặc định với JVM Heap tự do, hệ thống
 
 ### Cách 1: Sử dụng Script tự động (Khuyên dùng - Nhanh nhất)
 
+Chạy trong thư mục `smart-cafe-ai/backend`:
+
 #### Trên Windows (PowerShell):
 ```powershell
+cd backend
 .\build-docker.ps1
 ```
 
 #### Trên Linux / macOS / Git Bash:
 ```bash
+cd backend
 chmod +x build-docker.sh
 ./build-docker.sh
 ```

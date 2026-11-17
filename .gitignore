@@ -22,3 +22,9 @@ backend/logs/
 *.postman_collection.json
 backend/tools/
 **/tools/
+
+# Whitelist Docker scripts in backend
+!backend/build-docker.ps1
+!backend/build-docker.sh
+!backend/push-docker.ps1
+!backend/push-docker.sh
