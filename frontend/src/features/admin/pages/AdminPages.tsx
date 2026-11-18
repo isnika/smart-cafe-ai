@@ -657,12 +657,21 @@ function UserForm({ roles, onClose }: { roles: api.Role[]; onClose: () => void }
   const m = useMutation({
     mutationFn: async (input: { user: api.AdminUserInput; profile?: Omit<api.StaffProfileInput, "userId"> }) => {
       const user = await api.createAdminUser(input.user);
-      if (input.profile) await api.createStaffProfile({ ...input.profile, userId: user.id });
+      if (input.profile) {
+        try {
+          await api.createStaffProfile({ ...input.profile, userId: user.id });
+        } catch (error) {
+          // Identity and Store are separate services: the account already exists if
+          // Store rejects the staff profile, so surface that partial outcome clearly.
+          throw new Error(`Tài khoản đã được tạo nhưng chưa gắn chi nhánh/hồ sơ nhân viên: ${displayError(error)}`);
+        }
+      }
       return user;
     },
     onSuccess: () => {
       toast.success("Đã tạo tài khoản");
       void qc.invalidateQueries({ queryKey: keys.users });
+      void qc.invalidateQueries({ queryKey: keys.staffProfiles });
       onClose();
     },
     onError: (e) => setFailure(parseFormFailure(e)),
