@@ -11,6 +11,8 @@ import type {
   Timekeeping,
   TimekeepingCheckInInput,
   TimekeepingCheckOutInput,
+  LeaveRequest,
+  LeaveType,
 } from '@/shared/types';
 import { http } from './http';
 import { guestHeaders } from './guest';
@@ -94,5 +96,13 @@ export const getTableBill = (sessionId: number) => http.get<TableBill>(`${P}/tab
 // Work schedules and staff timekeeping. These are separate from cashier shifts.
 export const getMySchedules = (params: Pick<ListSchedulesParams, 'from' | 'to'>) => http.get<ScheduleView[]>('/schedules/me', { query: params });
 export const getMyTimekeeping = (params: Pick<ListSchedulesParams, 'from' | 'to'> = {}) => http.get<Timekeeping[]>('/timekeeping/me', { query: params });
+export const getMyLeaveRequests = (status?: string) => http.get<LeaveRequest[]>('/leave-requests/me', { query: { status } });
+export const createLeaveRequest = (input: { leaveType: LeaveType; startDate: string; endDate: string; reason: string }) =>
+  http.post<LeaveRequest>('/leave-requests', input, { snake: true });
+export const cancelLeaveRequest = (id: number) => http.post<LeaveRequest>(`/leave-requests/${id}/cancel`);
+export const listLeaveRequests = (params: { branchId?: number; status?: string } = {}) =>
+  http.get<LeaveRequest[]>('/leave-requests', { query: { branch_id: params.branchId, status: params.status } });
+export const decideLeaveRequest = (id: number, input: { status: 'Approved' | 'Rejected'; decisionNote?: string }) =>
+  http.patch<LeaveRequest>(`/leave-requests/${id}/decision`, { status: input.status }, { snake: true });
 export const checkIn = (input: TimekeepingCheckInInput) => http.post<Timekeeping>('/timekeeping/check-in', input, { snake: true });
 export const checkOut = (input: TimekeepingCheckOutInput) => http.post<Timekeeping>('/timekeeping/check-out', input, { snake: true });
