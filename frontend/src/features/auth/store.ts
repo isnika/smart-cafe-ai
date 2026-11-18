@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { identityApi } from '@/shared/api';
 import { changeOnlineCartOwner, useOnlineCartStore } from '@/features/online-order/store';
-import { changeOnlineCartOwner, useOnlineCartStore } from '@/features/online-order/store';
 import type { AuthSession, LoginInput, RoleName, User } from '@/shared/types';
 
 /**
@@ -161,8 +160,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const roleName = identityApi.roleFromUser(user) ?? get().roleName;
       if (!roleName) throw new Error('API /users/me không trả về vai trò hợp lệ');
       const branchId = get().branchId;
-      changeOnlineCartOwner(roleName === 'Customer' ? user.id : null);
-      if (roleName === 'Customer') useOnlineCartStore.setState({ syncStatus: 'loading' });
       changeOnlineCartOwner(roleName === 'Customer' ? user.id : null);
       if (roleName === 'Customer') useOnlineCartStore.setState({ syncStatus: 'loading' });
       save({ accessToken: token, refreshToken: get().refreshToken, roleName, branchId });

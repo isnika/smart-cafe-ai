@@ -1,5 +1,5 @@
 import { buildLineKey, type DineInCartLine } from '@/features/dine-in/cart';
-import { ApiError, isApiError, isApiError, orderApi } from '@/shared/api';
+import { ApiError, isApiError, orderApi } from '@/shared/api';
 import type { OnlineCartCtx, QrCart, QrCartItem } from '@/shared/api/order';
 import type { OnlineFulfillment } from './store';
 import { useAuthStore } from '@/features/auth/store';
