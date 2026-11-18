@@ -20,6 +20,8 @@ public final class Requests {
         public ItemUpdate { options=options==null?List.of():options; }
     }
     public record CartCreate(@NotNull Source cartSource,@NotNull @Positive Integer branchId,@NotNull Fulfillment fulfillmentType) {}
+    public record CartMerge(@NotNull @Positive Integer branchId,@NotNull Fulfillment fulfillmentType,
+                            @NotNull @Size(max=100) List<@NotNull @Valid Item> items) {}
     public record CreateOrder(@Positive Long cartId,@NotNull Source orderSource,@NotNull Fulfillment fulfillmentType,
             @NotNull @Positive Integer branchId,@Size(max=36) String userId,@Positive Long tableSessionId,
             @Size(max=100) String deliveryName,@Size(max=20) String deliveryPhone,@Size(max=255) String deliveryAddress,

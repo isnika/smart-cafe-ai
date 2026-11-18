@@ -73,6 +73,43 @@ public class CartService {
         var s=dependencies.sessionByCode(context.sessionCode());OrderPolicy.active(s,writing);return s;
     }
     public Object get(Source source,Context context){return view(current(source,context,false),true);}
+    /** Merge uses max quantities for identical selections: retrying after a lost response is safe. */
+    public Object merge(CartMerge request,Context context){
+        String user=access.customer(context).userId();
+        var found=carts.findByUserIdAndCartSourceAndStatus(user,Source.Online,CartStatus.Active);
+        Cart cart;
+        if(found.isPresent()) cart=carts.lock(found.get().id).orElseThrow(ApiException::missing);
+        else {
+            OrderPolicy.shape(Source.Online,request.fulfillmentType());
+            OrderPolicy.branch(dependencies.branch(request.branchId()),Source.Online);
+            cart=new Cart();cart.cartSource=Source.Online;cart.branchId=request.branchId();cart.fulfillmentType=request.fulfillmentType();cart.userId=user;
+            carts.saveAndFlush(cart);
+        }
+        if(cart.status!=CartStatus.Active)throw ApiException.conflict("CART_NOT_ACTIVE","Giỏ không còn hoạt động.");
+        var incoming=new LinkedHashMap<String,Item>();
+        for(var line:request.items()){
+            validateOptions(line.options());
+            String key=mergeKey(line.variantId(),line.note(),line.options());
+            var previous=incoming.putIfAbsent(key,line);
+            if(previous!=null)throw ApiException.invalid("Các dòng giỏ khách không được trùng nhau.");
+        }
+        if(!request.items().isEmpty()){
+            OrderPolicy.branch(dependencies.branch(cart.branchId),Source.Online);
+            dependencies.resolve(cart.branchId,request.items());
+        }
+        for(var line:incoming.entrySet()){
+            var existing=cart.items.stream().filter(i->mergeKey(i.variantId,i.note,i.options.stream().map(o->new Option(o.optionId,o.quantity)).toList()).equals(line.getKey())).findFirst();
+            if(existing.isPresent())existing.get().quantity=Math.max(existing.get().quantity,line.getValue().quantity());
+            else {
+                if(cart.items.size()>=100)throw ApiException.invalid("Giỏ có tối đa 100 dòng.");
+                var item=new CartItem();item.cart=cart;item.variantId=line.getValue().variantId();item.quantity=line.getValue().quantity();item.note=line.getValue().note();setOptions(item,line.getValue().options());cart.items.add(item);
+            }
+        }
+        cart.touch();carts.flush();return view(cart,true);
+    }
+    private String mergeKey(Integer variant,String note,List<Option> options){
+        return variant+"|"+(note==null?"":note.trim())+"|"+options.stream().sorted(Comparator.comparing(Option::optionId)).map(o->o.optionId()+":"+o.quantity()).toList();
+    }
     public Object add(Source source,Item request,Context context){
         var cart=current(source,context,true);if(cart.items.size()>=100)throw ApiException.invalid("Giỏ có tối đa 100 dòng.");
         validateOptions(request.options());OrderPolicy.branch(dependencies.branch(cart.branchId),source);
@@ -100,7 +137,7 @@ public class CartService {
             BigDecimal total=BigDecimal.ZERO;var rows=new ArrayList<Object>();
             for(int i=0;i<lines.size();i++){var r=resolved.get(i);var options=r.options().stream().map(o->o.extraPrice().multiply(BigDecimal.valueOf(o.quantity()))).reduce(BigDecimal.ZERO,BigDecimal::add);
                 var line=r.price().add(options).multiply(BigDecimal.valueOf(lines.get(i).quantity()));total=total.add(line);
-                rows.add(Map.of("cart_item_id",cart.items.get(i).id,"product_name",r.productName(),"variant_name",r.variantName(),"unit_price",r.price(),"options_unit_total",options,"line_total",line));
+                rows.add(Map.of("cart_item_id",cart.items.get(i).id,"product_id",r.productId(),"product_name",r.productName(),"variant_name",r.variantName(),"unit_price",r.price(),"options_unit_total",options,"line_total",line,"options",r.options()));
             }data.put("pricing",Map.of("sub_total",total,"items",rows));
         }
         return data;
