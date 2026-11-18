@@ -61,7 +61,7 @@ it('does not upload in-flight or queued products from A under B credentials', as
   let entered!: () => void;
   const gate = new Promise<void>((resolve) => { release = resolve; });
   const started = new Promise<void>((resolve) => { entered = resolve; });
-  const ensure = vi.spyOn(orderApi, 'ensureCart').mockImplementation(async () => {
+  const getCart = vi.spyOn(orderApi, 'getCurrentCart').mockImplementation(async () => {
     entered();
     await gate;
     return cartA;
@@ -77,7 +77,7 @@ it('does not upload in-flight or queued products from A under B credentials', as
   expect(await active).toMatchObject({ code: 'ACCOUNT_CHANGED' });
   expect(await queued).toMatchObject({ code: 'ACCOUNT_CHANGED' });
   expect(await syncOnlineCart(args).catch((error: unknown) => error)).toMatchObject({ code: 'ACCOUNT_CHANGED' });
-  expect(ensure).toHaveBeenCalledOnce();
+  expect(getCart).toHaveBeenCalledOnce();
   expect(add).not.toHaveBeenCalled();
   expect(useOnlineCartStore.getState().lines).toEqual([]);
 });
@@ -88,25 +88,26 @@ it('discards legacy unowned products instead of migrating them into a new Google
     lines: useOnlineCartStore.getState().lines, fulfillmentType: 'Delivery', voucherCode: 'OLD',
     delivery: { receiverName: 'Previous user', phone: '0901234567', addressLine: 'Private address' },
   } }));
+  useOnlineCartStore.setState({ ownerId: null, lines: [], fulfillmentType: null, voucherCode: null, delivery: null });
   await useOnlineCartStore.persist.rehydrate();
   signIn('u-customer2');
   expect(useOnlineCartStore.getState()).toMatchObject({ ownerId: 'u-customer2', lines: [], voucherCode: null, delivery: null });
 });
 
-it('restores the correct owner after rehydrating browser storage and switching accounts', async () => {
+it('does not persist account carts across browser storage rehydration', async () => {
   signIn('u-customer');
   useOnlineCartStore.getState().addLine(latte, 2);
   signIn('u-customer2');
   useOnlineCartStore.getState().addLine({ ...latte, note: 'Only B' });
   signIn('u-customer');
-  const persisted = localStorage.getItem('smartcafe.online-cart.v1')!;
+  const persisted = localStorage.getItem('smartcafe.online-cart.v2')!;
   useOnlineCartStore.setState({ ownerId: null, savedCarts: {}, lines: [] });
-  localStorage.setItem('smartcafe.online-cart.v1', persisted);
+  localStorage.setItem('smartcafe.online-cart.v2', persisted);
   await useOnlineCartStore.persist.rehydrate();
-  expect(useOnlineCartStore.getState().ownerId).toBe('u-customer');
-  expect(useOnlineCartStore.getState().lines[0]?.quantity).toBe(2);
+  expect(useOnlineCartStore.getState().ownerId).toBeNull();
+  expect(useOnlineCartStore.getState().lines).toEqual([]);
   signIn('u-customer2');
-  expect(useOnlineCartStore.getState().lines[0]).toMatchObject({ quantity: 1, note: 'Only B' });
+  expect(useOnlineCartStore.getState().lines).toEqual([]);
 });
 
 it('keeps genuinely anonymous shopping items when signing in for checkout', () => {

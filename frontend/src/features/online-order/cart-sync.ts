@@ -1,8 +1,8 @@
 import { buildLineKey, type DineInCartLine } from '@/features/dine-in/cart';
-import { ApiError, orderApi } from '@/shared/api';
-import { useAuthStore } from '@/features/auth/store';
+import { ApiError, isApiError, orderApi } from '@/shared/api';
 import type { OnlineCartCtx, QrCart, QrCartItem } from '@/shared/api/order';
 import type { OnlineFulfillment } from './store';
+import { useAuthStore } from '@/features/auth/store';
 
 /**
  * Đồng bộ giỏ Online (UI cache cục bộ) → giỏ server-side của user (POST/GET /carts, …/items?source=Online, Bearer).
@@ -56,14 +56,19 @@ export function resetOnlineCartSync(): void {
 }
 
 async function sync({ fulfillmentType, branchId, lines, userId }: SyncArgs, assertAccount: () => void): Promise<QrCart> {
-  if (userId !== undefined && useAuthStore.getState().user?.id !== userId) throw accountChanged();
+  if (!useAuthStore.getState().user?.id || (userId !== undefined && useAuthStore.getState().user?.id !== userId)) throw accountChanged();
   const ctx: OnlineCartCtx = { source: 'Online', fulfillmentType };
-  let cart = await orderApi.ensureCart(ctx, branchId);
+  let cart: QrCart | undefined;
+  try { cart = await orderApi.getCurrentCart(ctx); }
+  catch (e) { if (!isApiError(e) || e.status !== 404) throw e; }
   assertAccount();
   // Online chỉ có MỘT giỏ Active/user: đổi Giao hàng ↔ Mang đi hoặc đổi chi nhánh → bỏ giỏ cũ, mở giỏ mới đúng ngữ cảnh.
-  if (cart.fulfillmentType !== fulfillmentType || cart.branchId !== branchId) {
+  if (cart && (cart.fulfillmentType !== fulfillmentType || cart.branchId !== branchId)) {
     await orderApi.clearCart(ctx);
     assertAccount();
+    cart = undefined;
+  }
+  if (!cart) {
     cart = await orderApi.ensureCart(ctx, branchId);
     assertAccount();
   }
@@ -74,6 +79,7 @@ async function sync({ fulfillmentType, branchId, lines, userId }: SyncArgs, asse
   let changed = false;
   const seen = new Set<string>();
   for (const it of cart.items) {
+    assertAccount();
     const sig = sigOfItem(it);
     const line = wanted.get(sig);
     if (!line || seen.has(sig)) {
@@ -95,6 +101,7 @@ async function sync({ fulfillmentType, branchId, lines, userId }: SyncArgs, asse
     }
   }
   for (const [sig, line] of wanted) {
+    assertAccount();
     if (seen.has(sig)) continue;
     await orderApi.addCartItem(ctx, {
       variantId: line.variantId,
@@ -106,6 +113,7 @@ async function sync({ fulfillmentType, branchId, lines, userId }: SyncArgs, asse
     changed = true;
   }
   // Xoá dòng trả 204 không body → lấy lại giỏ để có pricing◇ mới nhất.
+  assertAccount();
   return changed ? orderApi.getCurrentCart(ctx) : cart;
 }
 
