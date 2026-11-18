@@ -6,6 +6,7 @@ import { StickyActionBar } from '@/features/dine-in/components/StickyActionBar';
 import { formatVnd } from '@/shared/lib';
 import { Button } from '@/shared/ui';
 import { PriceSummary } from '../components/PriceSummary';
+import { VoucherBox } from '../components/VoucherBox';
 import { useOnlinePricing } from '../hooks/usePricing';
 import { useOnlineCartStore } from '../store';
 import { describeLine, lineTotal, type DineInCartLine } from '@/features/dine-in/cart';
@@ -110,6 +111,7 @@ export default function OnlineCartPage() {
               Tóm tắt đơn hàng
             </h2>
             <PriceSummary totals={totals} showDeliveryFee={fulfillmentType === 'Delivery'} />
+            <VoucherBox appliedCode={pricing.appliedCode} message={pricing.voucherMessage} />
             {(pricing.branchBlock ?? pricing.cartError) && (
               <p role="alert" className="mt-2 text-caption text-error-strong">
                 {pricing.branchBlock ?? pricing.cartError}

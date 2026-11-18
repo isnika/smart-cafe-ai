@@ -15,10 +15,11 @@ interface Props {
   onAdd: (line: NewCartLine, quantity: number) => void;
   initialLine?: DineInCartLine | null;
   onUpdate?: (line: NewCartLine) => void;
+  branchId?: number;
 }
 
-export function ProductOptionsModal({ product, onClose, onAdd, initialLine, onUpdate }: Props) {
-  const detail = useProductDetail(product?.id ?? null, DINE_IN_BRANCH_ID);
+export function ProductOptionsModal({ product, onClose, onAdd, initialLine, onUpdate, branchId = DINE_IN_BRANCH_ID }: Props) {
+  const detail = useProductDetail(product?.id ?? null, branchId);
   return (
     <Modal open={product !== null} onClose={onClose} title={product?.name ?? ""}>
       {detail.isPending && (

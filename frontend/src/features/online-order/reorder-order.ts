@@ -5,7 +5,6 @@ import { useAuthStore } from '@/features/auth/store';
 import type { OnlineCartCtx, QrCart, QrCartItem, QrCartItemInput } from '@/shared/api/order';
 import type { OrderItemDetail } from '@/shared/types';
 import { runOnlineCartExclusive } from './cart-sync';
-import { ONLINE_BRANCH_ID } from './config';
 import { useOnlineCartStore, type OnlineFulfillment } from './store';
 
 /**
@@ -196,6 +195,8 @@ function mirrorServerCart(cart: QrCart, fulfillmentType: OnlineFulfillment, plan
   const store = useOnlineCartStore.getState();
   store.clearOrder();
   store.setFulfillment(fulfillmentType);
+  store.setBranch(cart.branchId);
+  useOnlineCartStore.setState({ fulfillmentType, branchId: cart.branchId });
   for (const item of cart.items) {
     const key = buildLineKey({
       variantId: item.variantId,
@@ -231,6 +232,7 @@ export async function reorderOnlineOrder(orderId: number, options: ReorderOption
   if (!canReorder(order)) return result({ status: 'not_reorderable', orderId });
 
   const fulfillmentType = reorderFulfillment(order);
+  const branchId = order.branchId;
   const { lines, skipped } = planLines(order.items);
   if (lines.length === 0) return result({ status: 'nothing_to_reorder', orderId, fulfillmentType, skipped });
 
@@ -244,10 +246,10 @@ export async function reorderOnlineOrder(orderId: number, options: ReorderOption
       return result({ status: 'blocked', orderId, fulfillmentType, skipped, existingCartItemCount: existingCount });
     }
     // Giỏ Online chỉ có MỘT giỏ Active/user → giỏ cũ có món hoặc sai ngữ cảnh thì bỏ, mở giỏ mới (như cart-sync).
-    if (existing && (existingCount > 0 || existing.fulfillmentType !== fulfillmentType || existing.branchId !== ONLINE_BRANCH_ID)) {
+    if (existing && (existingCount > 0 || existing.fulfillmentType !== fulfillmentType || existing.branchId !== branchId)) {
       await orderApi.clearCart(ctx);
     }
-    await orderApi.ensureCart(ctx, ONLINE_BRANCH_ID);
+    await orderApi.ensureCart(ctx, branchId);
 
     const added: ReorderLineRef[] = [];
     const failed: ReorderFailure[] = [];

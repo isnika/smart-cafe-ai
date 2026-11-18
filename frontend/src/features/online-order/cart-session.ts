@@ -1,7 +1,6 @@
 import { buildLineKey, cartToLines, type LineDisplayMeta } from '@/features/dine-in/cart';
 import { useAuthStore } from '@/features/auth/store';
 import { isApiError, orderApi } from '@/shared/api';
-import { ONLINE_BRANCH_ID } from './config';
 import { clearPendingGuestCart, useOnlineCartStore } from './store';
 import { runOnlineCartExclusive } from './cart-sync';
 
@@ -17,13 +16,15 @@ export async function loadOnlineCartSession(userId: string): Promise<void> {
       const lines = state.lines;
       const snapshot = JSON.stringify(lines);
       const fulfillment = state.fulfillmentType ?? 'Pickup';
+      const branchId = state.branchId;
       const ctx = { source: 'Online' as const, fulfillmentType: fulfillment };
       let cart;
       try { cart = await orderApi.getCurrentCart(ctx); }
       catch (e) { if (!isApiError(e) || e.status !== 404) throw e; }
+      if (cart) useOnlineCartStore.setState({ branchId: cart.branchId });
       if (!current()) return;
-      if (!cart && lines.length) {
-        await orderApi.ensureCart(ctx, ONLINE_BRANCH_ID);
+      if (!cart && lines.length && branchId !== null) {
+        await orderApi.ensureCart(ctx, branchId);
         if (!current()) return;
         cart = await orderApi.getCurrentCart(ctx);
       }
@@ -94,7 +95,7 @@ export async function loadOnlineCartSession(userId: string): Promise<void> {
         return { ...line, key: occurrence === 1 ? signature : `${signature}#${cart!.items[index]!.id}` };
       });
       clearPendingGuestCart(userId);
-      useOnlineCartStore.setState({ lines: result, fulfillmentType: cart.fulfillmentType === 'Delivery' ? 'Delivery' : 'Pickup', syncStatus: 'ready' });
+      useOnlineCartStore.setState({ lines: result, fulfillmentType: cart.fulfillmentType === 'Delivery' ? 'Delivery' : 'Pickup', branchId: cart.branchId, syncStatus: 'ready' });
       return;
     }
   } catch {

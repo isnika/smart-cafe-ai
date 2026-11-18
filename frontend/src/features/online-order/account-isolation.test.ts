@@ -88,7 +88,7 @@ it('discards legacy unowned products instead of migrating them into a new Google
     lines: useOnlineCartStore.getState().lines, fulfillmentType: 'Delivery', voucherCode: 'OLD',
     delivery: { receiverName: 'Previous user', phone: '0901234567', addressLine: 'Private address' },
   } }));
-  useOnlineCartStore.setState({ ownerId: null, lines: [], fulfillmentType: null, voucherCode: null, delivery: null });
+  useOnlineCartStore.setState({ ownerId: null, lines: [], fulfillmentType: null, branchId: null, voucherCode: null, delivery: null });
   await useOnlineCartStore.persist.rehydrate();
   signIn('u-customer2');
   expect(useOnlineCartStore.getState()).toMatchObject({ ownerId: 'u-customer2', lines: [], voucherCode: null, delivery: null });

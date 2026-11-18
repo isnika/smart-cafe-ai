@@ -55,6 +55,7 @@ export function ProductDetailView({ detail, categoryName }: Props) {
   const [quantity, setQuantity] = useState(1);
 
   const fulfillment = useOnlineCartStore((s) => s.fulfillmentType);
+  const branchId = useOnlineCartStore((s) => s.branchId);
   const addLine = useOnlineCartStore((s) => s.addLine);
 
   const variant = variants.find((v) => v.id === variantId) ?? null;
@@ -64,7 +65,7 @@ export function ProductDetailView({ detail, categoryName }: Props) {
   const total = draft ? lineUnitTotal(draft) * quantity : 0;
   const shownPrice = variant?.price ?? (variants.length > 0 ? Math.min(...variants.map((v) => v.price)) : null);
 
-  const canAdd = !soldOut && draft !== null && !missing;
+  const canAdd = branchId !== null && !soldOut && draft !== null && !missing;
   const buttonLabel = soldOut ? "Hết hàng" : missing ? `Chọn ${missing.name}` : `Thêm vào giỏ • ${formatVnd(total)}`;
 
   const change = <T,>(setter: (value: T) => void) => (value: T) => {
@@ -72,6 +73,11 @@ export function ProductDetailView({ detail, categoryName }: Props) {
   };
 
   const handleAdd = () => {
+    if (branchId === null) {
+      toast.error('Vui lòng chọn chi nhánh trước khi thêm món.');
+      navigate(PATHS.menu);
+      return;
+    }
     if (!canAdd || !draft) return;
     addLine(draft, quantity);
     toast.success(`Đã thêm ${quantity} ${detail.name} vào giỏ hàng`, {

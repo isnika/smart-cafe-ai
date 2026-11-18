@@ -12,10 +12,11 @@ import { loadOnlineCartSession } from '../cart-session';
 
 /** Chi nhánh phục vụ đơn Online (GET /branches/{id}, công khai): phí giao hàng, accepts_online_orders, delivery_radius_km. */
 export function useOnlineBranch(enabled: boolean) {
+  const branchId = useOnlineCartStore((s) => s.branchId);
   return useQuery({
-    queryKey: ['store', 'branch', ONLINE_BRANCH_ID],
-    enabled,
-    queryFn: () => storeApi.getBranch(ONLINE_BRANCH_ID),
+    queryKey: ['store', 'branch', branchId],
+    enabled: enabled && branchId !== null,
+    queryFn: () => storeApi.getBranch(branchId!),
   });
 }
 
@@ -27,6 +28,7 @@ export function useOnlineBranch(enabled: boolean) {
  */
 export function useOnlinePricing() {
   const fulfillmentType = useOnlineCartStore((s) => s.fulfillmentType);
+  const branchId = useOnlineCartStore((s) => s.branchId);
   const lines = useOnlineCartStore((s) => s.lines);
   const voucherCode = useOnlineCartStore((s) => s.voucherCode);
   const delivery = useOnlineCartStore((s) => s.delivery);
@@ -37,22 +39,22 @@ export function useOnlinePricing() {
   const isDelivery = fulfillmentType === 'Delivery';
   const signedIn = !!userId && roleName === 'Customer';
 
-  const branch = useOnlineBranch(fulfillmentType !== null && lines.length > 0);
+  const branch = useOnlineBranch(branchId !== null && fulfillmentType !== null && lines.length > 0);
   const destination =
     delivery && typeof delivery.latitude === 'number' && typeof delivery.longitude === 'number'
       ? { latitude: delivery.latitude, longitude: delivery.longitude }
       : null;
   const branchBlock = branch.data && fulfillmentType ? onlineBranchBlock(branch.data, { fulfillmentType, destination }) : null;
 
-  const useServerCart = signedIn && syncStatus === 'ready' && fulfillmentType !== null && lines.length > 0 && !branchBlock && branch.isSuccess;
+  const useServerCart = signedIn && syncStatus === 'ready' && branchId !== null && fulfillmentType !== null && lines.length > 0 && !branchBlock && branch.isSuccess;
   const cart = useQuery({
-    queryKey: ['online-cart', userId, fulfillmentType, JSON.stringify(toOrderLines(lines))],
+    queryKey: ['online-cart', userId, branchId, fulfillmentType, JSON.stringify(toOrderLines(lines))],
     enabled: useServerCart,
     // Đồng bộ giỏ là thao tác reconcile (GET rồi PUT/DELETE/POST theo trạng thái hiện tại), có thể chạy lại an toàn sau 5xx tạm thời.
     retry: (failureCount, error) => failureCount < 1 && isTransientServerError(error),
     retryDelay: 500,
     staleTime: 0,
-    queryFn: () => syncOnlineCart({ fulfillmentType: fulfillmentType!, branchId: ONLINE_BRANCH_ID, lines, userId }),
+    queryFn: () => syncOnlineCart({ fulfillmentType: fulfillmentType!, branchId: branchId!, lines, userId }),
   });
 
   const subTotal = cart.data?.pricing?.subTotal ?? calcSubTotal(lines);
@@ -64,7 +66,7 @@ export function useOnlinePricing() {
     queryFn: () =>
       engagementApi.validateVoucher({
         code: voucherCode!,
-        branchId: ONLINE_BRANCH_ID,
+        branchId: branchId ?? ONLINE_BRANCH_ID,
         fulfillmentType: fulfillmentType!,
         subTotal,
         ...(userId ? { userId } : {}),
@@ -86,6 +88,7 @@ export function useOnlinePricing() {
 
   return {
     fulfillmentType,
+    branchId,
     lines,
     itemCount: countItems(lines),
     totals,
@@ -94,7 +97,7 @@ export function useOnlinePricing() {
     voucherMessage: voucherOn && voucherCode && quote && !quote.valid ? (quote.message ?? 'Mã giảm giá không hợp lệ') : null,
     /** false khi còn thiếu dữ liệu để tính tổng (đang tải chi nhánh / đồng bộ giỏ / kiểm tra mã) hoặc chi nhánh không phục vụ → chặn bấm tiếp. */
     ready:
-      (fulfillmentType === null || branch.isSuccess) &&
+      (branchId === null || fulfillmentType === null || branch.isSuccess) &&
       (!signedIn || syncStatus === 'ready') &&
       !branchBlock &&
       (!useServerCart || cart.isSuccess) &&

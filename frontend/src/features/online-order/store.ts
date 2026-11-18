@@ -27,6 +27,7 @@ interface CartSnapshot {
   syncStatus: 'ready' | 'loading' | 'error';
   /** null = khách đang duyệt món/chỉnh giỏ, chưa chọn cách nhận hàng. */
   fulfillmentType: OnlineFulfillment | null;
+  branchId: number | null;
   lines: DineInCartLine[];
   /** Mã đã được người dùng nhập; mức giảm thật luôn do server (validate) trả, không lưu ở đây. */
   voucherCode: string | null;
@@ -41,6 +42,7 @@ interface OnlineCartState extends CartSnapshot {
   bindOwner: (ownerId: string | null) => void;
 
   setFulfillment: (type: OnlineFulfillment | null) => void;
+  setBranch: (branchId: number | null) => void;
   addLine: (line: NewCartLine, quantity?: number) => void;
   increment: (key: string) => void;
   decrement: (key: string) => void;
@@ -53,10 +55,10 @@ interface OnlineCartState extends CartSnapshot {
 }
 
 const clamp = (n: number) => Math.min(MAX_LINE_QUANTITY, n);
-const emptyCart = (): CartSnapshot => ({ ownerId: null, syncStatus: 'ready', fulfillmentType: null, lines: [], voucherCode: null, delivery: null });
+const emptyCart = (): CartSnapshot => ({ ownerId: null, syncStatus: 'ready', fulfillmentType: null, branchId: null, lines: [], voucherCode: null, delivery: null });
 const cartSnapshot = (state: CartSnapshot): CartSnapshot => ({
   ownerId: state.ownerId, syncStatus: state.syncStatus,
-  fulfillmentType: state.fulfillmentType, lines: state.lines,
+  fulfillmentType: state.fulfillmentType, branchId: state.branchId, lines: state.lines,
   voucherCode: state.voucherCode, delivery: state.delivery,
 });
 const ownerKey = (id: string | null) => id === null ? 'guest' : `user:${id}`;
@@ -67,6 +69,7 @@ export const useOnlineCartStore = create<OnlineCartState>()(persist((set) => ({
   savedCarts: {},
   syncStatus: 'ready',
   fulfillmentType: null,
+  branchId: null,
   lines: [],
   voucherCode: null,
   delivery: null,
@@ -82,6 +85,12 @@ export const useOnlineCartStore = create<OnlineCartState>()(persist((set) => ({
   }),
 
   setFulfillment: (fulfillmentType) => set({ fulfillmentType }),
+  setBranch: (branchId) => set((state) => {
+    if (branchId === state.branchId) return state;
+    if (branchId === null) return { branchId, lines: [], fulfillmentType: null, voucherCode: null, delivery: null };
+    const savedCarts = { ...state.savedCarts, [ownerKey(state.ownerId)]: cartSnapshot(state) };
+    return { ...emptyCart(), ownerId: state.ownerId, syncStatus: 'ready', branchId, savedCarts };
+  }),
 
   addLine: (line, quantity = 1) => {
     if (!Number.isInteger(quantity) || quantity < 1) return;
@@ -123,6 +132,7 @@ export const useOnlineCartStore = create<OnlineCartState>()(persist((set) => ({
   partialize: (state) => ({
     ownerId: null,
     fulfillmentType: state.ownerId ? null : state.fulfillmentType,
+    branchId: state.ownerId ? null : state.branchId,
     lines: state.ownerId ? [] : state.lines,
     voucherCode: state.ownerId ? null : state.voucherCode,
     delivery: state.ownerId ? null : state.delivery,

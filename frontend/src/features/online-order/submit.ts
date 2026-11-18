@@ -78,10 +78,11 @@ export function resetOnlineSubmitState(): void {
  */
 export function placeOnlineOrder(opts: { note?: string; voucherCode?: string; method?: PaymentChoice } = {}): Promise<OrderDetail> {
   if (useOnlineCartStore.getState().syncStatus !== 'ready') return Promise.reject(new SubmitOrderError('CART_SYNC_PENDING', 'Vui lòng đồng bộ giỏ hàng trước khi đặt hàng.'));
-  const { fulfillmentType, lines, delivery } = useOnlineCartStore.getState();
+  const { fulfillmentType, branchId, lines, delivery } = useOnlineCartStore.getState();
   if (fulfillmentType === null) {
     return Promise.reject(new SubmitOrderError('NO_FULFILLMENT', 'Vui lòng chọn Giao hàng hoặc Mang đi.'));
   }
+  if (branchId === null) return Promise.reject(new SubmitOrderError('NO_BRANCH', 'Vui lòng chọn chi nhánh trước khi đặt hàng.'));
   if (lines.length === 0) return Promise.reject(new SubmitOrderError('EMPTY_CART', 'Giỏ hàng đang trống.'));
 
   const { user, roleName } = useAuthStore.getState();
@@ -98,7 +99,7 @@ export function placeOnlineOrder(opts: { note?: string; voucherCode?: string; me
 
   const voucherCode = isVoucherEnabled() ? opts.voucherCode : undefined;
   const signature = JSON.stringify([
-    user.id, fulfillmentType, toOrderLines(lines), fulfillmentType === 'Delivery' ? normalizedDelivery : null,
+    user.id, branchId, fulfillmentType, toOrderLines(lines), fulfillmentType === 'Delivery' ? normalizedDelivery : null,
     opts.note?.trim() ?? '', voucherCode ?? '', opts.method ?? '',
   ]);
   if (inflight?.signature === signature) return inflight.promise;
@@ -109,7 +110,7 @@ export function placeOnlineOrder(opts: { note?: string; voucherCode?: string; me
   };
 
   const run = async (): Promise<OrderDetail> => {
-    const branch = await storeApi.getBranch(ONLINE_BRANCH_ID);
+    const branch = await storeApi.getBranch(branchId);
     assertAccount();
     const destination =
       delivery && typeof delivery.latitude === 'number' && typeof delivery.longitude === 'number'
@@ -120,7 +121,7 @@ export function placeOnlineOrder(opts: { note?: string; voucherCode?: string; me
 
     const current = attemptFor(signature);
     if (current.cartId === null) {
-      const cart = await syncOnlineCart({ fulfillmentType, branchId: ONLINE_BRANCH_ID, lines: snapshot(lines), userId: user.id });
+      const cart = await syncOnlineCart({ fulfillmentType, branchId, lines: snapshot(lines), userId: user.id });
       assertAccount();
       current.cartId = cart.id;
       current.branchId = cart.branchId;
@@ -128,7 +129,7 @@ export function placeOnlineOrder(opts: { note?: string; voucherCode?: string; me
 
     const input = buildOnlineOrderInput({
       cartId: current.cartId,
-      branchId: current.branchId ?? ONLINE_BRANCH_ID,
+      branchId: current.branchId ?? branchId,
       fulfillmentType,
       ...(normalizedDelivery ? { delivery: normalizedDelivery } : {}),
       ...(opts.note ? { note: opts.note } : {}),

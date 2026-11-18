@@ -31,7 +31,7 @@ export function resetWorld(): void {
   resetDb();
   resetOnlineSubmitState();
   resetOnlineCartSync();
-  useOnlineCartStore.setState({ ownerId: null, savedCarts: {}, fulfillmentType: null, lines: [], voucherCode: null, delivery: null });
+  useOnlineCartStore.setState({ ownerId: null, savedCarts: {}, fulfillmentType: null, branchId: null, lines: [], voucherCode: null, delivery: null });
   mockConfig.latencyMs = 0;
   mockConfig.enforceAuth = false;
   resetSubmitState();

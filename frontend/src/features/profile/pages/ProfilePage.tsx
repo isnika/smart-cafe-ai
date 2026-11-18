@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, type SyntheticEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Camera, Check, ChevronRight, Gift, MapPin, Pencil, Plus, Trash2, UserRound, Bell, FileText, LockKeyhole, Download, BadgeCheck, Phone } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -36,6 +36,7 @@ export default function ProfilePage() {
   const [phoneError, setPhoneError] = useState('');
   const [phoneNotice, setPhoneNotice] = useState('');
   const [phoneBusy, setPhoneBusy] = useState(false);
+  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
   const addresses = useQuery({ queryKey: ['identity', 'addresses', user?.id], enabled: !!user?.id, queryFn: () => identityApi.listAddresses() });
   const loyalty = useQuery({ queryKey: ['engagement', 'loyalty', user?.id], enabled: !!user?.id, queryFn: () => engagementApi.getLoyaltySummary() });
   const transactions = useQuery({ queryKey: ['engagement', 'loyalty-transactions', user?.id], enabled: !!user?.id, queryFn: () => engagementApi.getLoyaltyTransactions(1, 5) });
@@ -104,8 +105,8 @@ export default function ProfilePage() {
   return <div className="min-h-screen bg-primary-50 pb-8">
     <PageHeader title="Trang cá nhân" back={PATHS.home} />
     <section className="flex items-center gap-4 border-b border-gray-100 bg-white px-5 py-5">
-      <div className="relative grid size-20 shrink-0 place-items-center rounded-md bg-primary-100 text-primary-700">
-        {user?.avatar ? <img src={user.avatar} alt="Ảnh đại diện" className="size-full rounded-md object-cover" /> : <UserRound className="size-9" aria-hidden />}
+      <div className="relative grid size-20 shrink-0 place-items-center overflow-hidden rounded-full border-2 border-primary-100 bg-gradient-to-br from-primary-100 to-primary-200 text-primary-700 shadow-sm">
+        {user?.avatar && !avatarLoadFailed ? <img src={user.avatar} alt="Ảnh đại diện" onError={(event: SyntheticEvent<HTMLImageElement>) => { event.currentTarget.hidden = true; setAvatarLoadFailed(true); }} className="absolute inset-0 size-full object-cover" /> : <UserRound className="size-9" aria-hidden />}
         <button type="button" aria-label="Cập nhật ảnh đại diện" title="Cập nhật ảnh đại diện" className="absolute -bottom-1 -right-1 rounded bg-primary-700 p-1.5 text-white"><Camera className="size-4" aria-hidden /></button>
       </div>
       <div className="min-w-0"><h2 className="text-h4">{user?.fullName ?? 'Khách hàng'}</h2><p className="text-caption text-gray-600">Thành viên từ {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('vi-VN', { month: 'numeric', year: 'numeric' }) : 'Smart Café'}</p></div>

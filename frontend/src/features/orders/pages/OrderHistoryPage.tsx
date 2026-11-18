@@ -5,6 +5,7 @@ import { PATHS } from '@/app/routes';
 import { PageHeader } from '@/features/dine-in/components/PageHeader';
 import { cn } from '@/shared/lib/cn';
 import { Button, Skeleton } from '@/shared/ui';
+import { isApiError } from '@/shared/api';
 import { OrderHistoryCard } from '../components/OrderHistoryCard';
 import { OrderPagination } from '../components/OrderPagination';
 import { ORDER_TABS, type OrderTab } from '../format';
@@ -23,7 +24,7 @@ const EMPTY_TEXT: Record<OrderTab, string> = {
 export default function OrderHistoryPage() {
   const [tab, setTab] = useState<OrderTab>('all');
   const [page, setPage] = useState(1);
-  const { data, isPending, isError, refetch, isFetching } = useMyOrders(tab, page);
+  const { data, error, isPending, isError, refetch, isFetching } = useMyOrders(tab, page);
   const orders = data?.items ?? [];
   const totalPages = data?.meta.totalPages ?? 0;
 
@@ -73,7 +74,8 @@ export default function OrderHistoryPage() {
         {isError && (
           <div role="alert" className="flex flex-col items-center gap-3 px-6 py-16 text-center">
             <h2 className="text-h4">Không tải được đơn hàng</h2>
-            <p className="text-body text-gray-600">Vui lòng kiểm tra kết nối và thử lại.</p>
+            <p className="text-body text-gray-600">{isApiError(error) ? error.message : 'Vui lòng kiểm tra kết nối và thử lại.'}</p>
+            {isApiError(error) && error.traceId && <p className="text-caption text-gray-500">Mã tra cứu: {error.traceId}</p>}
             <Button variant="outline" loading={isFetching} onClick={() => void refetch()}>
               Thử lại
             </Button>

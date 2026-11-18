@@ -31,7 +31,7 @@ afterEach(() => {
 beforeEach(() => {
   resetWorld();
   resetOnlineSubmitState();
-  useOnlineCartStore.setState({ fulfillmentType: null, lines: [], voucherCode: null, delivery: null });
+  useOnlineCartStore.setState({ fulfillmentType: null, branchId: null, lines: [], voucherCode: null, delivery: null });
   requests.length = 0;
 });
 
@@ -41,6 +41,7 @@ const customer = () => loginAs('Customer', { id: 'u-customer', fullName: 'Nguy�
 /** Giỏ Online: 2 ly latte (mỗi ly 35.000 + trân châu 10.000 = 45.000đ) → tạm tính 90.000đ. */
 function seedCart(type: OnlineFulfillment, quantity = 2, extra: Partial<{ voucherCode: string }> = {}) {
   useOnlineCartStore.setState({
+    branchId: 1,
     fulfillmentType: type,
     lines: [{ ...latte, key: buildLineKey(latte), quantity }],
     voucherCode: extra.voucherCode ?? null,
@@ -105,14 +106,14 @@ describe('điểm bắt đầu & menu', () => {
     const { router } = renderApp('/');
     fireEvent.click(await screen.findByRole('button', { name: 'Xem thực đơn' }));
     await waitFor(() => expect(router.state.location.pathname).toBe('/menu'));
-    expect(useOnlineCartStore.getState().fulfillmentType).toBeNull();
-    const add = await screen.findAllByRole('button', { name: /^Thêm / });
-    expect(add.length).toBeGreaterThan(0);
+    expect(useOnlineCartStore.getState().branchId).toBeNull();
+    expect(screen.getByText('Vui lòng chọn chi nhánh để xem thực đơn và thêm món vào giỏ.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Thêm / })).toBeNull();
     expect(useDineInCartStore.getState().lines).toHaveLength(0);
   });
 
   it('thêm món (qua modal tuỳ chọn) vào giỏ Online và xem giỏ', async () => {
-    useOnlineCartStore.setState({ fulfillmentType: 'Pickup' });
+    useOnlineCartStore.setState({ branchId: 1, fulfillmentType: 'Pickup' });
     const { router } = renderApp('/menu');
     fireEvent.click(await screen.findByRole('button', { name: 'Thêm Cà phê sữa đá' }));
     fireEvent.click(await screen.findByRole('button', { name: /Thêm vào giỏ/ }));
@@ -125,10 +126,12 @@ describe('điểm bắt đầu & menu', () => {
 
   it('thêm món trước, chọn mang đi trong giỏ rồi tiếp tục checkout', async () => {
     customer();
+    useOnlineCartStore.getState().setBranch(1);
     const { router } = renderApp('/menu/1');
     await screen.findByRole('heading', { level: 2, name: 'Cà phê sữa đá' });
+    await screen.findByRole('button', { name: /Thêm vào giỏ/ });
     fireEvent.click(screen.getByRole('button', { name: /Thêm vào giỏ/ }));
-    fireEvent.click(await screen.findByRole('link', { name: 'Xem giỏ hàng (1)' }));
+    await waitFor(() => expect(useOnlineCartStore.getState().lines).toHaveLength(0));
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/cart'));
     const pickup = screen.getByRole('button', { name: /Đặt hàng mang đi/ });
@@ -154,6 +157,7 @@ describe('giỏ hàng → checkout: tiền nhất quán', () => {
     seedCart('Delivery');
     const { router } = renderApp('/cart');
 
+    await waitFor(() => expect(screen.getByPlaceholderText('Nhập mã giảm giá')).toBeTruthy());
     fireEvent.change(await screen.findByPlaceholderText('Nhập mã giảm giá'), { target: { value: 'giam10' } });
     fireEvent.click(screen.getByRole('button', { name: 'Áp dụng' }));
     const summary = await screen.findByText('Khuyến mãi');
@@ -174,6 +178,7 @@ describe('giỏ hàng → checkout: tiền nhất quán', () => {
     customer();
     seedCart('Pickup');
     renderApp('/cart');
+    await waitFor(() => expect(screen.getByPlaceholderText('Nhập mã giảm giá')).toBeTruthy());
     fireEvent.change(await screen.findByPlaceholderText('Nhập mã giảm giá'), { target: { value: 'SAI' } });
     fireEvent.click(screen.getByRole('button', { name: 'Áp dụng' }));
     expect((await screen.findByRole('alert')).textContent).toContain('không tồn tại');
@@ -182,7 +187,7 @@ describe('giỏ hàng → checkout: tiền nhất quán', () => {
 
   it('giỏ trống → hướng dẫn quay lại thực đơn (cả giỏ lẫn checkout)', async () => {
     customer();
-    useOnlineCartStore.setState({ fulfillmentType: 'Delivery' });
+    useOnlineCartStore.setState({ branchId: 1, fulfillmentType: 'Delivery' });
     const { router } = renderApp('/cart');
     expect(await screen.findByText('Giỏ hàng đang trống')).toBeTruthy();
     await act(() => router.navigate('/checkout'));

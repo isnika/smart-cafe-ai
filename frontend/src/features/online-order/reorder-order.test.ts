@@ -2,6 +2,7 @@ import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { useDineInCartStore } from '@/features/dine-in/store';
+import { useAuthStore } from '@/features/auth/store';
 import { db, availKey, findVariant } from '@/mocks/db';
 import { handlers } from '@/mocks/handlers';
 import { mockAccessToken, resetAuthMock } from '@/mocks/handlers/identity';
@@ -102,9 +103,11 @@ describe('gọi API giỏ Online (không copy local state)', () => {
   it('store đồng bộ với server: syncOnlineCart(lines của store) không xoá/thêm gì (usePricing sẽ không làm mất món vừa đặt lại)', async () => {
     const order = sample();
     await reorderOnlineOrder(order.id);
+    useAuthStore.setState({ status: 'authenticated', roleName: 'Customer', user: { id: A } as never, accessToken: mockAccessToken(A) });
     const before = activeCart()!.items.map((i) => i.id);
     calls.length = 0;
-    const synced = await syncOnlineCart({ fulfillmentType: 'Delivery', branchId: ONLINE_BRANCH_ID, lines: useOnlineCartStore.getState().lines });
+    useAuthStore.setState({ status: 'authenticated', roleName: 'Customer', user: { id: A } as never, accessToken: mockAccessToken(A) });
+    const synced = await syncOnlineCart({ fulfillmentType: 'Delivery', branchId: useOnlineCartStore.getState().branchId ?? ONLINE_BRANCH_ID, lines: useOnlineCartStore.getState().lines });
     expect(synced.items.map((i) => i.id)).toEqual(before);
     expect(calls.filter((c) => ['DELETE', 'PUT', 'POST'].includes(c.method) && c.path.includes('/items'))).toEqual([]);
   });

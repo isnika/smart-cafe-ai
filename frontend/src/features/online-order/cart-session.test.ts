@@ -13,7 +13,7 @@ const server = setupServer(...handlers);
 beforeAll(() => server.listen());
 afterAll(() => server.close());
 afterEach(() => server.resetHandlers());
-beforeEach(() => { resetWorld(); useOnlineCartStore.setState({ ownerId: null, syncStatus: 'ready' }); });
+beforeEach(() => { resetWorld(); useOnlineCartStore.setState({ ownerId: null, syncStatus: 'ready', branchId: null }); });
 
 describe('account cart merge', () => {
   it('preserves the account cart, merges a guest line and can retry without duplicates', async () => {
@@ -38,6 +38,7 @@ describe('account cart merge', () => {
     const ctx = { source: 'Online', fulfillmentType: 'Pickup' } as const;
     await orderApi.ensureCart(ctx, 1);
     await orderApi.addCartItem(ctx, { variantId: latte.variantId, quantity: 1, options: latte.options });
+    useOnlineCartStore.getState().setBranch(1);
     useOnlineCartStore.getState().addLine({ ...latte, note: 'Ít đá' }, 1);
     useOnlineCartStore.getState().addLine(latte, 2);
     changeOnlineCartOwner('u-customer');

@@ -6,7 +6,7 @@ import { changeOnlineCartOwner, useOnlineCartStore } from './store';
 describe('online cart ownership', () => {
   beforeEach(() => {
     localStorage.clear();
-    useOnlineCartStore.setState({ ownerId: null, fulfillmentType: null, lines: [], voucherCode: null, delivery: null });
+    useOnlineCartStore.setState({ ownerId: null, fulfillmentType: null, branchId: null, lines: [], voucherCode: null, delivery: null });
   });
 
   it('persists guest items, but does not persist account data', () => {
