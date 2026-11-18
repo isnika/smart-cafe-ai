@@ -21,7 +21,8 @@ export interface DeliveryDetails {
   longitude?: number;
 }
 
-interface OnlineCartState {
+interface CartSnapshot {
+
   /** null cho giỏ khách; giỏ tài khoản chỉ tồn tại trong bộ nhớ của phiên. */
   ownerId: string | null;
   syncStatus: 'ready' | 'loading' | 'error';
@@ -31,6 +32,14 @@ interface OnlineCartState {
   /** Mã đã được người dùng nhập; mức giảm thật luôn do server (validate) trả, không lưu ở đây. */
   voucherCode: string | null;
   delivery: DeliveryDetails | null;
+}
+
+interface OnlineCartState extends CartSnapshot {
+  ownerId: string | null;
+  syncStatus: 'ready' | 'loading' | 'error';
+  savedCarts: Record<string, CartSnapshot>;
+  /** Bind the local cart to an authenticated user, or to the anonymous shopping session. */
+  bindOwner: (ownerId: string | null) => void;
 
   setFulfillment: (type: OnlineFulfillment | null) => void;
   addLine: (line: NewCartLine, quantity?: number) => void;
@@ -45,15 +54,34 @@ interface OnlineCartState {
 }
 
 const clamp = (n: number) => Math.min(MAX_LINE_QUANTITY, n);
+const emptyCart = (): CartSnapshot => ({ fulfillmentType: null, lines: [], voucherCode: null, delivery: null });
+const cartSnapshot = (state: CartSnapshot): CartSnapshot => ({
+  fulfillmentType: state.fulfillmentType, lines: state.lines,
+  voucherCode: state.voucherCode, delivery: state.delivery,
+});
+const ownerKey = (id: string | null) => id === null ? 'guest' : `user:${id}`;
 
 // Giỏ Online TÁCH HẲN giỏ Dine-in (store khác, không chung state). Tổng tiền không lưu: suy ra từ `lines` (cart.ts).
 export const useOnlineCartStore = create<OnlineCartState>()(persist((set) => ({
+  ownerId: null,
+  savedCarts: {},
+  syncStatus: 'ready',
   ownerId: null,
   syncStatus: 'ready',
   fulfillmentType: null,
   lines: [],
   voucherCode: null,
   delivery: null,
+
+  bindOwner: (ownerId) => set((state) => {
+    if (state.ownerId === ownerId) return state;
+    const savedCarts = { ...state.savedCarts, [ownerKey(state.ownerId)]: cartSnapshot(state) };
+    // Only an anonymous shopping cart can be adopted on login. Never transfer another user's cart.
+    const target = savedCarts[ownerKey(ownerId)]
+      ?? (state.ownerId === null && ownerId !== null ? cartSnapshot(state) : emptyCart());
+    if (state.ownerId === null && ownerId !== null) delete savedCarts.guest;
+    return { ...target, ownerId, savedCarts };
+  }),
 
   setFulfillment: (fulfillmentType) => set({ fulfillmentType }),
 
@@ -102,6 +130,41 @@ export const useOnlineCartStore = create<OnlineCartState>()(persist((set) => ({
     delivery: state.ownerId ? null : state.delivery,
   }) as OnlineCartState,
 }));
+
+/** Chuyển quyền sở hữu cục bộ khi phiên thay đổi; không bao giờ chuyển giỏ giữa hai tài khoản. */
+export function changeOnlineCartOwner(ownerId: string | null): void {
+  const previous = useOnlineCartStore.getState().ownerId;
+  if (previous === ownerId) return;
+  if (previous) {
+    try { localStorage.removeItem(`smartcafe.pending-guest-cart.${previous}`); } catch { /* storage unavailable */ }
+  }
+  if (previous !== null) {
+    const state = useOnlineCartStore.getState();
+    const savedCarts = { ...state.savedCarts, [ownerKey(previous)]: cartSnapshot(state) };
+    useOnlineCartStore.setState({ ...emptyCart(), ...(ownerId ? savedCarts[ownerKey(ownerId)] : undefined), savedCarts, ownerId, syncStatus: ownerId ? 'loading' : 'ready' });
+  } else {
+    if (ownerId) {
+      try {
+        const key = `smartcafe.pending-guest-cart.${ownerId}`;
+        const current = useOnlineCartStore.getState();
+        const saved = localStorage.getItem(key);
+        if (!current.lines.length && saved) {
+          const pending = JSON.parse(saved) as { lines?: DineInCartLine[]; fulfillmentType?: OnlineFulfillment | null };
+          if (Array.isArray(pending.lines)) useOnlineCartStore.setState({ lines: pending.lines, fulfillmentType: pending.fulfillmentType ?? null });
+        } else if (current.lines.length) {
+          localStorage.setItem(key, JSON.stringify({ lines: current.lines, fulfillmentType: current.fulfillmentType }));
+        }
+      } catch { /* Keep the current in-memory cart if storage is unavailable. */ }
+    }
+    const state = useOnlineCartStore.getState();
+    const restored = ownerId ? state.savedCarts[ownerKey(ownerId)] : undefined;
+    useOnlineCartStore.setState({ ...(restored ?? {}), ownerId, syncStatus: ownerId ? 'loading' : 'ready' });
+  }
+}
+
+export function clearPendingGuestCart(ownerId: string): void {
+  try { localStorage.removeItem(`smartcafe.pending-guest-cart.${ownerId}`); } catch { /* storage unavailable */ }
+}
 
 /** Chuyển quyền sở hữu cục bộ khi phiên thay đổi; không bao giờ chuyển giỏ giữa hai tài khoản. */
 export function changeOnlineCartOwner(ownerId: string | null): void {

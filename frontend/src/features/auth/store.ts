@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { identityApi } from '@/shared/api';
 import { changeOnlineCartOwner, useOnlineCartStore } from '@/features/online-order/store';
+import { changeOnlineCartOwner, useOnlineCartStore } from '@/features/online-order/store';
 import type { AuthSession, LoginInput, RoleName, User } from '@/shared/types';
 
 /**
@@ -137,9 +138,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: async () => {
     const refreshToken = get().refreshToken;
+    get().clear();
     const accessToken = get().accessToken;
     try {
-      await identityApi.logout(refreshToken); // cần refresh token để thu hồi phiên server trước khi clear
+      await identityApi.logout(refreshToken); // revoke the captured session while the UI is already signed out
     } catch {
       /* token có thể đã hết hạn / mất mạng — vẫn đăng xuất phía client */
     }
@@ -159,6 +161,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const roleName = identityApi.roleFromUser(user) ?? get().roleName;
       if (!roleName) throw new Error('API /users/me không trả về vai trò hợp lệ');
       const branchId = get().branchId;
+      changeOnlineCartOwner(roleName === 'Customer' ? user.id : null);
+      if (roleName === 'Customer') useOnlineCartStore.setState({ syncStatus: 'loading' });
       changeOnlineCartOwner(roleName === 'Customer' ? user.id : null);
       if (roleName === 'Customer') useOnlineCartStore.setState({ syncStatus: 'loading' });
       save({ accessToken: token, refreshToken: get().refreshToken, roleName, branchId });

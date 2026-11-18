@@ -75,6 +75,8 @@ const isEnvelope = (j: unknown): j is Envelope =>
 // ── Cấu hình (auth store gọi 1 lần khi khởi động, http.ts không import store) ──
 interface HttpConfig {
   getToken: () => string | null | undefined;
+  /** Stable account identity; token refresh must not change it. */
+  getAccountId: () => string | null | undefined;
   /** Gọi khi không thể phục hồi phiên (401 mà không refresh được) → vd: logout + về /login. */
   onUnauthorized: (() => void) | undefined;
   /**
@@ -84,7 +86,7 @@ interface HttpConfig {
   refresh: (() => Promise<boolean>) | undefined;
 }
 
-const config: HttpConfig = { getToken: () => null, onUnauthorized: undefined, refresh: undefined };
+const config: HttpConfig = { getToken: () => null, getAccountId: () => null, onUnauthorized: undefined, refresh: undefined };
 
 export function configureHttp(next: Partial<HttpConfig>): void {
   Object.assign(config, next);
@@ -149,7 +151,7 @@ async function readErrorBody(res: Response): Promise<ApiErrorInit> {
   return { message: res.statusText || `Lỗi máy chủ (${res.status})` };
 }
 
-async function execute<T>(method: HttpMethod, path: string, opts: RequestOptions, isRetry: boolean): Promise<ApiResult<T>> {
+async function execute<T>(method: HttpMethod, path: string, opts: RequestOptions, isRetry: boolean, accountId = config.getAccountId() ?? null): Promise<ApiResult<T>> {
   const url = `${BASE_URL}${path.startsWith('/') ? path : `/${path}`}${buildQuery(opts.query)}`;
 
   const headers = new Headers(opts.headers);
@@ -158,6 +160,12 @@ async function execute<T>(method: HttpMethod, path: string, opts: RequestOptions
   if (hasBody) headers.set('Content-Type', 'application/json');
 
   const useAuth = opts.auth !== false;
+  const assertAccount = (includeAnonymous = false) => {
+    if (useAuth && (accountId !== null || includeAnonymous) && (config.getAccountId() ?? null) !== accountId) {
+      throw new ApiError(409, { code: 'ACCOUNT_CHANGED', message: 'Tài khoản đã thay đổi. Vui lòng thực hiện lại thao tác.' });
+    }
+  };
+  assertAccount();
   let sentToken = false;
   if (useAuth) {
     const token = config.getToken(); // đọc lại mỗi lần → request retry dùng token mới sau refresh
@@ -177,15 +185,20 @@ async function execute<T>(method: HttpMethod, path: string, opts: RequestOptions
     });
   } catch (e) {
     if ((e as Error)?.name === 'AbortError') throw e; // để React Query / caller tự xử lý huỷ
+    assertAccount();
     throw new ApiError(0, { message: 'Không thể kết nối tới máy chủ', code: API_ERROR_CODES.NETWORK_ERROR });
   }
+  assertAccount();
 
   if (!res.ok) {
     const body = await readErrorBody(res);
+    assertAccount(true);
     if (res.status === 401 && useAuth) {
       // Có token + có cơ chế refresh + chưa retry → thử phục hồi phiên đúng 1 lần rồi gửi lại request gốc.
-      if (sentToken && config.refresh && !isRetry && (await refreshOnce())) {
-        return execute<T>(method, path, opts, true);
+      if (sentToken && config.refresh && !isRetry) {
+        const refreshed = await refreshOnce();
+        assertAccount();
+        if (refreshed) return execute<T>(method, path, opts, true, accountId);
       }
       config.onUnauthorized?.();
     }
@@ -194,6 +207,7 @@ async function execute<T>(method: HttpMethod, path: string, opts: RequestOptions
 
   if (res.status === 204) return { data: undefined as T, meta: null };
   const text = await res.text();
+  assertAccount();
   if (!text) return { data: undefined as T, meta: null };
 
   const json = JSON.parse(text) as unknown;

@@ -2,7 +2,7 @@ import { useAuthStore } from '@/features/auth/store';
 import { toOrderLines, type DineInCartLine } from '@/features/dine-in/cart';
 import { usePlacedOrders } from '@/features/dine-in/placed-orders';
 import { SubmitOrderError } from '@/features/dine-in/submit';
-import { isApiError, orderApi, storeApi } from '@/shared/api';
+import { ApiError, isApiError, orderApi, storeApi } from '@/shared/api';
 import type { CreateOnlineOrderInput } from '@/shared/api/order';
 import type { OrderDetail } from '@/shared/types';
 import { onlineBranchBlock } from './branch-policy';
@@ -102,9 +102,15 @@ export function placeOnlineOrder(opts: { note?: string; voucherCode?: string; me
     opts.note?.trim() ?? '', voucherCode ?? '', opts.method ?? '',
   ]);
   if (inflight?.signature === signature) return inflight.promise;
+  const assertAccount = () => {
+    if (useAuthStore.getState().user?.id !== user.id) {
+      throw new ApiError(409, { code: 'ACCOUNT_CHANGED', message: 'Tài khoản đã thay đổi. Vui lòng mở lại giỏ hàng.' });
+    }
+  };
 
   const run = async (): Promise<OrderDetail> => {
     const branch = await storeApi.getBranch(ONLINE_BRANCH_ID);
+    assertAccount();
     const destination =
       delivery && typeof delivery.latitude === 'number' && typeof delivery.longitude === 'number'
         ? { latitude: delivery.latitude, longitude: delivery.longitude }
@@ -114,7 +120,8 @@ export function placeOnlineOrder(opts: { note?: string; voucherCode?: string; me
 
     const current = attemptFor(signature);
     if (current.cartId === null) {
-      const cart = await syncOnlineCart({ fulfillmentType, branchId: ONLINE_BRANCH_ID, lines: snapshot(lines) });
+      const cart = await syncOnlineCart({ fulfillmentType, branchId: ONLINE_BRANCH_ID, lines: snapshot(lines), userId: user.id });
+      assertAccount();
       current.cartId = cart.id;
       current.branchId = cart.branchId;
     }
@@ -131,6 +138,7 @@ export function placeOnlineOrder(opts: { note?: string; voucherCode?: string; me
       idempotencyKey: current.key,
       ...(isMockMode() && opts.method ? { mockPaymentMethod: toPaymentMethod(opts.method) } : {}),
     });
+    assertAccount();
     usePlacedOrders.getState().record(order);
     useOnlineCartStore.getState().clearOrder();
     attempt = null;

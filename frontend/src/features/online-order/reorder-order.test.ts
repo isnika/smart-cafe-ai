@@ -262,6 +262,16 @@ describe('lỗi từng món', () => {
     expect(r.status).toBe('partial');
   });
 
+  it('đổi tài khoản giữa lúc thêm món phải dừng hẳn, không tiếp tục thêm món còn lại', async () => {
+    server.use(http.post(url('/carts/current/items'), () => HttpResponse.json({
+      success: false, error: { code: 'ACCOUNT_CHANGED', message: 'Account changed' },
+    }, { status: 409 })));
+    const error = await reorderOnlineOrder(sample().id).catch((value: unknown) => value);
+    expect(error).toMatchObject({ code: 'ACCOUNT_CHANGED' });
+    expect(itemPosts()).toHaveLength(1);
+    expect(storeVariants()).toEqual([]);
+  });
+
   it('401/403 không phải lỗi của một món: dừng hẳn và ném lỗi, store không bị đụng', async () => {
     server.use(http.post(url('/carts/current/items'), () => HttpResponse.json({ success: false, error: { code: 'FORBIDDEN', message: 'no' }, trace_id: 't' }, { status: 403 })));
     const e = await reorderOnlineOrder(sample().id).catch((x: unknown) => x);

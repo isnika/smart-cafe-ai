@@ -22,6 +22,7 @@ beforeEach(() => {
   useAuthStore.getState().clear();
   configureHttp({
     getToken: () => useAuthStore.getState().accessToken,
+    getAccountId: () => useAuthStore.getState().user?.id ?? null,
     onUnauthorized: () => useAuthStore.getState().clear(),
     refresh: () => useAuthStore.getState().refresh(),
   });
@@ -84,6 +85,35 @@ describe('quên mật khẩu', () => {
 });
 
 describe('phiên: me, refresh xoay token, logout', () => {
+  it('đăng nhập Google mới thay đúng phiên cũ và gửi /users/me bằng token mới', async () => {
+    await useAuthStore.getState().login({ identifier: 'customer@smartcafe.vn', password: '123456' });
+    const oldUserId = useAuthStore.getState().user!.id;
+    const googleUser = {
+      id: 'new-google-customer', full_name: 'Google Customer B', email: 'new-google-user@gmail.com',
+      role_id: 1, role_name: 'ROLE_CUSTOMER', status: 'Active',
+      created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+    };
+    server.use(
+      http.post(url('/auth/google'), async ({ request }) => {
+        expect(request.headers.get('Authorization')).toBeNull();
+        expect(await request.json()).toEqual({ id_token: 'google-id-token-for-B' });
+        return HttpResponse.json({ success: true, data: {
+          access_token: 'access-for-B', refresh_token: 'refresh-for-B', user: googleUser, is_new_user: true,
+        } });
+      }),
+      http.get(url('/users/me'), ({ request }) => {
+        expect(request.headers.get('Authorization')).toBe('Bearer access-for-B');
+        return HttpResponse.json({ success: true, data: googleUser });
+      }),
+    );
+    const session = await useAuthStore.getState().loginWithGoogle('google-id-token-for-B');
+    expect(session.user.id).not.toBe(oldUserId);
+    expect(useAuthStore.getState().user?.email).toBe('new-google-user@gmail.com');
+    expect(useAuthStore.getState().accessToken).toBe('access-for-B');
+    expect(useAuthStore.getState().refreshToken).toBe('refresh-for-B');
+    expect((await identityApi.getMe()).id).toBe('new-google-customer');
+  });
+
   it('đăng nhập tài khoản Admin mock và điều hướng về trang quản trị hợp lệ', async () => {
     const session = await identityApi.login({ identifier: 'admin@smartcafe.vn', password: '123456' });
     useAuthStore.getState().applySession(session);
@@ -191,6 +221,25 @@ describe('phiên: me, refresh xoay token, logout', () => {
     expect(s.refreshToken).not.toBe(oldRt);
     expect(await identityApi.refresh(oldRt).catch((x: unknown) => x)).toMatchObject({ status: 401 });
     expect((await identityApi.getMe()).email).toBe('customer@smartcafe.vn');
+  });
+
+  it('logout chậm của A không được xoá phiên B vừa đăng nhập', async () => {
+    const first = await useAuthStore.getState().login({ identifier: 'customer@smartcafe.vn', password: '123456' });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    server.use(http.post(url('/auth/logout'), async ({ request }) => {
+      expect(await request.json()).toEqual({ refresh_token: first.refreshToken });
+      await gate;
+      return new HttpResponse(null, { status: 204 });
+    }));
+    const pending = useAuthStore.getState().logout();
+    expect(useAuthStore.getState().status).toBe('anonymous');
+    useAuthStore.getState().applySession({ ...first, accessToken: 'access-B', refreshToken: 'refresh-B',
+      user: { ...first.user, id: 'account-B', email: 'account-B@gmail.com' } });
+    release();
+    await pending;
+    expect(useAuthStore.getState().user?.id).toBe('account-B');
+    expect(useAuthStore.getState().accessToken).toBe('access-B');
   });
 
   it('logout → 204', async () => {
