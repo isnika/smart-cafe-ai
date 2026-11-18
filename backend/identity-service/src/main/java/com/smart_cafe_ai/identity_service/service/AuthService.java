@@ -141,29 +141,43 @@ public class AuthService {
         validateGoogleRequest(request);
         GoogleIdentity identity = googleTokenVerifier.verify(request.getIdToken());
         User user = userRepository.findByGoogleId(identity.subject()).orElse(null);
-        boolean newUser = user == null;
-        if (newUser) {
+        boolean newUser = false;
+        if (user == null) {
             String email = googleEmail(identity);
-            User existingUser = userRepository.findByEmailIgnoreCase(email).orElse(null);
-            if (existingUser != null) {
-                requireActiveGoogleUser(existingUser);
-                throw new GoogleAuthException(HttpStatus.CONFLICT, "ACCOUNT_LINK_REQUIRED",
-                        "Email đã có tài khoản. Hãy đăng nhập tài khoản hiện tại và liên kết Google");
+            // Serialize linking with other updates to the existing account.
+            user = userRepository.findByEmailForUpdate(email).orElse(null);
+            if (user != null) {
+                requireActiveGoogleUser(user);
+                if (user.getGoogleId() != null && !user.getGoogleId().equals(identity.subject())) {
+                    throw new GoogleAuthException(HttpStatus.CONFLICT, "GOOGLE_ACCOUNT_CONFLICT",
+                            "Tài khoản hiện tại đã liên kết với tài khoản Google khác");
+                }
+                // Only auto-link emails whose current ownership Google can establish.
+                if (!identity.hasAuthoritativeEmail()) {
+                    throw new GoogleAuthException(HttpStatus.CONFLICT, "ACCOUNT_LINK_REQUIRED",
+                            "Hãy đăng nhập tài khoản hiện tại để liên kết email không do Google quản lý");
+                }
+                user.setGoogleId(identity.subject());
+                if (user.getEmailVerifiedAt() == null) {
+                    user.setEmailVerifiedAt(LocalDateTime.now());
+                }
+            } else {
+                // Non-Google email addresses need our own OTP before they can be trusted as contacts.
+                if (!identity.hasAuthoritativeEmail()) {
+                    throw new GoogleAuthException(HttpStatus.FORBIDDEN, "GOOGLE_EMAIL_VERIFICATION_REQUIRED",
+                            "Hãy đăng ký và xác thực email bằng OTP, sau đó đăng nhập để liên kết Google");
+                }
+                Role customerRole = roleRepository.findByName("ROLE_CUSTOMER")
+                        .orElseGet(() -> roleRepository.save(Role.builder().name("ROLE_CUSTOMER").description("Khách hàng thành viên Smart Cafe").build()));
+                String name = identity.name() == null || identity.name().isBlank() ? "Google User" : identity.name().trim();
+                String picture = identity.picture();
+                user = User.builder()
+                        .googleId(identity.subject()).email(email)
+                        .fullName(name.substring(0, Math.min(name.length(), 100)))
+                        .avatar(picture != null && picture.startsWith("https://") && picture.length() <= 255 ? picture : null)
+                        .role(customerRole).status(UserStatus.Active).emailVerifiedAt(LocalDateTime.now()).build();
+                newUser = true;
             }
-            // Non-Google email addresses need our own OTP before they can be trusted as contacts.
-            if (!identity.hasAuthoritativeEmail()) {
-                throw new GoogleAuthException(HttpStatus.FORBIDDEN, "GOOGLE_EMAIL_VERIFICATION_REQUIRED",
-                        "Hãy đăng ký và xác thực email bằng OTP, sau đó đăng nhập để liên kết Google");
-            }
-            Role customerRole = roleRepository.findByName("ROLE_CUSTOMER")
-                    .orElseGet(() -> roleRepository.save(Role.builder().name("ROLE_CUSTOMER").description("Khách hàng thành viên Smart Cafe").build()));
-            String name = identity.name() == null || identity.name().isBlank() ? "Google User" : identity.name().trim();
-            String picture = identity.picture();
-            user = User.builder()
-                    .googleId(identity.subject()).email(email)
-                    .fullName(name.substring(0, Math.min(name.length(), 100)))
-                    .avatar(picture != null && picture.startsWith("https://") && picture.length() <= 255 ? picture : null)
-                    .role(customerRole).status(UserStatus.Active).emailVerifiedAt(LocalDateTime.now()).build();
         }
         requireActiveGoogleUser(user);
         user.setLastLoginAt(LocalDateTime.now());
@@ -177,7 +191,7 @@ public class AuthService {
     @Transactional
     public ApiResponse<AuthResponse> linkGoogle(String userId, GoogleLoginRequest request) {
         validateGoogleRequest(request);
-        User user = userRepository.findById(userId).orElseThrow(() ->
+        User user = userRepository.findByIdForUpdate(userId).orElseThrow(() ->
                 new GoogleAuthException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Tài khoản không tồn tại"));
         requireActiveGoogleUser(user);
         GoogleIdentity identity = googleTokenVerifier.verify(request.getIdToken());

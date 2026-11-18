@@ -9,6 +9,8 @@ import { PriceSummary } from '../components/PriceSummary';
 import { useOnlinePricing } from '../hooks/usePricing';
 import { useOnlineCartStore } from '../store';
 import { describeLine, lineTotal, type DineInCartLine } from '@/features/dine-in/cart';
+import { useAuthStore } from '@/features/auth/store';
+import { loadOnlineCartSession } from '../cart-session';
 
 /** Giỏ đặt hàng trực tuyến; khách chọn cách nhận món sau khi duyệt giỏ. */
 export default function OnlineCartPage() {
@@ -17,10 +19,16 @@ export default function OnlineCartPage() {
   const removeLine = useOnlineCartStore((s) => s.removeLine);
   const { fulfillmentType, lines, totals } = pricing;
   const setFulfillment = useOnlineCartStore((s) => s.setFulfillment);
+  const syncStatus = useOnlineCartStore((s) => s.syncStatus);
+  const userId = useAuthStore((s) => s.user?.id);
 
   return (
     <div className="min-h-screen bg-primary-50">
       <PageHeader title="Giỏ hàng của bạn" />
+      {syncStatus === 'loading' && <p role="status" className="px-4 py-3">Đang tải giỏ hàng của bạn…</p>}
+      {syncStatus === 'error' && <p role="alert" className="px-4 py-3 text-error-strong">Không thể hợp nhất giỏ hàng.{' '}
+        <button type="button" className="underline" onClick={() => { if (userId) void loadOnlineCartSession(userId); }}>Thử lại</button>
+      </p>}
 
       {lines.length === 0 ? (
         <div className="flex flex-col items-center gap-3 px-6 py-20 text-center">

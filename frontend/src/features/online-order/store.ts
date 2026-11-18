@@ -22,6 +22,9 @@ export interface DeliveryDetails {
 }
 
 interface OnlineCartState {
+  /** null cho giỏ khách; giỏ tài khoản chỉ tồn tại trong bộ nhớ của phiên. */
+  ownerId: string | null;
+  syncStatus: 'ready' | 'loading' | 'error';
   /** null = khách đang duyệt món/chỉnh giỏ, chưa chọn cách nhận hàng. */
   fulfillmentType: OnlineFulfillment | null;
   lines: DineInCartLine[];
@@ -45,6 +48,8 @@ const clamp = (n: number) => Math.min(MAX_LINE_QUANTITY, n);
 
 // Giỏ Online TÁCH HẲN giỏ Dine-in (store khác, không chung state). Tổng tiền không lưu: suy ra từ `lines` (cart.ts).
 export const useOnlineCartStore = create<OnlineCartState>()(persist((set) => ({
+  ownerId: null,
+  syncStatus: 'ready',
   fulfillmentType: null,
   lines: [],
   voucherCode: null,
@@ -86,12 +91,45 @@ export const useOnlineCartStore = create<OnlineCartState>()(persist((set) => ({
   setDelivery: (delivery) => set({ delivery }),
   clearOrder: () => set({ lines: [], voucherCode: null }),
 }), {
-  name: 'smartcafe.online-cart.v1',
+  // Không chuyển dữ liệu v1: định dạng cũ không ghi chủ sở hữu, có thể là giỏ tài khoản khác.
+  name: 'smartcafe.online-cart.v2',
   storage: createJSONStorage(() => localStorage),
   partialize: (state) => ({
-    fulfillmentType: state.fulfillmentType,
-    lines: state.lines,
-    voucherCode: state.voucherCode,
-    delivery: state.delivery,
+    ownerId: null,
+    fulfillmentType: state.ownerId ? null : state.fulfillmentType,
+    lines: state.ownerId ? [] : state.lines,
+    voucherCode: state.ownerId ? null : state.voucherCode,
+    delivery: state.ownerId ? null : state.delivery,
   }) as OnlineCartState,
 }));
+
+/** Chuyển quyền sở hữu cục bộ khi phiên thay đổi; không bao giờ chuyển giỏ giữa hai tài khoản. */
+export function changeOnlineCartOwner(ownerId: string | null): void {
+  const previous = useOnlineCartStore.getState().ownerId;
+  if (previous === ownerId) return;
+  if (previous) {
+    try { localStorage.removeItem(`smartcafe.pending-guest-cart.${previous}`); } catch { /* storage unavailable */ }
+  }
+  if (previous !== null) {
+    useOnlineCartStore.setState({ ownerId, syncStatus: ownerId ? 'loading' : 'ready', fulfillmentType: null, lines: [], voucherCode: null, delivery: null });
+  } else {
+    if (ownerId) {
+      try {
+        const key = `smartcafe.pending-guest-cart.${ownerId}`;
+        const current = useOnlineCartStore.getState();
+        const saved = localStorage.getItem(key);
+        if (!current.lines.length && saved) {
+          const pending = JSON.parse(saved) as { lines?: DineInCartLine[]; fulfillmentType?: OnlineFulfillment | null };
+          if (Array.isArray(pending.lines)) useOnlineCartStore.setState({ lines: pending.lines, fulfillmentType: pending.fulfillmentType ?? null });
+        } else if (current.lines.length) {
+          localStorage.setItem(key, JSON.stringify({ lines: current.lines, fulfillmentType: current.fulfillmentType }));
+        }
+      } catch { /* Keep the current in-memory cart if storage is unavailable. */ }
+    }
+    useOnlineCartStore.setState({ ownerId, syncStatus: ownerId ? 'loading' : 'ready' });
+  }
+}
+
+export function clearPendingGuestCart(ownerId: string): void {
+  try { localStorage.removeItem(`smartcafe.pending-guest-cart.${ownerId}`); } catch { /* storage unavailable */ }
+}

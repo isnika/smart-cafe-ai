@@ -77,6 +77,7 @@ export function resetOnlineSubmitState(): void {
  * nhận diện luồng và (mock) gợi ý Pending_Payment.
  */
 export function placeOnlineOrder(opts: { note?: string; voucherCode?: string; method?: PaymentChoice } = {}): Promise<OrderDetail> {
+  if (useOnlineCartStore.getState().syncStatus !== 'ready') return Promise.reject(new SubmitOrderError('CART_SYNC_PENDING', 'Vui lòng đồng bộ giỏ hàng trước khi đặt hàng.'));
   const { fulfillmentType, lines, delivery } = useOnlineCartStore.getState();
   if (fulfillmentType === null) {
     return Promise.reject(new SubmitOrderError('NO_FULFILLMENT', 'Vui lòng chọn Giao hàng hoặc Mang đi.'));

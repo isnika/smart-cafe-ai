@@ -65,6 +65,7 @@ export function toQrCart(raw: unknown): QrCart {
   const r = (raw ?? {}) as Loose;
   const rawItems = (Array.isArray(r.items) ? r.items : Array.isArray(r.lines) ? r.lines : []) as Loose[];
   const pricing = r.pricing as Loose | null | undefined;
+  const pricedItems = (Array.isArray(pricing?.items) ? pricing.items : []) as Loose[];
   return {
     id: Number(r.id),
     cartSource: (r.cartSource as QrCart['cartSource']) ?? 'QR',
@@ -74,27 +75,31 @@ export function toQrCart(raw: unknown): QrCart {
     clientKey: (r.clientKey as string | null | undefined) ?? null,
     userId: (r.userId as string | null | undefined) ?? null,
     status: (r.status as QrCart['status']) ?? 'Active',
-    items: rawItems.map((it) => ({
+    items: rawItems.map((it) => {
+      const priced = pricedItems.find(p => Number(p.cartItemId) === Number(it.id));
+      return ({
       id: Number(it.id),
       variantId: Number(it.variantId),
       quantity: Number(it.quantity),
       note: (it.note as string | null | undefined) ?? null,
-      options: ((Array.isArray(it.options) ? it.options : []) as Loose[]).map((o) => ({
+      options: ((Array.isArray(it.options) ? it.options : []) as Loose[]).map((o) => {
+        const pricedOption = ((Array.isArray(priced?.options) ? priced.options : []) as Loose[]).find(p => Number(p.optionId) === Number(o.optionId));
+        return ({
         optionId: Number(o.optionId),
         quantity: num(o.quantity) ?? 1,
-        optionName: (o.optionName as string | null | undefined) ?? null,
-        unitPrice: num(o.unitPrice ?? o.extraPrice),
+        optionName: ((o.optionName ?? pricedOption?.optionName) as string | null | undefined) ?? null,
+        unitPrice: num(o.unitPrice ?? o.extraPrice ?? pricedOption?.extraPrice),
         ...(o.isAvailable === undefined ? {} : { isAvailable: Boolean(o.isAvailable) }),
-      })),
-      productId: num(it.productId),
-      productName: (it.productName as string | null | undefined) ?? null,
+      }); }),
+      productId: num(it.productId ?? priced?.productId),
+      productName: ((it.productName ?? priced?.productName) as string | null | undefined) ?? null,
       productImage: (it.productImage as string | null | undefined) ?? null,
-      variantName: (it.variantName as string | null | undefined) ?? null,
-      unitPrice: num(it.unitPrice),
-      optionsUnitTotal: num(it.optionsUnitTotal),
-      lineTotal: num(it.lineTotal),
+      variantName: ((it.variantName ?? priced?.variantName) as string | null | undefined) ?? null,
+      unitPrice: num(it.unitPrice ?? priced?.unitPrice),
+      optionsUnitTotal: num(it.optionsUnitTotal ?? priced?.optionsUnitTotal),
+      lineTotal: num(it.lineTotal ?? priced?.lineTotal),
       ...(it.isAvailable === undefined ? {} : { isAvailable: Boolean(it.isAvailable) }),
-    })),
+    }); }),
     pricing: pricing
       ? {
           subTotal: num(pricing.subTotal ?? pricing.total),

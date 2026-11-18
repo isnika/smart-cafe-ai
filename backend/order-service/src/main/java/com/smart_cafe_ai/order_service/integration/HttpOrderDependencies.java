@@ -59,6 +59,13 @@ public class HttpOrderDependencies implements OrderDependencies {
         }
         return result;
     }
+    @Override public void requireStock(Integer branchId,List<Item> items){
+        var requestItems=items.stream().map(i->Map.of("variant_id",i.variantId(),"quantity",i.quantity(),"options",i.options())).toList();
+        var data=call("inventory","/availability",Map.of("branch_id",branchId,"items",requestItems));
+        if(!data.path("available").isBoolean()||!data.path("can_make").isBoolean())throw unavailable("inventory");
+        if(!data.path("available").asBoolean()||!data.path("can_make").asBoolean())
+            throw new ApiException(UNPROCESSABLE_ENTITY,"OUT_OF_STOCK","Không đủ nguyên liệu để thực hiện đơn hàng.");
+    }
     private <T> T convert(JsonNode node,Class<T> type,String service){try{return json.readerFor(type).without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).readValue(node);}catch(Exception ex){throw unavailable(service);}}
     private JsonNode call(String service,String path,Object body){
         String base=env.getProperty("app."+service+".internal-base-url",""),header=env.getProperty("app."+service+".auth-header","X-Service-Key"),key=env.getProperty("app."+service+".auth-value","");

@@ -60,11 +60,11 @@ ON DUPLICATE KEY UPDATE full_name=VALUES(full_name), status=VALUES(status), pass
 -- ----------------------------------------------------------------------------
 USE smart_cafe_store_db;
 
-INSERT INTO Branches (id, code, name, address, phone, timezone, opening_time, closing_time, accepts_online_orders, delivery_radius_km, delivery_fee, status) VALUES
-(1, 'BR_Q1', 'Smart Café - Flagship Nguyễn Huệ', '68 Nguyễn Huệ, P. Bến Nghé, Quận 1, TP. HCM', '02838221199', 'Asia/Ho_Chi_Minh', '07:00:00', '23:00:00', TRUE, 10.0, 15000, 'Active'),
-(2, 'BR_BT', 'Smart Café - Landmark 81', 'Tầng trệt Landmark 81, 720A Điện Biên Phủ, P. 22, Bình Thạnh, TP. HCM', '02838992288', 'Asia/Ho_Chi_Minh', '07:30:00', '22:30:00', TRUE, 8.0, 18000, 'Active'),
-(3, 'BR_HN', 'Smart Café - Phố Cổ Hà Nội', '12 Hàng Bạc, P. Hàng Bạc, Hoàn Kiếm, Hà Nội', '02439263388', 'Asia/Ho_Chi_Minh', '06:30:00', '23:00:00', TRUE, 7.0, 15000, 'Active')
-ON DUPLICATE KEY UPDATE name=VALUES(name), address=VALUES(address), status=VALUES(status);
+INSERT INTO Branches (id, code, name, address, phone, latitude, longitude, timezone, opening_time, closing_time, accepts_online_orders, delivery_radius_km, delivery_fee, status) VALUES
+(1, 'BR_Q1', 'Smart Café - Flagship Nguyễn Huệ', '68 Nguyễn Huệ, P. Bến Nghé, Quận 1, TP. HCM', '02838221199', 10.7735000, 106.7038000, 'Asia/Ho_Chi_Minh', '07:00:00', '23:00:00', TRUE, 10.0, 15000, 'Active'),
+(2, 'BR_BT', 'Smart Café - Landmark 81', 'Tầng trệt Landmark 81, 720A Điện Biên Phủ, P. 22, Bình Thạnh, TP. HCM', '02838992288', 10.7951000, 106.7218000, 'Asia/Ho_Chi_Minh', '07:30:00', '22:30:00', TRUE, 8.0, 18000, 'Active'),
+(3, 'BR_HN', 'Smart Café - Phố Cổ Hà Nội', '12 Hàng Bạc, P. Hàng Bạc, Hoàn Kiếm, Hà Nội', '02439263388', 21.0345000, 105.8524000, 'Asia/Ho_Chi_Minh', '06:30:00', '23:00:00', TRUE, 7.0, 15000, 'Active')
+ON DUPLICATE KEY UPDATE name=VALUES(name), address=VALUES(address), latitude=VALUES(latitude), longitude=VALUES(longitude), status=VALUES(status);
 
 -- 10 bàn tại Chi nhánh 1 (Quận 1)
 INSERT INTO Tables (id, branch_id, table_number, qr_code, is_active) VALUES
