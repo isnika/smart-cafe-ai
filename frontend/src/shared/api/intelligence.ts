@@ -6,22 +6,16 @@ import type {
   CreateChatSessionInput,
   ListChatSessionsParams,
   ListForecastsParams,
-  RecommendationView,
   SendChatMessageInput,
 } from '@/shared/types';
 import { http } from './http';
 
-const P = '/intelligence';
+const AI = '/ai';
 // API Gateway định tuyến chat tại /api/v1/chat/** (không có /intelligence/chat/**).
 const CHAT = '/chat';
 
 // Forecast (Manager)
-export const listForecasts = (params: ListForecastsParams) => http.get<AIForecast[]>(`${P}/forecasts`, { query: params });
-
-// Recommendation
-export const listRecommendations = (branchId?: number, signal?: AbortSignal) =>
-  http.get<RecommendationView[]>(`${P}/recommendations/me`, { query: { branchId }, signal });
-export const trackRecommendationClick = (id: number) => http.post<void>(`${P}/recommendations/${id}/click`);
+export const listForecasts = (params: ListForecastsParams) => http.get<AIForecast[]>(`${AI}/forecasts`, { query: params });
 
 // Chat – khách vãng lai dùng guestKey nên không bắt buộc token
 export const createChatSession = (input: CreateChatSessionInput) =>

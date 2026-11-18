@@ -23,7 +23,6 @@ import {
   variantPriceHint,
   type Picks,
 } from "../model";
-import { ProductReviews } from "./ProductReviews";
 
 /** Ảnh món; thiếu ảnh hoặc ảnh lỗi → khối icon (không để <img> hỏng). */
 function ProductImage({ src, alt }: { src?: string | null; alt: string }) {
@@ -174,7 +173,6 @@ export function ProductDetailView({ detail, categoryName }: Props) {
           <RecommendationSection variant="detail" excludeProductId={detail.id} />
         </div>
 
-        <ProductReviews productId={detail.id} />
       </div>
 
       <div className="fixed inset-x-0 bottom-[calc(3.5rem+var(--safe-bottom,0px))] z-20 mx-auto max-w-2xl border-t border-primary-100 bg-white px-4 py-3">

@@ -8,6 +8,7 @@ import { isVoucherEnabled, ONLINE_BRANCH_ID } from '../config';
 import { describeOnlineError } from '../errors';
 import { calcTotals } from '../pricing';
 import { useOnlineCartStore } from '../store';
+import { loadOnlineCartSession } from '../cart-session';
 
 /** Chi nhánh phục vụ đơn Online (GET /branches/{id}, công khai): phí giao hàng, accepts_online_orders, delivery_radius_km. */
 export function useOnlineBranch(enabled: boolean) {
@@ -47,7 +48,9 @@ export function useOnlinePricing() {
   const cart = useQuery({
     queryKey: ['online-cart', userId, fulfillmentType, JSON.stringify(toOrderLines(lines))],
     enabled: useServerCart,
-    retry: false,
+    // Đồng bộ giỏ là thao tác reconcile (GET rồi PUT/DELETE/POST theo trạng thái hiện tại), có thể chạy lại an toàn sau 5xx tạm thời.
+    retry: (failureCount, error) => failureCount < 1 && isTransientServerError(error),
+    retryDelay: 500,
     staleTime: 0,
     queryFn: () => syncOnlineCart({ fulfillmentType: fulfillmentType!, branchId: ONLINE_BRANCH_ID, lines, userId }),
   });
@@ -76,6 +79,10 @@ export function useOnlinePricing() {
     discount: quote?.valid ? quote.discountAmount : 0,
     deliveryFee: isDelivery ? (serverFee ?? branch.data?.deliveryFee ?? 0) : 0,
   });
+  const retryCart = () => {
+    if (syncStatus === 'error' && userId) void loadOnlineCartSession(userId);
+    else void cart.refetch();
+  };
 
   return {
     fulfillmentType,
@@ -96,7 +103,12 @@ export function useOnlinePricing() {
     branchBlock,
     /** Lỗi đồng bộ giỏ server (vd 422 OUT_OF_STOCK) → thông báo nghiệp vụ. */
     cartError: signedIn && syncStatus === 'error' ? 'Không thể tải hoặc hợp nhất giỏ hàng. Vui lòng thử lại.' : cart.isError ? describeOnlineError(cart.error).message : null,
+    retryCart,
     feeError: isDelivery && branch.isError,
     refetchFee: branch.refetch,
   };
+}
+
+function isTransientServerError(error: unknown): boolean {
+  return error instanceof Error && 'status' in error && typeof error.status === 'number' && (error.status === 0 || error.status >= 500);
 }

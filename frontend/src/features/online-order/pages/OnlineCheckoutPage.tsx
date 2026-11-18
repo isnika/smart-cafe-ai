@@ -221,6 +221,7 @@ export default function OnlineCheckoutPage() {
         {(pricing.branchBlock ?? pricing.cartError) && (
           <p role="alert" className="text-caption text-error-strong">
             {pricing.branchBlock ?? pricing.cartError}
+            {!pricing.branchBlock && pricing.cartError && <>{' '}<button type="button" className="font-medium underline" onClick={pricing.retryCart}>Thử lại</button></>}
           </p>
         )}
 

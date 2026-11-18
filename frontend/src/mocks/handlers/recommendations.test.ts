@@ -28,12 +28,12 @@ async function tokenOf(email: string): Promise<string> {
 }
 
 async function list(token?: string, query = '') {
-  const res = await fetch(url(`/intelligence/recommendations/me${query}`), { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  const res = await fetch(url(`/ai/recommendations/me${query}`), { headers: token ? { Authorization: `Bearer ${token}` } : {} });
   return { status: res.status, body: (await res.json()) as RecommendationView[] & Partial<ApiErrorBody> };
 }
 
 async function click(id: number | string, token?: string) {
-  const res = await fetch(url(`/intelligence/recommendations/${id}/click`), { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  const res = await fetch(url(`/ai/recommendations/${id}/click`), { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {} });
   const text = await res.text();
   return { status: res.status, text, body: text ? (JSON.parse(text) as ApiErrorBody) : null };
 }
@@ -50,7 +50,7 @@ describe('seed gợi ý AI', () => {
   });
 });
 
-describe('GET /intelligence/recommendations/me', () => {
+describe('GET /ai/recommendations/me', () => {
   it('trả gợi ý của chính người gọi, điểm giảm dần, kèm product khớp catalog', async () => {
     const { status, body } = await list(await tokenOf(A));
     expect(status).toBe(200);
@@ -120,7 +120,7 @@ describe('GET /intelligence/recommendations/me', () => {
   });
 });
 
-describe('POST /intelligence/recommendations/:id/click', () => {
+describe('POST /ai/recommendations/:id/click', () => {
   it('204 không body, ghi clickedAt và lần liệt kê sau thấy clickedAt', async () => {
     const token = await tokenOf(A);
     const target = (await list(token)).body[0];

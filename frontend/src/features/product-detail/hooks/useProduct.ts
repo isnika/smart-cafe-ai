@@ -1,6 +1,6 @@
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { DINE_IN_BRANCH_ID } from '@/features/dine-in/config';
-import { catalogApi, engagementApi, isApiError } from '@/shared/api';
+import { catalogApi, isApiError } from '@/shared/api';
 
 /** 404 là câu trả lời cuối cùng (món không có/đã ẩn) nên không thử lại; lỗi khác thử lại 1 lần như mặc định của app. */
 const retryUnlessNotFound = (failureCount: number, error: unknown) =>
@@ -18,16 +18,3 @@ export const useProduct = (productId: number | null) =>
     retry: retryUnlessNotFound,
   });
 
-export const REVIEWS_PAGE_SIZE = 5;
-
-/** Review công khai của món, tải từng trang ("Xem thêm đánh giá"). Lỗi ở đây không ảnh hưởng phần chi tiết món. */
-export const useProductReviews = (productId: number) =>
-  useInfiniteQuery({
-    queryKey: ['engagement', 'product-reviews', productId],
-    initialPageParam: 1,
-    queryFn: ({ pageParam }) => engagementApi.listProductReviews(productId, { page: pageParam, pageSize: REVIEWS_PAGE_SIZE }),
-    getNextPageParam: (last, pages) => {
-      const loaded = pages.reduce((n, p) => n + p.items.length, 0);
-      return loaded < last.total && last.items.length > 0 ? last.page + 1 : undefined;
-    },
-  });

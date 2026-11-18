@@ -82,45 +82,86 @@ async function sync({ fulfillmentType, branchId, lines, userId }: SyncArgs, asse
   }
 
   const wanted = new Map<string, DineInCartLine>();
-  for (const l of lines) wanted.set(sigOfLine(l), l);
+  for (const line of lines) {
+    const sig = sigOfLine(line);
+    const previous = wanted.get(sig);
+    wanted.set(sig, previous ? { ...line, quantity: previous.quantity + line.quantity } : { ...line });
+  }
+
+  const existing = new Map<string, QrCartItem[]>();
+  for (const item of cart.items) {
+    const sig = sigOfItem(item);
+    existing.set(sig, [...(existing.get(sig) ?? []), item]);
+  }
 
   let changed = false;
-  const seen = new Set<string>();
-  for (const it of cart.items) {
+  for (const [sig, items] of existing) {
     assertAccount();
     checkOwner();
-    const sig = sigOfItem(it);
     const line = wanted.get(sig);
-    if (!line || seen.has(sig)) {
-      await orderApi.removeCartItem(ctx, it.id);
-      assertAccount();
-      changed = true;
+    if (!line) {
+      for (const item of items) {
+        await orderApi.removeCartItem(ctx, item.id);
+        assertAccount();
+        changed = true;
+      }
       continue;
     }
-    seen.add(sig);
-    if (it.quantity !== line.quantity) {
-      await orderApi.updateCartItem(ctx, it.id, {
+
+    const serverQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
+    // Keep previously merged duplicate rows intact when their aggregate quantity already matches.
+    if (serverQuantity === line.quantity) continue;
+
+    let remaining = line.quantity;
+    const maxLineQuantity = 100;
+    for (const item of items) {
+      assertAccount();
+      const quantity = Math.min(maxLineQuantity, remaining);
+      remaining -= quantity;
+      if (quantity === 0) await orderApi.removeCartItem(ctx, item.id);
+      else if (item.quantity !== quantity) {
+        await orderApi.updateCartItem(ctx, item.id, {
+          variantId: line.variantId,
+          quantity,
+          note: line.note ?? null,
+          options: line.options.map((o) => ({ optionId: o.optionId, quantity: o.quantity })),
+        });
+      } else continue;
+      assertAccount();
+      changed = true;
+    }
+    while (remaining > 0) {
+      assertAccount();
+      const quantity = Math.min(100, remaining);
+      await orderApi.addCartItem(ctx, {
         variantId: line.variantId,
-        quantity: line.quantity,
+        quantity,
         note: line.note ?? null,
         options: line.options.map((o) => ({ optionId: o.optionId, quantity: o.quantity })),
       });
+      remaining -= quantity;
       assertAccount();
       changed = true;
     }
+    wanted.delete(sig);
   }
   for (const [sig, line] of wanted) {
-    assertAccount();
-    checkOwner();
-    if (seen.has(sig)) continue;
-    await orderApi.addCartItem(ctx, {
-      variantId: line.variantId,
-      quantity: line.quantity,
-      note: line.note ?? null,
-      options: line.options.map((o) => ({ optionId: o.optionId, quantity: o.quantity })),
-    });
-    assertAccount();
-    changed = true;
+    if (existing.has(sig)) continue;
+    let remaining = line.quantity;
+    while (remaining > 0) {
+      assertAccount();
+      checkOwner();
+      const quantity = Math.min(100, remaining);
+      await orderApi.addCartItem(ctx, {
+        variantId: line.variantId,
+        quantity,
+        note: line.note ?? null,
+        options: line.options.map((o) => ({ optionId: o.optionId, quantity: o.quantity })),
+      });
+      remaining -= quantity;
+      assertAccount();
+      changed = true;
+    }
   }
   // Xoá dòng trả 204 không body → lấy lại giỏ để có pricing◇ mới nhất.
   assertAccount();

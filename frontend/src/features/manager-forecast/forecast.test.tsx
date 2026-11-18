@@ -76,7 +76,7 @@ describe('/manager/forecast', () => {
   it('đổi tab 30/90 ngày dài thêm biểu đồ mà không gọi lại API', async () => {
     let calls = 0;
     server.events.on('request:start', ({ request }) => {
-      if (request.url.includes('/intelligence/forecasts')) calls += 1;
+      if (request.url.includes('/ai/forecasts')) calls += 1;
     });
     renderApp('/manager/forecast');
     await screen.findByRole('img', { name: /Biểu đồ doanh thu: 14 ngày/ });
@@ -109,7 +109,7 @@ describe('/manager/forecast', () => {
   it('lỗi doanh thu: hiện lỗi + nút "Thử lại", bấm lại thì hiển thị biểu đồ', async () => {
     let failing = true;
     server.use(
-      http.get(url('/intelligence/forecasts'), ({ request }) =>
+      http.get(url('/ai/forecasts'), ({ request }) =>
         failing && request.url.includes('forecastType=Revenue') ? HttpResponse.json({ message: 'Dịch vụ AI bận', code: 'SERVER_BUSY' }, { status: 503 }) : undefined,
       ),
     );
@@ -123,7 +123,7 @@ describe('/manager/forecast', () => {
 
   it('lỗi nguyên liệu không làm mất biểu đồ doanh thu', async () => {
     server.use(
-      http.get(url('/intelligence/forecasts'), ({ request }) =>
+      http.get(url('/ai/forecasts'), ({ request }) =>
         request.url.includes('Ingredient_Usage') ? HttpResponse.json({ message: 'Lỗi', code: 'X' }, { status: 500 }) : undefined,
       ),
     );
@@ -133,7 +133,7 @@ describe('/manager/forecast', () => {
   });
 
   it('chưa có dự báo nào → empty state, không có biểu đồ', async () => {
-    server.use(http.get(url('/intelligence/forecasts'), () => HttpResponse.json([])));
+    server.use(http.get(url('/ai/forecasts'), () => HttpResponse.json([])));
     renderApp('/manager/forecast');
     expect(await screen.findByText('Chưa có dữ liệu dự báo cho chi nhánh này')).toBeTruthy();
     expect(screen.getByText('Chưa có dự báo tiêu thụ nguyên liệu')).toBeTruthy();
@@ -143,7 +143,7 @@ describe('/manager/forecast', () => {
 
   it('chưa đủ lịch sử → "AI đang học dữ liệu", độ chính xác chưa xác định, nút tạo đơn bị vô hiệu hoá', async () => {
     const stripped = db.forecasts.filter((f) => f.isLatest).map((f) => ({ ...f, actualValue: f.forecastDate < today() && f.forecastDate < addDays(today(), -2) ? null : f.actualValue }));
-    server.use(http.get(url('/intelligence/forecasts'), () => HttpResponse.json(stripped.filter((f) => f.forecastType === 'Revenue'))));
+    server.use(http.get(url('/ai/forecasts'), () => HttpResponse.json(stripped.filter((f) => f.forecastType === 'Revenue'))));
     renderApp('/manager/forecast');
     expect(await screen.findByText('AI đang học dữ liệu')).toBeTruthy();
     expect(screen.getByText('Độ chính xác: chưa xác định')).toBeTruthy();
@@ -155,7 +155,7 @@ describe('/manager/forecast', () => {
     useAuthStore.setState({ branchId: null });
     let called = false;
     server.events.on('request:start', ({ request }) => {
-      if (request.url.includes('/intelligence/forecasts')) called = true;
+      if (request.url.includes('/ai/forecasts')) called = true;
     });
     renderApp('/manager/forecast');
     expect(await screen.findByText('Tài khoản chưa được gán chi nhánh')).toBeTruthy();

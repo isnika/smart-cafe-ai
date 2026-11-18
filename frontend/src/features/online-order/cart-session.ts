@@ -28,19 +28,54 @@ export async function loadOnlineCartSession(userId: string): Promise<void> {
         cart = await orderApi.getCurrentCart(ctx);
       }
       if (cart && lines.length) {
-        for (const line of lines) {
-          if (!current()) return;
-          const matches = cart.items.filter(item => buildLineKey({
+        const guestLines = new Map(lines.map((line) => [buildLineKey(line), line]));
+        const groups = new Map<string, typeof cart.items>();
+        for (const item of cart.items) {
+          const key = buildLineKey({
             variantId: item.variantId, note: item.note ?? undefined,
-            options: item.options.map(o => ({ ...o, optionName: '', extraPrice: 0 })),
-          }) === buildLineKey(line));
-          if (matches.length > 1) throw new Error('Giỏ tài khoản có các dòng trùng nhau.');
-          const item = matches[0];
-          const input = { variantId: line.variantId, quantity: line.quantity, note: line.note,
-            options: line.options.map(o => ({ optionId: o.optionId, quantity: o.quantity })) };
-          if (!item) cart = await orderApi.addCartItem(ctx, input);
-          else if (item.quantity < line.quantity) cart = await orderApi.updateCartItem(ctx, item.id, input);
+            options: item.options.map((o) => ({ ...o, optionName: '', extraPrice: 0 })),
+          });
+          groups.set(key, [...(groups.get(key) ?? []), item]);
         }
+
+        const matchedGuestKeys = new Set<string>();
+        let cartChanged = false;
+        for (const [key, serverItems] of groups) {
+          if (!current()) return;
+          const line = guestLines.get(key);
+          if (!line) continue;
+          matchedGuestKeys.add(key);
+          const serverQuantity = serverItems.reduce((sum, item) => sum + item.quantity, 0);
+          const targetQuantity = Math.max(serverQuantity, line.quantity);
+          if (targetQuantity === serverQuantity) continue;
+
+          if (serverItems.length === 1) {
+            const item = serverItems[0]!;
+            await orderApi.updateCartItem(ctx, item.id, {
+              variantId: line.variantId, quantity: targetQuantity, note: line.note ?? null,
+              options: line.options.map((o) => ({ optionId: o.optionId, quantity: o.quantity })),
+            });
+          } else {
+            // Keep old duplicate rows untouched; add only the missing delta. Retrying after a lost response
+            // sees the new aggregate quantity and won't apply the delta twice.
+            await orderApi.addCartItem(ctx, {
+              variantId: line.variantId, quantity: targetQuantity - serverQuantity, note: line.note ?? null,
+              options: line.options.map((o) => ({ optionId: o.optionId, quantity: o.quantity })),
+            });
+          }
+          cartChanged = true;
+        }
+
+        for (const [key, line] of guestLines) {
+          if (!current()) return;
+          if (matchedGuestKeys.has(key)) continue;
+          await orderApi.addCartItem(ctx, {
+            variantId: line.variantId, quantity: line.quantity, note: line.note ?? null,
+            options: line.options.map((o) => ({ optionId: o.optionId, quantity: o.quantity })),
+          });
+          cartChanged = true;
+        }
+        if (cartChanged) cart = await orderApi.getCurrentCart(ctx);
       }
       if (!current()) return;
       if (JSON.stringify(useOnlineCartStore.getState().lines) !== snapshot) continue;
@@ -51,10 +86,13 @@ export async function loadOnlineCartSession(userId: string): Promise<void> {
         variantName: line.variantName, unitPrice: line.unitPrice,
         options: Object.fromEntries(line.options.map(o => [o.optionId, { optionName: o.optionName, extraPrice: o.extraPrice }])),
       });
-      const result = cartToLines(cart, meta).map(line => ({ ...line, key: buildLineKey(line) }));
-      if (new Set(result.map(line => line.key)).size !== result.length) {
-        throw new Error('Giỏ tài khoản có các dòng trùng nhau và cần được xử lý trước khi đồng bộ.');
-      }
+      const seen = new Map<string, number>();
+      const result = cartToLines(cart, meta).map((line, index) => {
+        const signature = buildLineKey(line);
+        const occurrence = (seen.get(signature) ?? 0) + 1;
+        seen.set(signature, occurrence);
+        return { ...line, key: occurrence === 1 ? signature : `${signature}#${cart!.items[index]!.id}` };
+      });
       clearPendingGuestCart(userId);
       useOnlineCartStore.setState({ lines: result, fulfillmentType: cart.fulfillmentType === 'Delivery' ? 'Delivery' : 'Pickup', syncStatus: 'ready' });
       return;
