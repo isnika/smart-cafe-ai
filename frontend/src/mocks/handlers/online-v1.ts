@@ -167,7 +167,12 @@ export const onlineV1Handlers = [
     }
     if (body.branch_id !== MOCK_BRANCH.id) fail(404, 'NOT_FOUND', `Không có chi nhánh ${String(body.branch_id)}`);
     const existing = activeCart(u.id); // một giỏ Active/user
-    if (existing) return ok(cartView(existing), null, { status: 200 });
+    if (existing) {
+      if (existing.branchId !== body.branch_id || existing.fulfillmentType !== body.fulfillment_type) {
+        fail(409, 'CART_CONTEXT_CONFLICT', 'Giỏ hiện tại thuộc chi nhánh/hình thức khác. Hãy bỏ giỏ trước khi đổi.');
+      }
+      return ok(cartView(existing), null, { status: 200 });
+    }
     const now = nowNaive();
     const cart: MockOnlineCart = {
       id: ++db.seq.cart, userId: u.id, branchId: body.branch_id, fulfillmentType: body.fulfillment_type,

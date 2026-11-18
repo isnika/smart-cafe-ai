@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { identityApi } from '@/shared/api';
+import { changeOnlineCartOwner, useOnlineCartStore } from '@/features/online-order/store';
 import type { AuthSession, LoginInput, RoleName, User } from '@/shared/types';
 
 /**
@@ -98,6 +99,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   applySession: (session) => {
+    changeOnlineCartOwner(session.roleName === 'Customer' ? session.user.id : null);
+    if (session.roleName === 'Customer') useOnlineCartStore.setState({ syncStatus: 'loading' });
     save({
       accessToken: session.accessToken,
       refreshToken: session.refreshToken ?? null,
@@ -112,6 +115,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       roleName: session.roleName,
       branchId: session.branchId ?? null,
     });
+    if (session.roleName === 'Customer') void import('@/features/online-order/cart-session').then(m => m.loadOnlineCartSession(session.user.id));
   },
 
   refresh: async () => {
@@ -133,12 +137,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: async () => {
     const refreshToken = get().refreshToken;
+    const accessToken = get().accessToken;
     try {
       await identityApi.logout(refreshToken); // cần refresh token để thu hồi phiên server trước khi clear
     } catch {
       /* token có thể đã hết hạn / mất mạng — vẫn đăng xuất phía client */
     }
-    get().clear();
+    if (get().accessToken === accessToken && get().refreshToken === refreshToken) get().clear();
   },
 
   hydrate: async () => {
@@ -154,8 +159,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const roleName = identityApi.roleFromUser(user) ?? get().roleName;
       if (!roleName) throw new Error('API /users/me không trả về vai trò hợp lệ');
       const branchId = get().branchId;
+      changeOnlineCartOwner(roleName === 'Customer' ? user.id : null);
+      if (roleName === 'Customer') useOnlineCartStore.setState({ syncStatus: 'loading' });
       save({ accessToken: token, refreshToken: get().refreshToken, roleName, branchId });
       set({ user, roleName, status: 'authenticated' });
+      if (roleName === 'Customer') void import('@/features/online-order/cart-session').then(m => m.loadOnlineCartSession(user.id));
     } catch {
       // HTTP client đã thử refresh một lần khi /me trả 401. Nếu refresh thất bại,
       // onUnauthorized sẽ clear store; lỗi mạng / 5xx vẫn giữ phiên để tải lại sau.
@@ -164,6 +172,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   clear: () => {
+    changeOnlineCartOwner(null);
     save(null);
     set({ status: 'anonymous', accessToken: null, refreshToken: null, user: null, roleName: null, branchId: null });
   },

@@ -29,6 +29,7 @@ export function useOnlinePricing() {
   const lines = useOnlineCartStore((s) => s.lines);
   const voucherCode = useOnlineCartStore((s) => s.voucherCode);
   const delivery = useOnlineCartStore((s) => s.delivery);
+  const syncStatus = useOnlineCartStore((s) => s.syncStatus);
   const userId = useAuthStore((s) => s.user?.id);
   const roleName = useAuthStore((s) => s.roleName);
 
@@ -42,7 +43,7 @@ export function useOnlinePricing() {
       : null;
   const branchBlock = branch.data && fulfillmentType ? onlineBranchBlock(branch.data, { fulfillmentType, destination }) : null;
 
-  const useServerCart = signedIn && fulfillmentType !== null && lines.length > 0 && !branchBlock && branch.isSuccess;
+  const useServerCart = signedIn && syncStatus === 'ready' && fulfillmentType !== null && lines.length > 0 && !branchBlock && branch.isSuccess;
   const cart = useQuery({
     queryKey: ['online-cart', userId, fulfillmentType, JSON.stringify(toOrderLines(lines))],
     enabled: useServerCart,
@@ -87,13 +88,14 @@ export function useOnlinePricing() {
     /** false khi còn thiếu dữ liệu để tính tổng (đang tải chi nhánh / đồng bộ giỏ / kiểm tra mã) hoặc chi nhánh không phục vụ → chặn bấm tiếp. */
     ready:
       (fulfillmentType === null || branch.isSuccess) &&
+      (!signedIn || syncStatus === 'ready') &&
       !branchBlock &&
       (!useServerCart || cart.isSuccess) &&
       !(voucherOn && voucherCode && voucher.isFetching),
     /** Chi nhánh không nhận đơn Online / không giao hàng / ngoài phạm vi → thông báo cho khách. */
     branchBlock,
     /** Lỗi đồng bộ giỏ server (vd 422 OUT_OF_STOCK) → thông báo nghiệp vụ. */
-    cartError: cart.isError ? describeOnlineError(cart.error).message : null,
+    cartError: signedIn && syncStatus === 'error' ? 'Không thể tải hoặc hợp nhất giỏ hàng. Vui lòng thử lại.' : cart.isError ? describeOnlineError(cart.error).message : null,
     feeError: isDelivery && branch.isError,
     refetchFee: branch.refetch,
   };

@@ -131,7 +131,7 @@ describe('giỏ Online dùng Bearer, tách khỏi giỏ guest', () => {
       expect(c.headers.get('x-table-session-code')).toBeNull();
       if (c.path !== '/api/carts') expect(c.search).toContain('source=Online'); // POST /carts mang cart_source trong body
     }
-    expect(await bodyOf(calls[0]!)).toMatchObject({ cart_source: 'Online', fulfillment_type: 'Pickup', branch_id: 1 });
+    expect(await bodyOf(calls.find(c => c.method === 'POST' && c.path === '/api/carts')!)).toMatchObject({ cart_source: 'Online', fulfillment_type: 'Pickup', branch_id: 1 });
   });
 
   it('đồng bộ: đổi số lượng → PUT (không thêm trùng), bỏ dòng → DELETE, tổng đọc từ pricing của server', async () => {
@@ -154,6 +154,7 @@ describe('giỏ Online dùng Bearer, tách khỏi giỏ guest', () => {
     customer();
     const lines = [{ ...latte, key: buildLineKey(latte), quantity: 1 }];
     const first = await syncOnlineCart({ fulfillmentType: 'Delivery', branchId: 1, lines });
+    await expect(orderApi.ensureCart({ source: 'Online', fulfillmentType: 'Pickup' }, 1)).rejects.toMatchObject({ status: 409 });
     const second = await syncOnlineCart({ fulfillmentType: 'Pickup', branchId: 1, lines });
     expect(second.id).not.toBe(first.id);
     expect(second.fulfillmentType).toBe('Pickup');
