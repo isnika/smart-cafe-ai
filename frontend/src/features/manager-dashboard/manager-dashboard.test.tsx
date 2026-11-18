@@ -103,7 +103,7 @@ describe('/manager', () => {
   it('orders lỗi: vẫn thấy card kho, các section đơn có nút "Thử lại" và tải lại được', async () => {
     let fail = true;
     server.use(
-      http.get(url('/orders-svc/orders'), () => (fail ? HttpResponse.json({ message: 'Máy chủ bận', code: 'SERVER_BUSY' }, { status: 503 }) : undefined)),
+      http.get(url('/orders'), () => (fail ? HttpResponse.json({ message: 'Máy chủ bận', code: 'SERVER_BUSY' }, { status: 503 }) : undefined)),
     );
     renderApp('/manager');
 
@@ -130,7 +130,7 @@ describe('/manager', () => {
   });
 
   it('không có đơn nào → "Chưa có đơn nào hôm nay", KPI về 0 và kho vẫn hiển thị', async () => {
-    server.use(http.get(url('/orders-svc/orders'), () => HttpResponse.json({ items: [], total: 0, page: 1, pageSize: 100 })));
+    server.use(http.get(url('/orders'), () => HttpResponse.json({ success: true, data: [], meta: { page: 1, size: 100, total: 0 } })));
     renderApp('/manager');
     expect(await screen.findAllByText('Chưa có đơn nào hôm nay')).toHaveLength(2);
     expect(within(kpi('Số đơn hôm nay')).getByText('0')).toBeTruthy();
@@ -159,8 +159,21 @@ describe('/manager', () => {
 
   it('đơn bị cắt (total > items) → ghi chú chưa có API thống kê', async () => {
     const real = db.orders.slice(0, 3);
-    server.use(http.get(url('/orders-svc/orders'), () => HttpResponse.json({ items: real, total: 250, page: 1, pageSize: 100 })));
+    server.use(http.get(url('/orders'), () => HttpResponse.json({ success: true, data: real, meta: { page: 1, size: 100, total: 250 } })));
     renderApp('/manager');
     expect(await screen.findByText(/hệ thống có 250 đơn/)).toBeTruthy();
+  });
+
+  it('Manager tải danh sách qua endpoint v1 và giới hạn theo branch_id, phân trang bằng size', async () => {
+    const requestUrls: URL[] = [];
+    server.use(http.get(url('/orders'), ({ request }) => {
+      requestUrls.push(new URL(request.url));
+      return HttpResponse.json({ success: true, data: db.orders.slice(0, 2), meta: { page: 1, size: 100, total: 2 } });
+    }));
+    renderApp('/manager');
+    await screen.findByRole('img', { name: /Doanh thu đã thu theo giờ hôm nay/ });
+    expect(requestUrls[0]?.searchParams.get('branch_id')).toBe('1');
+    expect(requestUrls[0]?.searchParams.get('size')).toBe('100');
+    expect(requestUrls[0]?.pathname).toBe('/api/orders');
   });
 });

@@ -19,6 +19,7 @@ import { useDefaultAddress } from '../hooks/useDefaultAddress';
 import { useOnlinePricing } from '../hooks/usePricing';
 import { browserRedirect, PAYMENT_OPTIONS, type PaymentChoice } from '../payment';
 import { useOnlineCartStore, type DeliveryDetails } from '../store';
+import { paymentApi } from '@/shared/api';
 
 const field = 'w-full rounded-lg border border-primary-100 bg-white px-4 py-3 text-body placeholder:text-gray-500 focus:border-primary-600 focus:outline-none';
 
@@ -68,6 +69,14 @@ export default function OnlineCheckoutPage() {
     });
     if (!result) return;
     const { order, next } = result;
+    if (invoiceOn) {
+      try {
+        await paymentApi.requestInvoice({ orderId: order.id, buyerName: user?.fullName || delivery.receiverName, buyerAddress: isDelivery ? delivery.addressLine : undefined, buyerTaxCode: companyInfo.trim() || undefined, email: user?.email || undefined });
+      } catch (e) {
+        // Đơn đã được đặt; giữ luồng thanh toán và thông báo để khách gửi yêu cầu sau ở hồ sơ.
+        setInvoiceError(e instanceof Error ? `Đơn đã đặt nhưng chưa gửi được yêu cầu hóa đơn: ${e.message}` : 'Đơn đã đặt nhưng chưa gửi được yêu cầu hóa đơn.');
+      }
+    }
     setDone(true);
     if (next.kind === 'external') browserRedirect.assign(next.url); // chế độ thật: sang cổng VNPay/Momo
     else if (next.kind === 'gateway') navigate(next.path, { replace: true }); // mock: PaymentGatewayPage hiện có

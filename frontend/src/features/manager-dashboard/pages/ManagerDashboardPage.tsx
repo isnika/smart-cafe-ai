@@ -20,7 +20,7 @@ const NO_VALUE = '—';
 export default function ManagerDashboardPage() {
   const branchId = useAuthStore((s) => s.branchId);
   // Hai nguồn độc lập: đơn hàng (không phụ thuộc chi nhánh) và tồn kho (theo chi nhánh của tài khoản).
-  const orders = useDayOrders();
+  const orders = useDayOrders(branchId);
   const stock = useInventoryStock(branchId);
 
   // `now` lấy từ lần tải gần nhất để các hàm tính toán thuần, render lại không đổi kết quả.
@@ -107,7 +107,7 @@ export default function ManagerDashboardPage() {
 
       {truncated && (
         <p className="text-caption text-gray-500">
-          Số liệu đơn tính trên {DAY_ORDERS_PAGE_SIZE} đơn gần nhất (hệ thống có {orders.data?.total} đơn, chưa lọc theo chi nhánh); chưa có API thống kê theo ngày.
+          Số liệu đơn tính trên {DAY_ORDERS_PAGE_SIZE} đơn gần nhất trong chi nhánh (hệ thống có {orders.data?.total} đơn); chưa có API thống kê theo ngày.
         </p>
       )}
 

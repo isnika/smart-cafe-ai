@@ -172,6 +172,16 @@ export const createOrder = (input: CreateOrderInput) => http.post<OrderDetail>(`
 /** Page<OrderDetail>: Kanban cần items/tableNumber để vẽ card mà không phải gọi N lần. */
 export const listOrders = (params: ListOrdersParams = {}, signal?: AbortSignal) =>
   http.get<Page<OrderDetail>>(`${P}/orders`, { query: params, signal });
+
+/** Dashboard Manager: backend v1 contract, branch scoped. */
+export async function listManagerOrders(branchId: number, size = 100, signal?: AbortSignal): Promise<Page<OrderDetail>> {
+  const { data, meta } = await http.getWithMeta<OrderDetail[] | { items?: OrderDetail[]; total?: number; page?: number; size?: number; pageSize?: number }>('/orders', {
+    query: { branch_id: branchId, page: 1, size, sort: 'created_at,desc' }, signal,
+  });
+  const wrapped = !Array.isArray(data) ? data : null;
+  const items = Array.isArray(data) ? data : wrapped?.items ?? [];
+  return { items, total: Number(meta?.total ?? wrapped?.total ?? items.length), page: meta?.page ?? wrapped?.page ?? 1, pageSize: meta?.size ?? wrapped?.size ?? wrapped?.pageSize ?? size };
+}
 export const getOrder = (id: number) => http.get<OrderDetail>(`${P}/orders/${id}`);
 
 /** Lệch version → ApiError 409 VERSION_CONFLICT; sai transition → INVALID_TRANSITION. */
