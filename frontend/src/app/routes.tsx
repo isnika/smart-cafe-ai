@@ -30,18 +30,24 @@ export const PATHS = {
   staffQueue: "/staff/queue",
   staffOrder: "/staff/orders/:orderId",
   staffCheckin: "/staff/checkin",
+  staffLeave: "/staff/leave",
+  staffSchedule: "/staff/schedule",
   staffTables: "/staff/tables", // Bàn & phiên bàn (Staff)
 
   // Manager
   manager: "/manager",
   managerInventory: "/manager/inventory",
   managerForecast: "/manager/forecast",
+  managerLeave: "/manager/leave-requests",
+  managerSchedules: "/manager/schedules",
 
   // Admin
   admin: "/admin",
   adminBranches: "/admin/branches",
   adminTables: "/admin/tables",
   adminUsers: "/admin/users",
+  adminProducts: "/admin/products",
+  adminMenus: "/admin/menus",
 } as const;
 
 export const to = {
@@ -73,7 +79,7 @@ export function homeAfterLogin(roleName: RoleName, requestedPath?: string | null
     Customer: [PATHS.home, PATHS.menu, PATHS.cart, PATHS.checkout, PATHS.orders, PATHS.profile],
     Staff: [PATHS.staff, PATHS.staffQueue, PATHS.staffCheckin, PATHS.staffTables, '/staff/orders/'],
     Manager: [PATHS.manager, PATHS.managerInventory, PATHS.managerForecast],
-    Admin: [PATHS.admin, PATHS.adminBranches, PATHS.adminTables, PATHS.adminUsers],
+    Admin: [PATHS.admin, PATHS.adminBranches, PATHS.adminTables, PATHS.adminUsers, PATHS.adminProducts, PATHS.adminMenus],
   };
   const canOpen = allowed[roleName].some((path) =>
     path.endsWith('/') ? requestedPath.startsWith(path) : requestedPath === path || requestedPath.startsWith(`${path}/`),

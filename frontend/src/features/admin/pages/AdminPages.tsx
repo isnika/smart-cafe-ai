@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, AlertCircle, ArrowDownToLine, Building2, ChevronLeft, ChevronRight, CircleHelp, Coffee, LoaderCircle, Plus, QrCode, RefreshCw, Search, Shield, Users } from "lucide-react";
+import { Activity, AlertCircle, ArrowDownToLine, Building2, ChevronLeft, ChevronRight, CircleHelp, Coffee, LoaderCircle, Plus, QrCode, RefreshCw, Search, Shield, Users, ArrowRightLeft, History } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import { Badge, Button, Card, Input, Modal } from "@/shared/ui";
 import * as api from "@/shared/api/admin";
+import * as catalogApi from "@/shared/api/catalog";
 import { isApiError } from "@/shared/api/http";
 
 const keys = {
@@ -13,6 +14,10 @@ const keys = {
   tables: ["admin", "tables"] as const,
   roles: ["admin", "roles"] as const,
   users: ["admin", "users"] as const,
+  staffProfiles: ["admin", "staff-profiles"] as const,
+  staffBranchHistory: ["admin", "staff-branch-history"] as const,
+  products: ["admin", "products"] as const,
+  categories: ["admin", "categories"] as const,
 };
 const displayError = (e: unknown) => (e instanceof Error ? e.message : "Đã xảy ra lỗi khi kết nối máy chủ.");
 type FormFailure = { global?: string; fields: Record<string, string> };
@@ -173,6 +178,7 @@ export function AdminDashboardPage() {
                 label: "Tài khoản & phân quyền",
                 icon: Users,
               },
+              { to: "/admin/menus", label: "Thực đơn chi nhánh", icon: Coffee },
               { to: "/admin/tables", label: "Quản lý bàn & QR", icon: QrCode },
             ].map(({ to, label, icon: Icon }) => (
               <Link key={to} to={to} className="group flex items-center gap-3 rounded-xl border border-gray-100 p-4 transition hover:border-primary-200 hover:bg-primary-50">
@@ -481,6 +487,161 @@ export function AdminTablesPage() {
   );
 }
 
+function useAdminProducts(params: { q?: string; categoryId?: number; status?: string }) {
+  return useQuery({
+    queryKey: [...keys.products, params],
+    queryFn: ({ signal }) => api.listAdminProducts({ ...params, page: 1, size: 100 }, signal),
+  });
+}
+
+export function AdminProductsPage() {
+  const [term, setTerm] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [status, setStatus] = useState("");
+  const [form, setForm] = useState<api.AdminProduct | null | undefined>(undefined);
+  const products = useAdminProducts({ q: term.trim() || undefined, categoryId: categoryId ? Number(categoryId) : undefined, status: status || undefined });
+  const categories = useQuery({ queryKey: keys.categories, queryFn: ({ signal }) => api.listAdminCategories(signal) });
+  const qc = useQueryClient();
+  const toggle = useMutation({
+    mutationFn: (product: api.AdminProduct) => api.updateAdminProductStatus(product.id, product.status === "Active" ? "Inactive" : "Active"),
+    onSuccess: () => {
+      toast.success("Đã cập nhật trạng thái sản phẩm");
+      void qc.invalidateQueries({ queryKey: keys.products });
+    },
+    onError: (error) => toast.error(displayError(error)),
+  });
+  return (
+    <div className="mx-auto max-w-[1440px]">
+      <PageHeading title="Sản phẩm" description="Quản lý danh mục, thông tin hiển thị, giá và trạng thái món trong menu."
+        action={<Button leftIcon={<Plus className="size-4" />} onClick={() => setForm(null)}>Thêm sản phẩm</Button>} />
+      <Card className="mb-5 flex flex-wrap items-center gap-3 p-4">
+        <div className="min-w-[220px] flex-1"><Input aria-label="Tìm sản phẩm" placeholder="Tìm theo tên sản phẩm" leftIcon={<Search aria-hidden />} value={term} onChange={(e) => setTerm(e.target.value)} /></div>
+        <select aria-label="Lọc danh mục sản phẩm" value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="h-10 rounded-md border border-gray-200 bg-white px-3 text-sm">
+          <option value="">Tất cả danh mục</option>{categories.data?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <select aria-label="Lọc trạng thái sản phẩm" value={status} onChange={(e) => setStatus(e.target.value)} className="h-10 rounded-md border border-gray-200 bg-white px-3 text-sm">
+          <option value="">Tất cả trạng thái</option><option value="Active">Đang bán</option><option value="Inactive">Ngừng bán</option>
+        </select>
+        <Button variant="outline" leftIcon={<RefreshCw className="size-4" />} onClick={() => void products.refetch()}>Làm mới</Button>
+      </Card>
+      <Card padding="none" className="overflow-hidden">
+        {products.isPending ? <Loading /> : products.isError ? <div className="p-5"><ErrorState error={products.error} retry={() => void products.refetch()} /></div> : products.data.items.length === 0 ? (
+          <EmptyState title="Chưa có sản phẩm phù hợp" message="Thử thay đổi bộ lọc hoặc thêm sản phẩm mới." icon={Coffee} />
+        ) : <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-left text-sm">
+          <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500"><tr>{["Sản phẩm", "Danh mục", "Giá", "Biến thể", "Trạng thái", "Thao tác"].map((h) => <th key={h} className="px-5 py-3.5 font-semibold">{h}</th>)}</tr></thead>
+          <tbody className="divide-y divide-gray-100">{products.data.items.map((p) => <tr key={p.id} className="hover:bg-gray-50/70">
+            <td className="px-5 py-4"><div className="flex items-center gap-3">{p.image ? <img src={p.image} alt="" className="size-12 rounded-lg object-cover" /> : <span className="grid size-12 place-items-center rounded-lg bg-primary-50 text-primary-700"><Coffee className="size-5" /></span>}<div><p className="font-semibold text-gray-900">{p.name}</p><p className="mt-1 text-xs text-gray-500">#{p.id}</p></div></div></td>
+            <td className="px-5 py-4 text-gray-600">{p.categoryName || "—"}</td>
+            <td className="px-5 py-4 text-gray-700">{p.price == null ? "—" : p.maxPrice && p.maxPrice !== p.price ? `${p.price.toLocaleString("vi-VN")} – ${p.maxPrice.toLocaleString("vi-VN")} ₫` : `${p.price.toLocaleString("vi-VN")} ₫`}</td>
+            <td className="px-5 py-4 text-gray-600">{p.activeVariantCount}/{p.variantCount} đang bật</td>
+            <td className="px-5 py-4"><Badge tone={p.status === "Active" ? "success" : "neutral"}>{p.status === "Active" ? "Đang bán" : "Ngừng bán"}</Badge></td>
+            <td className="px-5 py-4"><div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => setForm(p)}>Chỉnh sửa</Button><Button size="sm" variant="ghost" loading={toggle.isPending && toggle.variables?.id === p.id} onClick={() => toggle.mutate(p)}>{p.status === "Active" ? "Ngừng bán" : "Mở bán"}</Button></div></td>
+          </tr>)}</tbody>
+        </table></div>}
+      </Card>
+      <Modal open={form !== undefined} onClose={() => setForm(undefined)} title={form ? "Chỉnh sửa sản phẩm" : "Thêm sản phẩm mới"} size="lg">
+        <AdminProductForm initial={form ?? undefined} categories={categories.data ?? []} onClose={() => setForm(undefined)} />
+      </Modal>
+    </div>
+  );
+}
+
+export function AdminBranchMenusPage() {
+  const branches = useAdminBranches();
+  const [selectedBranch, setSelectedBranch] = useState<number | null>(null);
+  const branchId = selectedBranch ?? branches.data?.find((branch) => branch.status.toLowerCase() === "active")?.id ?? branches.data?.[0]?.id ?? null;
+  const [term, setTerm] = useState("");
+  const qc = useQueryClient();
+  const products = useQuery({
+    queryKey: ["catalog", "products", branchId, "branch-menu", term],
+    queryFn: ({ signal }) => catalogApi.listProducts({ branchId: branchId!, q: term.trim() || undefined, includeUnavailable: true }, signal),
+    enabled: branchId !== null,
+  });
+  const availability = useMutation({
+    mutationFn: async ({ productId, available }: { productId: number; available: boolean }) => {
+      const detail = await catalogApi.getProduct(productId, branchId!);
+      if (available) {
+        const manuallyHidden = detail.variants.filter((variant) => !variant.isAvailable && variant.unavailableReason !== "Nguyên liệu chưa đủ theo thông báo từ Inventory.");
+        if (!manuallyHidden.length) return 0;
+        await Promise.all(manuallyHidden.map((variant) => catalogApi.setVariantAvailability(branchId!, variant.id, { isAvailable: true })));
+        return manuallyHidden.length;
+      }
+      const sellable = detail.variants.filter((variant) => variant.isAvailable);
+      await Promise.all(sellable.map((variant) => catalogApi.setVariantAvailability(branchId!, variant.id, {
+        isAvailable: false,
+        unavailableReason: "Ẩn món tại chi nhánh bởi quản trị viên.",
+      })));
+      return sellable.length;
+    },
+    onSuccess: (changedCount, variables) => {
+      if (changedCount === 0 && variables.available) toast.info("Các biến thể đang bị tồn kho đánh dấu hết nguyên liệu.");
+      else toast.success("Đã cập nhật thực đơn chi nhánh");
+      void qc.invalidateQueries({ queryKey: ["catalog", "products", branchId] });
+      void qc.invalidateQueries({ queryKey: ["catalog", "product"] });
+    },
+    onError: (error) => toast.error(displayError(error)),
+  });
+  const activeBranch = branches.data?.find((branch) => branch.id === branchId);
+  return (
+    <div className="mx-auto max-w-[1440px]">
+      <PageHeading title="Thực đơn chi nhánh" description="Bật hoặc tắt món tại từng cửa hàng. Món bị khóa do hết nguyên liệu vẫn tuân theo trạng thái tồn kho."
+        action={<div className="min-w-56"><select aria-label="Chi nhánh thực đơn" value={branchId ?? ""} onChange={(e) => setSelectedBranch(Number(e.target.value))} className="h-10 w-full rounded-md border border-gray-200 bg-white px-3 text-sm"><option value="" disabled>Chọn chi nhánh</option>{branches.data?.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></div>} />
+      {branches.isError ? <ErrorState error={branches.error} retry={() => void branches.refetch()} /> : branches.isPending ? <Loading /> : !branches.data?.length ? <EmptyState title="Chưa có chi nhánh" message="Tạo chi nhánh trước khi thiết lập thực đơn." icon={Building2} /> : (
+        <>
+          <Card className="mb-5 flex flex-wrap items-center gap-3 p-4">
+            <div className="min-w-[220px] flex-1"><Input aria-label="Tìm món trong thực đơn" placeholder="Tìm sản phẩm" leftIcon={<Search aria-hidden />} value={term} onChange={(e) => setTerm(e.target.value)} /></div>
+            <span className="text-sm text-gray-500">Đang chỉnh thực đơn: <strong className="text-gray-800">{activeBranch?.name}</strong></span>
+            <Button variant="outline" leftIcon={<RefreshCw className="size-4" />} onClick={() => void products.refetch()}>Làm mới</Button>
+          </Card>
+          {products.isPending ? <Card><Loading /></Card> : products.isError ? <ErrorState error={products.error} retry={() => void products.refetch()} /> : products.data.length === 0 ? <Card><EmptyState title="Không tìm thấy sản phẩm" message="Thử từ khóa khác hoặc thêm sản phẩm trong mục Sản phẩm." icon={Coffee} /></Card> : (
+            <div className="space-y-3">{products.data.map((product) => <Card key={product.id} padding="none" className="flex flex-wrap items-center gap-4 p-4">
+              {product.image ? <img src={product.image} alt="" className="size-12 rounded-lg object-cover" /> : <span className="grid size-12 place-items-center rounded-lg bg-primary-50 text-primary-700"><Coffee className="size-5" /></span>}
+              <div className="min-w-48 flex-1"><p className="font-semibold text-gray-900">{product.name}</p><p className="mt-1 text-sm text-gray-500">{product.price == null ? "Chưa có giá" : `${product.price.toLocaleString("vi-VN")} ₫`}</p></div>
+              <Badge tone={product.isAvailable ? "success" : "neutral"}>{product.isAvailable ? "Đang bán" : "Không khả dụng"}</Badge>
+              <Button size="sm" variant={product.isAvailable ? "outline" : "primary"} loading={availability.isPending && availability.variables?.productId === product.id} onClick={() => availability.mutate({ productId: product.id, available: !product.isAvailable })}>{product.isAvailable ? "Tắt món" : "Bật món"}</Button>
+            </Card>)}</div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function AdminProductForm({ initial, categories, onClose }: { initial?: api.AdminProduct; categories: api.AdminCategory[]; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [failure, setFailure] = useState<FormFailure>({ fields: {} });
+  const [name, setName] = useState(initial?.name ?? "");
+  const [category, setCategory] = useState(String(initial?.categoryId ?? categories.find((c) => c.status.toLowerCase() === "active")?.id ?? ""));
+  const [image, setImage] = useState(initial?.image ?? "");
+  const [description, setDescription] = useState(initial?.description ?? "");
+  const [temperature, setTemperature] = useState(initial?.temperature ?? "");
+  const [caffeine, setCaffeine] = useState(initial?.caffeineLevel ?? "None");
+  const [tags, setTags] = useState((initial?.flavorTags ?? []).join(", "));
+  const [price, setPrice] = useState(initial?.price == null ? "" : String(initial.price));
+  const mutation = useMutation({
+    mutationFn: () => {
+      const input: api.AdminProductInput = { categoryId: Number(category), name: name.trim(), image: image.trim() || undefined, description: description.trim() || undefined, temperature: temperature || null, caffeineLevel: caffeine, flavorTags: tags.split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean), sortOrder: initial?.sortOrder ?? 0, status: initial?.status ?? "Active" };
+      return initial ? api.updateAdminProduct(initial.id, input) : api.createAdminProduct({ ...input, variants: [{ variantName: "Mặc định", price: Number(price), sortOrder: 0, status: "Active" }] });
+    },
+    onSuccess: () => { toast.success(initial ? "Đã cập nhật sản phẩm" : "Đã tạo sản phẩm"); void qc.invalidateQueries({ queryKey: keys.products }); onClose(); },
+    onError: (error) => setFailure(parseFormFailure(error)),
+  });
+  const field = "mt-1 h-10 w-full rounded-md border border-gray-200 bg-white px-3 text-sm";
+  return <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); setFailure({ fields: {} }); mutation.mutate(); }}>
+    <FormError message={failure.global} />
+    <Input label="Tên sản phẩm" value={name} onChange={(e) => setName(e.target.value)} required />
+    {failure.fields.name && <p className="text-sm text-error">{failure.fields.name}</p>}
+    <label className="block text-sm font-medium">Danh mục<select className={field} value={category} onChange={(e) => setCategory(e.target.value)} required><option value="">Chọn danh mục</option>{categories.filter((c) => c.status.toLowerCase() === "active" || c.id === initial?.categoryId).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+    <label className="block text-sm font-medium">Ảnh (URL)<input className={field} type="url" value={image} onChange={(e) => setImage(e.target.value)} placeholder="https://..." /></label>
+    <label className="block text-sm font-medium">Mô tả<textarea className="mt-1 min-h-20 w-full rounded-md border border-gray-200 p-3 text-sm" value={description} onChange={(e) => setDescription(e.target.value)} /></label>
+    <div className="grid gap-4 sm:grid-cols-2"><label className="block text-sm font-medium">Nhiệt độ<select className={field} value={temperature} onChange={(e) => setTemperature(e.target.value)}><option value="">Không áp dụng</option><option value="Hot">Nóng</option><option value="Iced">Đá</option><option value="Blended">Đá xay</option><option value="Hot_Or_Iced">Nóng hoặc đá</option></select></label>
+      <label className="block text-sm font-medium">Caffeine<select className={field} value={caffeine} onChange={(e) => setCaffeine(e.target.value)}><option value="None">Không có</option><option value="Low">Thấp</option><option value="Medium">Trung bình</option><option value="High">Cao</option></select></label></div>
+    <label className="block text-sm font-medium">Nhãn hương vị<input className={field} value={tags} onChange={(e) => setTags(e.target.value)} placeholder="ngọt, béo, trái cây" /></label>
+    {!initial && <label className="block text-sm font-medium">Giá khởi điểm (₫)<input className={field} type="number" min="0" step="1000" value={price} onChange={(e) => setPrice(e.target.value)} required /></label>}
+    <div className="flex justify-end gap-2 border-t border-gray-100 pt-4"><Button type="button" variant="outline" onClick={onClose}>Hủy</Button><Button type="submit" loading={mutation.isPending} disabled={!categories.length || (!initial && !price)}>{initial ? "Lưu thay đổi" : "Tạo sản phẩm"}</Button></div>
+  </form>;
+}
+
 function Loading() {
   return (
     <div className="flex justify-center py-12">
@@ -622,10 +783,14 @@ function UserForm({ roles, onClose }: { roles: api.Role[]; onClose: () => void }
 }
 export function AdminUsersPage() {
   const roles = useQuery({ queryKey: keys.roles, queryFn: api.listAdminRoles });
+  const branches = useAdminBranches();
+  const staffProfiles = useQuery({ queryKey: keys.staffProfiles, queryFn: ({ signal }) => api.listAdminStaffProfiles(signal) });
   const [roleFilter, setRoleFilter] = useState<number | undefined>();
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const [creating, setCreating] = useState(false);
+  const [transferring, setTransferring] = useState<{ profile: api.AdminStaffProfile; name: string } | null>(null);
+  const [historyProfile, setHistoryProfile] = useState<{ profile: api.AdminStaffProfile; name: string } | null>(null);
   const qc = useQueryClient();
   const users = useQuery({
     queryKey: [...keys.users, page, q, roleFilter],
@@ -646,6 +811,23 @@ export function AdminUsersPage() {
       void qc.invalidateQueries({ queryKey: keys.users });
     },
     onError: (e) => toast.error(displayError(e)),
+  });
+  const transferMut = useMutation({
+    mutationFn: ({ profileId, toBranchId, effectiveDate, note }: { profileId: number; toBranchId: number; effectiveDate: string; note?: string }) =>
+      api.transferStaffBranch(profileId, { toBranchId, effectiveDate, note }),
+    onSuccess: (profile) => {
+      toast.success(`Đã chuyển nhân viên sang ${profile.branchName || 'chi nhánh mới'}`);
+      void qc.invalidateQueries({ queryKey: keys.staffProfiles });
+      void qc.invalidateQueries({ queryKey: keys.staffBranchHistory });
+      void qc.invalidateQueries({ queryKey: keys.users });
+    },
+    onError: (e) => toast.error(displayError(e)),
+  });
+  const profileByUser = useMemo(() => new Map((staffProfiles.data ?? []).map((profile) => [profile.userId, profile])), [staffProfiles.data]);
+  const branchHistory = useQuery({
+    queryKey: [...keys.staffBranchHistory, historyProfile?.profile.id],
+    queryFn: ({ signal }) => api.listStaffBranchHistory(historyProfile!.profile.id, signal),
+    enabled: historyProfile !== null,
   });
   return (
     <div className="mx-auto max-w-[1440px]">
@@ -702,7 +884,7 @@ export function AdminUsersPage() {
               <table className="w-full min-w-[700px] text-left text-sm">
                 <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                   <tr>
-                    {["Nhân viên", "Vai trò", "Trạng thái", "Thao tác"].map((x) => (
+                    {["Nhân viên", "Vai trò", "Chi nhánh", "Trạng thái", "Thao tác"].map((x) => (
                       <th key={x} className="px-3 py-3 font-semibold">
                         {x}
                       </th>
@@ -734,6 +916,9 @@ export function AdminUsersPage() {
                             </option>
                           ))}
                         </select>
+                      </td>
+                      <td className="px-3 py-4">
+                        {staffProfiles.isPending ? <span className="text-xs text-gray-500">Đang tải hồ sơ…</span> : staffProfiles.isError ? <button type="button" className="text-xs text-error underline" onClick={() => void staffProfiles.refetch()}>Lỗi tải hồ sơ · thử lại</button> : profileByUser.has(u.id) ? <div className="flex min-w-48 flex-wrap items-center gap-2"><span className="text-xs text-gray-700">{profileByUser.get(u.id)?.branchName || branches.data?.find((b) => b.id === profileByUser.get(u.id)?.branchId)?.name || `Chi nhánh #${profileByUser.get(u.id)?.branchId}`}</span><Button size="sm" variant="outline" aria-label={`Chuyển chi nhánh ${u.fullName}`} leftIcon={<ArrowRightLeft className="size-3.5"/>} disabled={branches.isPending || !branches.data?.some((b) => b.status.toLowerCase() === "active" && b.id !== profileByUser.get(u.id)?.branchId)} onClick={() => setTransferring({ profile: profileByUser.get(u.id)!, name: u.fullName })}>Chuyển</Button><Button size="sm" variant="ghost" aria-label={`Lịch sử chi nhánh ${u.fullName}`} onClick={() => setHistoryProfile({ profile: profileByUser.get(u.id)!, name: u.fullName })}>Lịch sử</Button></div> : roles.data?.find((r) => r.id === u.roleId)?.name?.toLowerCase().includes("staff") ? <span className="text-xs text-amber-700">Chưa có hồ sơ</span> : <span className="text-xs text-gray-400">—</span>}
                       </td>
                       <td className="px-3 py-4">
                         <Badge tone={u.status === "Active" ? "success" : u.status === "Unverified" ? "warning" : "neutral"}>{u.status === "Active" ? "Đang hoạt động" : u.status === "Unverified" ? "Chưa xác minh" : u.status}</Badge>
@@ -797,6 +982,18 @@ export function AdminUsersPage() {
       </div>
       <Modal open={creating} onClose={() => setCreating(false)} title="Tạo tài khoản vận hành">
         <UserForm roles={roles.data ?? []} onClose={() => setCreating(false)} />
+      </Modal>
+      <Modal open={transferring !== null} onClose={() => { if (!transferMut.isPending) setTransferring(null); }} title="Điều chuyển chi nhánh" size="sm">
+        {transferring && <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); const f = new FormData(e.currentTarget); const branchId = Number(f.get("toBranchId")); const effectiveDate = String(f.get("effectiveDate") || ""); if (!branchId || !effectiveDate) return; transferMut.mutate({ profileId: transferring.profile.id, toBranchId: branchId, effectiveDate, note: String(f.get("note") || "").trim() || undefined }, { onSuccess: () => setTransferring(null) }); }}>
+          <p className="text-sm text-gray-600">Chuyển <strong>{transferring.name}</strong> từ {transferring.profile.branchName || `chi nhánh #${transferring.profile.branchId}`}.</p>
+          <label className="block text-sm font-medium">Chi nhánh mới<select name="toBranchId" required defaultValue="" className="mt-1 h-10 w-full rounded-md border border-gray-200 bg-white px-3"><option value="" disabled>Chọn chi nhánh</option>{branches.data?.filter((b) => b.status.toLowerCase() === "active" && b.id !== transferring.profile.branchId).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
+          <Input name="effectiveDate" type="date" label="Ngày hiệu lực" required defaultValue={new Date().toLocaleDateString("en-CA")} />
+          <label className="block text-sm font-medium">Ghi chú<textarea name="note" maxLength={500} rows={3} className="mt-1 w-full rounded-md border border-gray-200 p-3 text-sm" placeholder="Lý do hoặc ghi chú điều chuyển"/></label>
+          <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={transferMut.isPending} onClick={() => setTransferring(null)}>Hủy</Button><Button type="submit" loading={transferMut.isPending}>Xác nhận chuyển</Button></div>
+        </form>}
+      </Modal>
+      <Modal open={historyProfile !== null} onClose={() => setHistoryProfile(null)} title={`Lịch sử chi nhánh${historyProfile ? ` · ${historyProfile.name}` : ""}`} size="md">
+        {branchHistory.isPending ? <Loading/> : branchHistory.isError ? <ErrorState error={branchHistory.error} retry={() => void branchHistory.refetch()}/> : !branchHistory.data?.length ? <EmptyState title="Chưa có lịch sử điều chuyển" message="Các lần điều chuyển chi nhánh sẽ được lưu tại đây." icon={History}/> : <ul className="divide-y divide-gray-100">{branchHistory.data.map((row) => { const fromId = row.fromBranch?.id ?? row.fromBranchId ?? null; const toId = row.toBranch?.id ?? row.toBranchId ?? 0; const from = row.fromBranch?.name ?? branches.data?.find((b) => b.id === fromId)?.name ?? (fromId ? `Chi nhánh #${fromId}` : "Chưa phân công"); const to = row.toBranch?.name ?? branches.data?.find((b) => b.id === toId)?.name ?? `Chi nhánh #${toId}`; return <li key={row.id} className="py-3"><p className="font-medium">{from} → {to}</p><p className="text-xs text-gray-500">Hiệu lực {row.effectiveDate}{row.note ? ` · ${row.note}` : ""}</p></li>; })}</ul>}
       </Modal>
     </div>
   );
