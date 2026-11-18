@@ -29,12 +29,13 @@ public final class OrderPolicy {
     }
     public static BigDecimal delivery(Branch b,BigDecimal lat,BigDecimal lon){
         if(b.deliveryRadiusKm()==null||b.deliveryRadiusKm().signum()<=0)rule("Chi nhánh không phục vụ giao hàng.");
-        if(lat==null||lon==null||b.latitude()==null||b.longitude()==null)throw ApiException.invalid("Giao hàng cần tọa độ giao và tọa độ chi nhánh.");
-        double a1=Math.toRadians(b.latitude().doubleValue()),a2=Math.toRadians(lat.doubleValue());
-        double da=a2-a1,dl=Math.toRadians(lon.subtract(b.longitude()).doubleValue());
-        double h=Math.pow(Math.sin(da/2),2)+Math.cos(a1)*Math.cos(a2)*Math.pow(Math.sin(dl/2),2);
-        if(6371*2*Math.asin(Math.sqrt(Math.min(1,h)))>b.deliveryRadiusKm().doubleValue())rule("Địa chỉ nằm ngoài bán kính giao hàng.");
-        return b.deliveryFee();
+        if(lat!=null&&lon!=null&&b.latitude()!=null&&b.longitude()!=null){
+            double a1=Math.toRadians(b.latitude().doubleValue()),a2=Math.toRadians(lat.doubleValue());
+            double da=a2-a1,dl=Math.toRadians(lon.subtract(b.longitude()).doubleValue());
+            double h=Math.pow(Math.sin(da/2),2)+Math.cos(a1)*Math.cos(a2)*Math.pow(Math.sin(dl/2),2);
+            if(6371*2*Math.asin(Math.sqrt(Math.min(1,h)))>b.deliveryRadiusKm().doubleValue())rule("Địa chỉ nằm ngoài bán kính giao hàng.");
+        }
+        return b.deliveryFee()==null?BigDecimal.ZERO:b.deliveryFee();
     }
     public static void transition(Status from,Status to,Fulfillment f,boolean customer){
         if(customer){if(to!=Status.Cancelled||!(from==Status.Pending||from==Status.Pending_Payment))throw ApiException.forbidden();return;}

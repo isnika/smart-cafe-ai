@@ -573,6 +573,8 @@ USE smart_cafe_order_db;
 CREATE TABLE Orders (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     order_code VARCHAR(20) NOT NULL UNIQUE,
+    request_hash VARCHAR(64) NULL COMMENT 'SHA-256 of canonical create request',
+    request_owner VARCHAR(150) NULL COMMENT 'Authenticated owner/capability hash for idempotency replay',
     idempotency_key VARCHAR(64) NULL UNIQUE COMMENT 'Prevents duplicate order creation on retry/double-submit',
     user_id VARCHAR(36) NULL COMMENT 'External reference to Identity Service; required for Online orders',
     created_by VARCHAR(36) NULL COMMENT 'External reference to Identity Service; staff user for POS orders',
@@ -775,6 +777,37 @@ CREATE TABLE Processed_Events (
     source_service VARCHAR(100) NULL,
     processed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_order_processed_type_time (event_type, processed_at)
+);
+
+CREATE TABLE IF NOT EXISTS Identity_User_Status (
+    user_id VARCHAR(36) PRIMARY KEY,
+    status VARCHAR(20) NOT NULL,
+    status_revision BIGINT NOT NULL,
+    occurred_at TIMESTAMP(6) NOT NULL,
+    CONSTRAINT chk_identity_user_status CHECK (status IN ('Active', 'Banned', 'Deactivated', 'Unverified')),
+    CONSTRAINT chk_identity_status_revision CHECK (status_revision > 0)
+);
+
+CREATE TABLE IF NOT EXISTS Engagement_Checkouts (
+    order_id BIGINT PRIMARY KEY,
+    user_id VARCHAR(36) NOT NULL,
+    status VARCHAR(12) NOT NULL DEFAULT 'Pending',
+    retry_count INT NOT NULL DEFAULT 0,
+    next_retry_at DATETIME NOT NULL,
+    last_error VARCHAR(100) NULL,
+    CONSTRAINT chk_engagement_checkout_status CHECK (status IN ('Pending','Committed','Reversed')),
+    INDEX idx_engagement_checkout_recovery (status,next_retry_at)
+);
+
+CREATE TABLE IF NOT EXISTS Order_Payment_Entries (
+    entry_key VARCHAR(120) PRIMARY KEY COMMENT 'payment:{payment_id}:{order_id} or refund:{refund_id}:{order_id}',
+    order_id BIGINT NOT NULL,
+    entry_type VARCHAR(10) NOT NULL,
+    amount DECIMAL(15,0) NOT NULL,
+    CONSTRAINT fk_order_payment_entry_order FOREIGN KEY (order_id) REFERENCES Orders(id),
+    CONSTRAINT chk_order_payment_entry_amount CHECK (amount > 0),
+    CONSTRAINT chk_order_payment_entry_type CHECK (entry_type IN ('Payment', 'Refund')),
+    INDEX idx_order_payment_entry_order (order_id)
 );
 
 -- ============================================================================
