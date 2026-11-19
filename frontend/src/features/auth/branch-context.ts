@@ -1,0 +1,18 @@
+import { useAuthStore } from './store';
+import { USE_MOCK } from '@/shared/api/http';
+
+/** Mock branch context for Staff/Manager while Identity has not returned branch_id. */
+const configuredBranchId = import.meta.env.VITE_MOCK_AUTH_BRANCH_ID;
+const parsedBranchId = configuredBranchId === '' ? null : Number(configuredBranchId ?? 1);
+export const MOCK_AUTH_BRANCH_ID = parsedBranchId !== null && Number.isSafeInteger(parsedBranchId) && parsedBranchId > 0 ? parsedBranchId : 1;
+
+export function useAuthBranchId(): number | null {
+  const branchId = useAuthStore((state) => state.branchId);
+  const roleName = useAuthStore((state) => state.roleName);
+  return branchId ?? (USE_MOCK && (roleName === 'Staff' || roleName === 'Manager') ? MOCK_AUTH_BRANCH_ID : null);
+}
+
+export function getAuthBranchId(): number | null {
+  const { branchId, roleName } = useAuthStore.getState();
+  return branchId ?? (USE_MOCK && (roleName === 'Staff' || roleName === 'Manager') ? MOCK_AUTH_BRANCH_ID : null);
+}

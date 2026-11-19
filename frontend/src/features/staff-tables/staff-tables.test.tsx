@@ -9,10 +9,11 @@ import { resetCashPaymentAttempt } from '@/features/cashier/hooks/useCashier';
 import { resetPaymentRetry } from '@/features/online-order/payment-retry';
 import { db, nowNaive } from '@/mocks/db';
 import { handlers } from '@/mocks/handlers';
-import { mockAccessToken } from '@/mocks/handlers/identity';
+import { identityMockConfig, mockAccessToken, MOCK_PASSWORD } from '@/mocks/handlers/identity';
 import { tableSessionMock } from '@/mocks/handlers/staff-table-v1';
 import { seedDemoOrders } from '@/mocks/seed';
 import { mockConfig, url } from '@/mocks/utils';
+import { identityApi } from '@/shared/api';
 import { cashierShiftApi, configureHttp } from '@/shared/api';
 import type { TableSessionStatus } from '@/shared/types';
 import { loginAs, resetWorld } from '@/test/helpers';
@@ -61,6 +62,17 @@ const tile = (name: string) => screen.queryByRole('listitem', { name });
 const tablesLoaded = () => screen.findByRole('list', { name: 'Danh sách bàn' });
 
 describe('Trang Bàn & phiên bàn (Staff)', () => {
+  it('mock đăng nhập Staff thiếu branchId vẫn tải bàn từ branch mặc định', async () => {
+    identityMockConfig.omitBranchId = true;
+    useAuthStore.getState().clear();
+    const session = await identityApi.login({ identifier: 'staff@smartcafe.vn', password: MOCK_PASSWORD });
+    useAuthStore.getState().applySession(session);
+    expect(useAuthStore.getState().branchId).toBeNull();
+    renderApp('/staff/tables');
+    expect(await screen.findByRole('heading', { name: 'Bàn & phiên bàn' })).toBeTruthy();
+    expect(await screen.findByText('01')).toBeTruthy();
+  });
+
   it('hiển thị trạng thái bàn đúng như server trả, không suy từ phiên', async () => {
     addSession(2, 'Payment_Pending'); // phiên mở ở bàn 2…
     server.use(

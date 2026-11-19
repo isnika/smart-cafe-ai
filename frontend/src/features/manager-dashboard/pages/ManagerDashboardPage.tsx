@@ -1,6 +1,6 @@
 import { useMemo, type ReactNode } from 'react';
 import { AlertTriangle, Boxes, LayoutDashboard, ReceiptText, TrendingUp } from 'lucide-react';
-import { useAuthStore } from '@/features/auth/store';
+import { useAuthBranchId } from '@/features/auth/branch-context';
 import { isApiError } from '@/shared/api';
 import { formatVnd } from '@/shared/lib';
 import { Card, Skeleton } from '@/shared/ui';
@@ -18,7 +18,7 @@ import { averageOrderValue, cancelRate, formatPercent, orderMix, revenueByHour }
 const NO_VALUE = '—';
 
 export default function ManagerDashboardPage() {
-  const branchId = useAuthStore((s) => s.branchId);
+  const branchId = useAuthBranchId();
   // Hai nguồn độc lập: đơn hàng (không phụ thuộc chi nhánh) và tồn kho (theo chi nhánh của tài khoản).
   const orders = useDayOrders(branchId);
   const stock = useInventoryStock(branchId);

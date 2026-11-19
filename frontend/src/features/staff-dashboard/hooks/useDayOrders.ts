@@ -1,6 +1,6 @@
 import { queryOptions, useQuery } from '@tanstack/react-query';
 import { orderApi } from '@/shared/api';
-import { useAuthStore } from '@/features/auth/store';
+import { useAuthBranchId } from '@/features/auth/branch-context';
 
 export const DAY_ORDERS_PAGE_SIZE = 100;
 export const DAY_ORDERS_REFETCH_MS = 10_000;
@@ -16,7 +16,7 @@ export const dayOrdersQuery = (branchId?: number | null) =>
   });
 
 export const useDayOrders = (branchId?: number | null) => {
-  const assignedBranchId = useAuthStore((s) => s.branchId);
+  const assignedBranchId = useAuthBranchId();
   const selectedBranchId = branchId === undefined ? assignedBranchId : branchId;
   const query = useQuery({ ...dayOrdersQuery(selectedBranchId === null ? undefined : selectedBranchId), enabled: selectedBranchId !== null });
   return selectedBranchId === null ? { ...query, isPending: false, isLoading: false } : query;

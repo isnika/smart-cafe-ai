@@ -7,7 +7,7 @@ import { useAuthStore } from '@/features/auth/store';
 import { computeDayStats } from '@/features/staff-dashboard/stats';
 import { db } from '@/mocks/db';
 import { handlers } from '@/mocks/handlers';
-import { MOCK_PASSWORD, resetAuthMock } from '@/mocks/handlers/identity';
+import { identityMockConfig, MOCK_PASSWORD, resetAuthMock } from '@/mocks/handlers/identity';
 import { seedDemoOrders } from '@/mocks/seed';
 import { url } from '@/mocks/utils';
 import { configureHttp, identityApi } from '@/shared/api';
@@ -175,5 +175,15 @@ describe('/manager', () => {
     expect(requestUrls[0]?.searchParams.get('branch_id')).toBe('1');
     expect(requestUrls[0]?.searchParams.get('size')).toBe('100');
     expect(requestUrls[0]?.pathname).toBe('/api/orders');
+  });
+
+  it('mock đăng nhập Manager thiếu branchId vẫn dùng branch mặc định cho dashboard', async () => {
+    identityMockConfig.omitBranchId = true;
+    const session = await identityApi.login({ identifier: 'manager@smartcafe.vn', password: MOCK_PASSWORD });
+    useAuthStore.getState().applySession(session);
+    expect(useAuthStore.getState().branchId).toBeNull();
+    renderApp('/manager');
+    expect(await screen.findByRole('img', { name: /Doanh thu đã thu theo giờ hôm nay/ })).toBeTruthy();
+    expect(await within(stockCard()).findByText('Trân châu đen')).toBeTruthy();
   });
 });
