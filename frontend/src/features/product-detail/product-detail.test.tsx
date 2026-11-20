@@ -206,66 +206,13 @@ describe('/menu/:id – chọn tuỳ chọn, giá tạm tính, thêm vào giỏ'
   });
 });
 
-describe('/menu/:id – đánh giá', () => {
-  it('điểm trung bình + số đánh giá, danh sách mới nhất trước, "Xem thêm đánh giá" tải trang 2, review bị ẩn không hiện', async () => {
+describe('/menu/:id – không tải đánh giá', () => {
+  it('chỉ tải nội dung món và không hiển thị phần đánh giá', async () => {
     renderApp('/menu/1');
-    const list = await screen.findByRole('list', { name: 'Danh sách đánh giá' });
-    expect(screen.getByRole('heading', { level: 2, name: 'Đánh giá' })).toBeTruthy();
-    expect(screen.getByText('4,4')).toBeTruthy(); // (5+5+4+5+3+4+5)/7
-    expect(screen.getByText('7 đánh giá')).toBeTruthy();
-    expect(within(list).getAllByRole('listitem')).toHaveLength(5);
-    expect(within(list).getAllByRole('listitem')[0]!.textContent).toContain('Minh Anh'); // mới nhất
-
-    fireEvent.click(screen.getByRole('button', { name: 'Xem thêm đánh giá' }));
-    await waitFor(() => expect(within(list).getAllByRole('listitem')).toHaveLength(7));
-    expect(screen.queryByRole('button', { name: 'Xem thêm đánh giá' })).toBeNull();
-    expect(screen.queryByText(/đã bị ẩn bởi quản lý/)).toBeNull();
-    expect(screen.getByText('Ngọc Hân')).toBeTruthy();
-    expect(within(list).getAllByRole('img', { name: /trên 5 sao/ })).toHaveLength(7);
-  });
-
-  it('review chỉ có điểm (không nội dung) vẫn hiển thị', async () => {
-    renderApp('/menu/2');
-    const list = await screen.findByRole('list', { name: 'Danh sách đánh giá' });
-    expect(within(list).getAllByRole('listitem')).toHaveLength(3);
-    expect(within(list).getByText('Bảo Châu')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Xem thêm đánh giá' })).toBeNull();
-  });
-
-  it('chưa có review → "Chưa có đánh giá"', async () => {
-    renderApp('/menu/3');
-    expect(await screen.findByText('Chưa có đánh giá')).toBeTruthy();
+    expect(await screen.findByRole('heading', { level: 2, name: 'Cà phê sữa đá' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { level: 2, name: 'Đánh giá' })).toBeNull();
     expect(screen.queryByRole('list', { name: 'Danh sách đánh giá' })).toBeNull();
-  });
-
-  it('review đang tải: skeleton riêng, phần chi tiết món hiện bình thường', async () => {
-    server.use(
-      http.get(url('/engagement/products/:id/reviews'), async () => {
-        await new Promise((r) => setTimeout(r, 150));
-        return HttpResponse.json({ items: [], total: 0, page: 1, pageSize: 5, averageRating: null });
-      }),
-    );
-    renderApp('/menu/1');
-    await screen.findByRole('heading', { level: 2, name: 'Cà phê sữa đá' });
-    expect(screen.getByLabelText('Đang tải đánh giá')).toBeTruthy();
-    expect(await screen.findByText('Chưa có đánh giá')).toBeTruthy();
-  });
-
-  it('review lỗi: báo lỗi riêng + Thử lại, KHÔNG chặn chi tiết món và nút thêm vào giỏ', async () => {
-    online();
-    server.use(server500('/engagement/products/:id/reviews'));
-    renderApp('/menu/1');
-    const alert = await screen.findByRole('alert');
-    expect(alert.textContent).toContain('Không tải được đánh giá');
-    expect(screen.getByRole('heading', { level: 2, name: 'Cà phê sữa đá' })).toBeTruthy();
-    expect(addButton().disabled).toBe(false);
-    fireEvent.click(addButton());
-    expect(useOnlineCartStore.getState().lines).toHaveLength(1);
-
-    server.resetHandlers();
-    fireEvent.click(within(alert).getByRole('button', { name: 'Thử lại' }));
-    expect(await screen.findByText('7 đánh giá')).toBeTruthy();
-    expect(screen.queryByRole('alert')).toBeNull();
+    expect(requests.some((request) => request.includes('/reviews'))).toBe(false);
   });
 });
 

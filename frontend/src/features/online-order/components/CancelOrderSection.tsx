@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { paymentApi } from '@/shared/api';
 import type { MyOrderDetail } from '@/shared/api/order-me.types';
 import { MAX_CANCEL_REASON_LENGTH } from '@/shared/api/order-me.types';
 import { cn } from '@/shared/lib/cn';
@@ -11,16 +13,20 @@ type Notice = { tone: 'success' | 'warning'; message: string };
 /**
  * Khối hủy đơn của khách trên trang theo dõi.
  *  - Nút "Hủy đơn": chỉ khi Online + payment_status=Unpaid + trạng thái Excel cho khách hủy (cancel.ts).
- *  - Đơn đã thanh toán (còn hiệu lực): KHÔNG có nút, chỉ hướng dẫn liên hệ quán. Không có refund.
+ *  - Đơn đã thanh toán: khách có thể gửi yêu cầu hoàn tiền để nhân viên xử lý.
  *  - `version` gửi lên luôn là version của bản đơn đang hiển thị (order.version). Mọi quyết định cuối cùng do API.
  */
 export function CancelOrderSection({ order }: { order: MyOrderDetail }) {
+  const qc = useQueryClient();
+  const payments = useQuery({ queryKey: ['payment', 'order', order.id], queryFn: () => paymentApi.listPayments({ orderId: order.id }), enabled: order.paymentStatus === 'Paid' });
+  const refund = useMutation({ mutationFn: paymentApi.createRefund, onSuccess: () => { setNotice({ tone: 'success', message: 'Đã gửi yêu cầu hoàn tiền. Quán sẽ cập nhật trạng thái xử lý.' }); void qc.invalidateQueries({ queryKey: ['payment'] }); }, onError: (e: unknown) => setInlineError(e instanceof Error ? e.message : 'Không thể gửi yêu cầu hoàn tiền.') });
   const cancel = useCancelOrder(order.id);
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [touched, setTouched] = useState(false);
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [refundOpen, setRefundOpen] = useState(false);
 
   const affordance = cancelAffordance(order);
   const trimmed = reason.trim();
@@ -91,9 +97,14 @@ export function CancelOrderSection({ order }: { order: MyOrderDetail }) {
       {affordance === 'contact-shop' && (
         <section aria-label="Hủy đơn đã thanh toán" className="rounded-lg border border-primary-100 bg-white p-4 text-body text-gray-700">
           <p className="font-semibold text-gray-900">Cần hủy đơn đã thanh toán?</p>
-          <p className="mt-1">Đơn đã thanh toán nên không thể hủy trực tiếp trên ứng dụng. Vui lòng liên hệ quán và cung cấp mã đơn #{order.orderCode} để được hỗ trợ.</p>
+          <p className="mt-1">Gửi yêu cầu hoàn tiền cho đơn #{order.orderCode}; quán sẽ kiểm tra và cập nhật trạng thái.</p>
+          <Button className="mt-3" variant="outline" onClick={() => setRefundOpen(true)}>Yêu cầu hoàn tiền</Button>
         </section>
       )}
+
+      <Modal open={refundOpen} onClose={() => !refund.isPending && setRefundOpen(false)} title="Yêu cầu hoàn tiền" size="sm">
+        <div className="space-y-3"><p className="text-body text-gray-700">Yêu cầu hoàn tiền cho đơn #{order.orderCode}. Quán sẽ xác nhận số tiền và phương thức hoàn.</p>{payments.isLoading ? <p className="text-caption text-gray-600">Đang tải giao dịch…</p> : payments.isError ? <p role="alert" className="text-caption text-error-strong">Không tải được thanh toán. Hãy thử lại.</p> : !payments.data?.length ? <p className="text-caption text-gray-600">Chưa tìm thấy giao dịch thanh toán.</p> : <><p className="text-caption text-gray-600">Giao dịch #{payments.data[0].payment.id}</p>{inlineError && <p role="alert" className="text-caption text-error-strong">{inlineError}</p>}<div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setRefundOpen(false)}>Đóng</Button><Button loading={refund.isPending} disabled={refund.isPending || payments.data[0].payment.amount <= payments.data[0].payment.refundedAmount} onClick={() => { setInlineError(null); const p = payments.data![0].payment; refund.mutate({ paymentId: p.id, amount: p.amount - p.refundedAmount, refundMethod: p.paymentMethod === 'Momo' ? 'Momo' : 'VNPay', reason: 'Yêu cầu hoàn tiền từ khách hàng', allocations: [{ orderId: order.id, amount: p.amount - p.refundedAmount }] }); setRefundOpen(false); }}>Gửi yêu cầu</Button></div></>}</div>
+      </Modal>
 
       <Modal
         open={open}

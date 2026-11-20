@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { AlertTriangle, BrainCircuit, Sparkles, TrendingUp } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useAuthStore } from '@/features/auth/store';
+import { useAuthBranchId } from '@/features/auth/branch-context';
 import { SectionEmpty, SectionError, StaleNote } from '@/features/manager-dashboard/components/SectionState';
 import { formatPercent } from '@/features/manager-dashboard/model';
 import { useInventoryStock } from '@/features/manager-inventory/hooks/useInventory';
@@ -22,7 +22,7 @@ import {
 const errorMessage = (e: unknown) => (isApiError(e) ? e.message : undefined);
 
 export default function ManagerForecastPage() {
-  const branchId = useAuthStore((s) => s.branchId);
+  const branchId = useAuthBranchId();
   // "Hôm nay" cố định theo lần mở trang để mọi phép tính thuần và khớp với khoá query.
   const today = useMemo(() => toIsoDate(new Date()), []);
   const [horizon, setHorizon] = useState<Horizon>(DEFAULT_HORIZON);

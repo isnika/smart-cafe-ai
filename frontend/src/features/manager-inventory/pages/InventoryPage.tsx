@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { AlertTriangle, PackageSearch, RefreshCw, Search, Warehouse } from 'lucide-react';
-import { useAuthStore } from '@/features/auth/store';
+import { useAuthBranchId } from '@/features/auth/branch-context';
 import { isApiError } from '@/shared/api';
 import { cn } from '@/shared/lib/cn';
 import { Button, Card, Input, Skeleton } from '@/shared/ui';
@@ -11,7 +11,7 @@ import { useInventoryStock } from '../hooks/useInventory';
 import { countByStatus, filterStock } from '../model';
 
 export default function InventoryPage() {
-  const branchId = useAuthStore((s) => s.branchId);
+  const branchId = useAuthBranchId();
   const stock = useInventoryStock(branchId);
   const [q, setQ] = useState('');
   const [lowOnly, setLowOnly] = useState(false);

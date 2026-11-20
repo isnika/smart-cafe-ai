@@ -53,6 +53,12 @@ function customerOf(request: Request): MockAccount {
   return account;
 }
 
+function staffOf(request: Request): MockAccount {
+  const account = accountOf(request);
+  if (account.roleName !== 'Staff' && account.roleName !== 'Manager' && account.roleName !== 'Admin') fail(403, 'FORBIDDEN', 'Không đủ quyền xem đơn');
+  return account;
+}
+
 // ── Tham số ───────────────────────────────────────────────────────────
 function parseId(raw: unknown): number {
   const text = String(raw);
@@ -158,6 +164,25 @@ function detailView(o: OrderDetail, viewer: MockAccount) {
 }
 
 export const orderReadV1Handlers = [
+  http.get(url('/orders/public/best-selling-branch'), guardedV1(() => {
+    const best = db.orders.filter((o) => o.status === 'Completed').reduce((counts, order) => counts.set(order.branchId, (counts.get(order.branchId) ?? 0) + 1), new Map<number, number>());
+    const branchId = [...best].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]?.[0] ?? 1;
+    return ok(branchId);
+  })),
+  // GET /orders?branch_id=&page=&size=&sort= — Manager/Staff branch scoped list.
+  http.get(url('/orders'), guardedV1(({ request }) => {
+    const viewer = staffOf(request);
+    const sp = new URL(request.url).searchParams;
+    const requestedBranch = sp.has('branch_id') ? intParam(sp, 'branch_id', 1, 1) : viewer.branchId;
+    if (requestedBranch === null) fail(400, 'VALIDATION_ERROR', 'branch_id là bắt buộc');
+    if (viewer.roleName !== 'Admin' && requestedBranch !== viewer.branchId) fail(403, 'FORBIDDEN', 'Không có quyền xem đơn của chi nhánh này');
+    const page = intParam(sp, 'page', 1, 1);
+    const size = intParam(sp, 'size', DEFAULT_PAGE_SIZE, 1, MAX_PAGE_SIZE);
+    const rows = db.orders.filter((o) => o.branchId === requestedBranch).sort((a, b) => utcMs(b.createdAt) - utcMs(a.createdAt));
+    const start = (page - 1) * size;
+    return ok(rows.slice(start, start + size), { page, size, total: rows.length, totalPages: Math.ceil(rows.length / size) });
+  })),
+
   // GET /orders/me?status=&payment_status=&from=&to=&page=&size=&sort=
   http.get(url('/orders/me'), guardedV1(({ request }) => {
     const me = customerOf(request);

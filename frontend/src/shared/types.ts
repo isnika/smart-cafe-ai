@@ -371,6 +371,8 @@ export interface LeaveRequest {
   reviewedAt?: IsoDateTime | null;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
+  employeeCode?: string | null;
+  staff?: { userInfo?: { fullName?: string | null } | null } | null;
 }
 
 // ── Store view models / inputs ────────────────────────────────────────

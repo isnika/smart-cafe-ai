@@ -22,7 +22,7 @@ afterEach(() => server.resetHandlers());
 
 const productsOf = (metadata: Record<string, unknown> | null | undefined) => (metadata?.products ?? []) as ChatProductCard[];
 
-describe('POST /intelligence/chat/sessions', () => {
+describe('POST /chat/sessions', () => {
   it('khách vãng lai tạo phiên bằng guestKey (không cần token) → 201, Active', async () => {
     const session = await intelligenceApi.createChatSession({ guestKey: 'guest-1' });
     expect(session).toMatchObject({ status: 'Active', userId: null, guestKey: 'guest-1' });
@@ -49,7 +49,7 @@ describe('POST /intelligence/chat/sessions', () => {
   });
 });
 
-describe('POST/GET /intelligence/chat/sessions/:id/messages', () => {
+describe('POST/GET /chat/sessions/:id/messages', () => {
   it('"gợi ý đồ uống ít đắng" → tin khách + tin AI kèm 2–3 thẻ món từ catalog; GET trả đúng lịch sử', async () => {
     const session = await intelligenceApi.createChatSession({ guestKey: 'g' });
     const reply = await intelligenceApi.sendChatMessage(session.id, { content: 'gợi ý đồ uống ít đắng' });
@@ -104,7 +104,7 @@ describe('POST/GET /intelligence/chat/sessions/:id/messages', () => {
   });
 });
 
-describe('POST /intelligence/chat/sessions/:id/handoff', () => {
+describe('POST /chat/sessions/:id/handoff', () => {
   it('chuyển nhân viên → Waiting_Staff + handedOffAt; gọi lại vẫn idempotent', async () => {
     const session = await intelligenceApi.createChatSession({ guestKey: 'g' });
     const first = await intelligenceApi.handOffChat(session.id);
@@ -142,8 +142,8 @@ describe('POST /intelligence/chat/sessions/:id/handoff', () => {
 });
 
 describe('khớp URL của client', () => {
-  it('endpoint nằm dưới /intelligence/chat/sessions', async () => {
-    const res = await fetch(url('/intelligence/chat/sessions'), {
+  it('endpoint nằm dưới /chat/sessions', async () => {
+    const res = await fetch(url('/chat/sessions'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ guestKey: 'raw' }),
     });
     expect(res.status).toBe(201);

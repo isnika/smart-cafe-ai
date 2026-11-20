@@ -41,6 +41,7 @@ public class OrderController {
     @PatchMapping("/{id}/status") public ApiResponse status(@PathVariable @Positive Long id,@Valid @RequestBody ChangeStatus body,HttpServletRequest req){return ApiResponse.ok(service.change(id,body,access.context(req)));}
     @GetMapping("/{id}/history") public ApiResponse history(@PathVariable @Positive Long id,HttpServletRequest req){return ApiResponse.ok(service.history(id,access.context(req)));}
     @GetMapping("/summary") public ApiResponse summary(@RequestParam(name="branch_id",required=false) Integer branch,@RequestParam(required=false) String from,@RequestParam(required=false) String to,HttpServletRequest req){return ApiResponse.ok(queries.summary(new Filter(branch,null,null,null,null,from,to),access.context(req)));}
+    @GetMapping("/public/best-selling-branch") public ApiResponse bestSellingBranch(){return ApiResponse.ok(queries.bestSellingBranchId());}
     @GetMapping("/reports/sales") public ApiResponse sales(@RequestParam(name="branch_id",required=false) Integer branch,@RequestParam LocalDate from,@RequestParam LocalDate to,
             @RequestParam(name="group_by",defaultValue="day") String group,@RequestParam(name="order_source",required=false) Source source,@RequestParam(name="fulfillment_type",required=false) Fulfillment fulfillment,HttpServletRequest req){
         return ApiResponse.ok(queries.sales(branch,from,to,group,source,fulfillment,access.context(req)));

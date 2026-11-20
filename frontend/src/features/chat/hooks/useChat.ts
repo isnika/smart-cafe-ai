@@ -34,7 +34,9 @@ export function useChat(open: boolean) {
   const messages = useQuery({
     queryKey: messagesKey(sessionId),
     enabled: sessionId !== undefined,
-    staleTime: Infinity,
+    // Staff có thể nhận và trả lời ở một máy khác; đồng bộ lịch sử định kỳ khi panel mở.
+    refetchInterval: open && sessionId !== undefined ? 2500 : false,
+    staleTime: 0,
     gcTime: Infinity,
     queryFn: () => intelligenceApi.listChatMessages(sessionId!),
   });
@@ -86,5 +88,6 @@ export function useChat(open: boolean) {
     handOff: () => handOff.mutate(),
     handingOff: handOff.isPending,
     handOffError: handOff.isError,
+    refreshMessages: () => void messages.refetch(),
   };
 }

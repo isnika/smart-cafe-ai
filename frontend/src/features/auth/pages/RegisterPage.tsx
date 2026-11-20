@@ -54,8 +54,20 @@ export default function RegisterPage() {
     value: values[key],
     error: errors[key],
     onChange: (e: { target: { value: string } }) => {
-      setValues((p) => ({ ...p, [key]: e.target.value }));
-      if (errors[key]) setErrors((p) => ({ ...p, [key]: undefined }));
+      const value = e.target.value;
+      setValues((p) => ({ ...p, [key]: value }));
+      if (key === "email" || key === "phone") {
+        const validate = key === "email" ? validateEmail : validatePhone;
+        setErrors((p) => ({ ...p, [key]: validate(value) }));
+      } else if (errors[key]) {
+        setErrors((p) => ({ ...p, [key]: undefined }));
+      }
+    },
+    onBlur: () => {
+      if (key === "email" || key === "phone") {
+        const validate = key === "email" ? validateEmail : validatePhone;
+        setErrors((p) => ({ ...p, [key]: validate(values[key]) }));
+      }
     },
   });
 

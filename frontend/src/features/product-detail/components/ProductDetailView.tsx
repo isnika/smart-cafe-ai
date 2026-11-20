@@ -23,7 +23,6 @@ import {
   variantPriceHint,
   type Picks,
 } from "../model";
-import { ProductReviews } from "./ProductReviews";
 
 /** Ảnh món; thiếu ảnh hoặc ảnh lỗi → khối icon (không để <img> hỏng). */
 function ProductImage({ src, alt }: { src?: string | null; alt: string }) {
@@ -56,6 +55,7 @@ export function ProductDetailView({ detail, categoryName }: Props) {
   const [quantity, setQuantity] = useState(1);
 
   const fulfillment = useOnlineCartStore((s) => s.fulfillmentType);
+  const branchId = useOnlineCartStore((s) => s.branchId);
   const addLine = useOnlineCartStore((s) => s.addLine);
 
   const variant = variants.find((v) => v.id === variantId) ?? null;
@@ -65,7 +65,7 @@ export function ProductDetailView({ detail, categoryName }: Props) {
   const total = draft ? lineUnitTotal(draft) * quantity : 0;
   const shownPrice = variant?.price ?? (variants.length > 0 ? Math.min(...variants.map((v) => v.price)) : null);
 
-  const canAdd = !soldOut && draft !== null && !missing;
+  const canAdd = branchId !== null && !soldOut && draft !== null && !missing;
   const buttonLabel = soldOut ? "Hết hàng" : missing ? `Chọn ${missing.name}` : `Thêm vào giỏ • ${formatVnd(total)}`;
 
   const change = <T,>(setter: (value: T) => void) => (value: T) => {
@@ -73,6 +73,11 @@ export function ProductDetailView({ detail, categoryName }: Props) {
   };
 
   const handleAdd = () => {
+    if (branchId === null) {
+      toast.error('Vui lòng chọn chi nhánh trước khi thêm món.');
+      navigate(PATHS.menu);
+      return;
+    }
     if (!canAdd || !draft) return;
     addLine(draft, quantity);
     toast.success(`Đã thêm ${quantity} ${detail.name} vào giỏ hàng`, {
@@ -174,7 +179,6 @@ export function ProductDetailView({ detail, categoryName }: Props) {
           <RecommendationSection variant="detail" excludeProductId={detail.id} />
         </div>
 
-        <ProductReviews productId={detail.id} />
       </div>
 
       <div className="fixed inset-x-0 bottom-[calc(3.5rem+var(--safe-bottom,0px))] z-20 mx-auto max-w-2xl border-t border-primary-100 bg-white px-4 py-3">

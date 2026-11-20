@@ -98,7 +98,7 @@ export interface SetAvailabilityInput {
 }
 
 export const setVariantAvailability = (branchId: number, variantId: number, input: SetAvailabilityInput) =>
-  http.put<BranchProductAvailability>(`${P}/branches/${branchId}/variants/${variantId}/availability`, input);
+  http.put<BranchProductAvailability>(`${P}/branches/${branchId}/variants/${variantId}/availability`, input, { snake: true });
 
 export const setOptionAvailability = (branchId: number, optionId: number, input: SetAvailabilityInput) =>
-  http.put<BranchProductAvailability>(`${P}/branches/${branchId}/options/${optionId}/availability`, input);
+  http.put<BranchProductAvailability>(`${P}/branches/${branchId}/options/${optionId}/availability`, input, { snake: true });

@@ -14,6 +14,7 @@ import { Button } from "@/shared/ui";
 import { CategoryChips } from "../components/CategoryChips";
 import { MenuEmpty, MenuError, MenuSkeleton } from "../components/MenuStates";
 import { useCategories, usePublicMenu } from "../hooks/useMenu";
+import { useDefaultBranch } from "../hooks/useDefaultBranch";
 
 /**
  * Thực đơn công khai; khách có thể thêm món vào giỏ trước khi chọn cách nhận hàng.
@@ -25,6 +26,9 @@ export default function MenuBrowsePage() {
   const menu = usePublicMenu();
   const lines = useOnlineCartStore((s) => s.lines);
   const addLine = useOnlineCartStore((s) => s.addLine);
+  const branchId = useOnlineCartStore((s) => s.branchId);
+  const setBranch = useOnlineCartStore((s) => s.setBranch);
+  const { branches } = useDefaultBranch();
   const [picking, setPicking] = useState<MenuProduct | null>(null);
 
   const raw = Number(params.get("category"));
@@ -35,6 +39,11 @@ export default function MenuBrowsePage() {
     <div className="min-h-screen bg-primary-50">
       <PageHeader title="Thực đơn" />
       <div className={lines.length > 0 ? "space-y-4 px-4 pb-44 pt-4" : "space-y-4 px-4 pb-24 pt-4"}>
+        <section className="rounded-xl border border-primary-100 bg-white p-4">
+          <label htmlFor="online-branch" className="mb-2 block text-body font-semibold">Chọn chi nhánh trước khi chọn món</label>
+          {branches.isError ? <p role="alert" className="text-caption text-error-strong">Không tải được danh sách chi nhánh. <button type="button" className="underline" onClick={() => void branches.refetch()}>Thử lại</button></p> : <select id="online-branch" aria-label="Chi nhánh đặt hàng" value={branchId ?? ''} disabled={branches.isPending} onChange={(event) => setBranch(event.target.value ? Number(event.target.value) : null)} className="h-11 w-full rounded-md border border-gray-300 bg-white px-3 text-body"><option value="">Chọn chi nhánh</option>{branches.data?.filter((branch) => branch.status === 'Active' && branch.acceptsOnlineOrders).map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select>}
+        </section>
+        {branchId === null && <p className="rounded-xl bg-primary-100 p-4 text-body text-primary-900">Vui lòng chọn chi nhánh để xem thực đơn và thêm món vào giỏ.</p>}
         {categories.data && categories.data.length > 0 && (
           <CategoryChips
             categories={categories.data}
@@ -54,7 +63,7 @@ export default function MenuBrowsePage() {
           </div>
         )}
 
-        <p className="rounded-xl border border-primary-100 bg-white p-4 text-body text-gray-700">Thêm món vào giỏ, kiểm tra lựa chọn rồi chọn giao hàng trực tuyến hoặc mang đi để tiếp tục.</p>
+        {branchId !== null && <p className="rounded-xl border border-primary-100 bg-white p-4 text-body text-gray-700">Thực đơn và đơn hàng sẽ theo chi nhánh bạn đã chọn.</p>}
       </div>
 
       {lines.length > 0 && (
@@ -64,7 +73,7 @@ export default function MenuBrowsePage() {
           </Button>
         </StickyActionBar>
       )}
-      <ProductOptionsModal
+      {branchId !== null && <ProductOptionsModal
         product={picking}
         onClose={() => setPicking(null)}
         onAdd={(line, quantity) => {
@@ -72,7 +81,8 @@ export default function MenuBrowsePage() {
             toast.success(`Đã thêm ${quantity} ${line.productName} vào giỏ hàng`);
           setPicking(null);
         }}
-      />
+        branchId={branchId}
+      />}
     </div>
   );
 }

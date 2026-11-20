@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
-import { useAuthStore } from '@/features/auth/store';
+import { useAuthBranchId } from '@/features/auth/branch-context';
 import { isApiError } from '@/shared/api';
 import { cn } from '@/shared/lib/cn';
 import { Button, Skeleton } from '@/shared/ui';
@@ -19,7 +19,7 @@ const errorText = (e: unknown, fallback: string): string => {
 };
 
 export default function StaffTablesPage() {
-  const branchId = useAuthStore((s) => s.branchId);
+  const branchId = useAuthBranchId();
   const [filter, setFilter] = useState<SessionFilter>('Payment_Pending');
   const [page, setPage] = useState(1);
   const tables = useStaffTables(branchId);
@@ -34,7 +34,7 @@ export default function StaffTablesPage() {
   const meta = sessions.data?.meta;
   const refetchAll = () => void Promise.all([tables.refetch(), sessions.refetch()]);
 
-  // Chưa biết chi nhánh của tài khoản thì không đoán/hardcode: dừng ở đây (spec chưa nêu nguồn branch_id cho Staff).
+  // Khi BE chưa trả branch_id, FE mock dùng branch mặc định cấu hình ở auth/branch-context.
   if (branchId === null) {
     return (
       <div className="space-y-4">

@@ -23,7 +23,7 @@ export function describeApiError(err: unknown, ctx: { itemName?: string } = {}):
   if (status === 0 || code === 'NETWORK_ERROR') {
     return { ...base, retryable: true, message: 'Mất kết nối tới máy chủ. Vui lòng kiểm tra mạng và thử lại.' };
   }
-  if (status >= 500) return { ...base, retryable: true, message: 'Máy chủ đang bận. Vui lòng thử lại sau ít giây.' };
+  if (status >= 500) return { ...base, retryable: true, message: err.message || 'Máy chủ đang bận. Vui lòng thử lại sau ít giây.' };
 
   if (status === 422) {
     if (code === 'OUT_OF_STOCK') {

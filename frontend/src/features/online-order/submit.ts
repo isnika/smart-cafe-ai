@@ -2,7 +2,7 @@ import { useAuthStore } from '@/features/auth/store';
 import { toOrderLines, type DineInCartLine } from '@/features/dine-in/cart';
 import { usePlacedOrders } from '@/features/dine-in/placed-orders';
 import { SubmitOrderError } from '@/features/dine-in/submit';
-import { isApiError, orderApi, storeApi } from '@/shared/api';
+import { ApiError, isApiError, orderApi, storeApi } from '@/shared/api';
 import type { CreateOnlineOrderInput } from '@/shared/api/order';
 import type { OrderDetail } from '@/shared/types';
 import { onlineBranchBlock } from './branch-policy';
@@ -77,10 +77,12 @@ export function resetOnlineSubmitState(): void {
  * nhận diện luồng và (mock) gợi ý Pending_Payment.
  */
 export function placeOnlineOrder(opts: { note?: string; voucherCode?: string; method?: PaymentChoice } = {}): Promise<OrderDetail> {
-  const { fulfillmentType, lines, delivery } = useOnlineCartStore.getState();
+  if (useOnlineCartStore.getState().syncStatus !== 'ready') return Promise.reject(new SubmitOrderError('CART_SYNC_PENDING', 'Vui lòng đồng bộ giỏ hàng trước khi đặt hàng.'));
+  const { fulfillmentType, branchId, lines, delivery } = useOnlineCartStore.getState();
   if (fulfillmentType === null) {
     return Promise.reject(new SubmitOrderError('NO_FULFILLMENT', 'Vui lòng chọn Giao hàng hoặc Mang đi.'));
   }
+  if (branchId === null) return Promise.reject(new SubmitOrderError('NO_BRANCH', 'Vui lòng chọn chi nhánh trước khi đặt hàng.'));
   if (lines.length === 0) return Promise.reject(new SubmitOrderError('EMPTY_CART', 'Giỏ hàng đang trống.'));
 
   const { user, roleName } = useAuthStore.getState();
@@ -97,13 +99,19 @@ export function placeOnlineOrder(opts: { note?: string; voucherCode?: string; me
 
   const voucherCode = isVoucherEnabled() ? opts.voucherCode : undefined;
   const signature = JSON.stringify([
-    user.id, fulfillmentType, toOrderLines(lines), fulfillmentType === 'Delivery' ? normalizedDelivery : null,
+    user.id, branchId, fulfillmentType, toOrderLines(lines), fulfillmentType === 'Delivery' ? normalizedDelivery : null,
     opts.note?.trim() ?? '', voucherCode ?? '', opts.method ?? '',
   ]);
   if (inflight?.signature === signature) return inflight.promise;
+  const assertAccount = () => {
+    if (useAuthStore.getState().user?.id !== user.id) {
+      throw new ApiError(409, { code: 'ACCOUNT_CHANGED', message: 'Tài khoản đã thay đổi. Vui lòng mở lại giỏ hàng.' });
+    }
+  };
 
   const run = async (): Promise<OrderDetail> => {
-    const branch = await storeApi.getBranch(ONLINE_BRANCH_ID);
+    const branch = await storeApi.getBranch(branchId);
+    assertAccount();
     const destination =
       delivery && typeof delivery.latitude === 'number' && typeof delivery.longitude === 'number'
         ? { latitude: delivery.latitude, longitude: delivery.longitude }
@@ -113,14 +121,15 @@ export function placeOnlineOrder(opts: { note?: string; voucherCode?: string; me
 
     const current = attemptFor(signature);
     if (current.cartId === null) {
-      const cart = await syncOnlineCart({ fulfillmentType, branchId: ONLINE_BRANCH_ID, lines: snapshot(lines) });
+      const cart = await syncOnlineCart({ fulfillmentType, branchId, lines: snapshot(lines), userId: user.id });
+      assertAccount();
       current.cartId = cart.id;
       current.branchId = cart.branchId;
     }
 
     const input = buildOnlineOrderInput({
       cartId: current.cartId,
-      branchId: current.branchId ?? ONLINE_BRANCH_ID,
+      branchId: current.branchId ?? branchId,
       fulfillmentType,
       ...(normalizedDelivery ? { delivery: normalizedDelivery } : {}),
       ...(opts.note ? { note: opts.note } : {}),
@@ -130,6 +139,7 @@ export function placeOnlineOrder(opts: { note?: string; voucherCode?: string; me
       idempotencyKey: current.key,
       ...(isMockMode() && opts.method ? { mockPaymentMethod: toPaymentMethod(opts.method) } : {}),
     });
+    assertAccount();
     usePlacedOrders.getState().record(order);
     useOnlineCartStore.getState().clearOrder();
     attempt = null;

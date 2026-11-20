@@ -217,7 +217,7 @@ describe('FloatingChatBox — chuyển nhân viên', () => {
 
   it('handoff lỗi → báo lỗi, cho thử lại', async () => {
     await openPanel();
-    server.use(http.post(url('/intelligence/chat/sessions/:id/handoff'), () => HttpResponse.json({ message: 'Lỗi' }, { status: 500 }), { once: true }));
+    server.use(http.post(url('/chat/sessions/:id/handoff'), () => HttpResponse.json({ message: 'Lỗi' }, { status: 500 }), { once: true }));
     fireEvent.click(screen.getByRole('button', { name: /Chuyển nhân viên/ }));
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toMatch(/Chưa chuyển được/);
@@ -232,7 +232,7 @@ describe('FloatingChatBox — lỗi', () => {
   it('gửi thất bại → báo lỗi, bỏ tin tạm, "Thử lại" gửi lại đúng nội dung', async () => {
     await openPanel();
     server.use(
-      http.post(url('/intelligence/chat/sessions/:id/messages'), () => HttpResponse.json({ message: 'Lỗi máy chủ' }, { status: 500 }), { once: true }),
+      http.post(url('/chat/sessions/:id/messages'), () => HttpResponse.json({ message: 'Lỗi máy chủ' }, { status: 500 }), { once: true }),
     );
     type('gợi ý đồ uống ít đắng');
     pressEnter();
@@ -249,7 +249,7 @@ describe('FloatingChatBox — lỗi', () => {
   });
 
   it('không tạo được phiên → báo lỗi + thử lại', async () => {
-    server.use(http.post(url('/intelligence/chat/sessions'), () => HttpResponse.json({ message: 'Lỗi' }, { status: 500 }), { once: true }));
+    server.use(http.post(url('/chat/sessions'), () => HttpResponse.json({ message: 'Lỗi' }, { status: 500 }), { once: true }));
     renderAt();
     fireEvent.click(screen.getByRole('button', { name: 'Mở trợ lý AI' }));
     const alert = await screen.findByRole('alert');

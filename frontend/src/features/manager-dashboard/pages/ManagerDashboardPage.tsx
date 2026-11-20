@@ -1,6 +1,6 @@
 import { useMemo, type ReactNode } from 'react';
 import { AlertTriangle, Boxes, LayoutDashboard, ReceiptText, TrendingUp } from 'lucide-react';
-import { useAuthStore } from '@/features/auth/store';
+import { useAuthBranchId } from '@/features/auth/branch-context';
 import { isApiError } from '@/shared/api';
 import { formatVnd } from '@/shared/lib';
 import { Card, Skeleton } from '@/shared/ui';
@@ -18,9 +18,9 @@ import { averageOrderValue, cancelRate, formatPercent, orderMix, revenueByHour }
 const NO_VALUE = '—';
 
 export default function ManagerDashboardPage() {
-  const branchId = useAuthStore((s) => s.branchId);
+  const branchId = useAuthBranchId();
   // Hai nguồn độc lập: đơn hàng (không phụ thuộc chi nhánh) và tồn kho (theo chi nhánh của tài khoản).
-  const orders = useDayOrders();
+  const orders = useDayOrders(branchId);
   const stock = useInventoryStock(branchId);
 
   // `now` lấy từ lần tải gần nhất để các hàm tính toán thuần, render lại không đổi kết quả.
@@ -107,7 +107,7 @@ export default function ManagerDashboardPage() {
 
       {truncated && (
         <p className="text-caption text-gray-500">
-          Số liệu đơn tính trên {DAY_ORDERS_PAGE_SIZE} đơn gần nhất (hệ thống có {orders.data?.total} đơn, chưa lọc theo chi nhánh); chưa có API thống kê theo ngày.
+          Số liệu đơn tính trên {DAY_ORDERS_PAGE_SIZE} đơn gần nhất trong chi nhánh (hệ thống có {orders.data?.total} đơn); chưa có API thống kê theo ngày.
         </p>
       )}
 

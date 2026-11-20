@@ -1,10 +1,10 @@
 import { buildLineKey, MAX_LINE_QUANTITY, type NewCartLine } from '@/features/dine-in/cart';
 import { canReorder, reorderFulfillment } from '@/features/orders/reorder';
-import { isApiError, myOrderApi, orderApi } from '@/shared/api';
+import { ApiError, isApiError, myOrderApi, orderApi } from '@/shared/api';
+import { useAuthStore } from '@/features/auth/store';
 import type { OnlineCartCtx, QrCart, QrCartItem, QrCartItemInput } from '@/shared/api/order';
 import type { OrderItemDetail } from '@/shared/types';
 import { runOnlineCartExclusive } from './cart-sync';
-import { ONLINE_BRANCH_ID } from './config';
 import { useOnlineCartStore, type OnlineFulfillment } from './store';
 
 /**
@@ -157,7 +157,7 @@ export function classifyAddError(e: unknown): Pick<ReorderFailure, 'reason' | 's
 }
 
 /** 401/403 không phải lỗi của một món: dừng hẳn (401 đã qua refresh của http.ts). */
-const isFatal = (e: unknown): boolean => !isApiError(e) || e.status === 401 || e.status === 403;
+const isFatal = (e: unknown): boolean => !isApiError(e) || e.status === 401 || e.status === 403 || e.code === 'ACCOUNT_CHANGED';
 
 // ── Giỏ ────────────────────────────────────────────────────────────────
 async function currentCartOrNull(ctx: OnlineCartCtx, signal?: AbortSignal): Promise<QrCart | null> {
@@ -195,6 +195,8 @@ function mirrorServerCart(cart: QrCart, fulfillmentType: OnlineFulfillment, plan
   const store = useOnlineCartStore.getState();
   store.clearOrder();
   store.setFulfillment(fulfillmentType);
+  store.setBranch(cart.branchId);
+  useOnlineCartStore.setState({ fulfillmentType, branchId: cart.branchId });
   for (const item of cart.items) {
     const key = buildLineKey({
       variantId: item.variantId,
@@ -221,16 +223,21 @@ const result = (r: Partial<ReorderResult> & Pick<ReorderResult, 'status' | 'orde
  * lỗi hệ thống của giỏ (401/403, mở giỏ thất bại); lỗi của TỪNG món không ném mà nằm trong `failed`.
  */
 export async function reorderOnlineOrder(orderId: number, options: ReorderOptions = {}): Promise<ReorderResult> {
+  const ownerId = useAuthStore.getState().user?.id;
   const { replaceExisting = true, signal } = options;
   const order = await myOrderApi.getMyOrder(orderId, signal);
+  if (useAuthStore.getState().user?.id !== ownerId) {
+    throw new ApiError(409, { code: 'ACCOUNT_CHANGED', message: 'Tài khoản đã thay đổi. Vui lòng thực hiện lại thao tác.' });
+  }
   if (!canReorder(order)) return result({ status: 'not_reorderable', orderId });
 
   const fulfillmentType = reorderFulfillment(order);
+  const branchId = order.branchId;
   const { lines, skipped } = planLines(order.items);
   if (lines.length === 0) return result({ status: 'nothing_to_reorder', orderId, fulfillmentType, skipped });
 
   // Cùng hàng đợi với syncOnlineCart: không chạy chồng với lần đồng bộ giỏ đang diễn ra.
-  return runOnlineCartExclusive(async () => {
+  return runOnlineCartExclusive(async (assertAccount) => {
     const ctx: OnlineCartCtx = { source: 'Online', fulfillmentType };
 
     const existing = await currentCartOrNull(ctx, signal);
@@ -239,10 +246,10 @@ export async function reorderOnlineOrder(orderId: number, options: ReorderOption
       return result({ status: 'blocked', orderId, fulfillmentType, skipped, existingCartItemCount: existingCount });
     }
     // Giỏ Online chỉ có MỘT giỏ Active/user → giỏ cũ có món hoặc sai ngữ cảnh thì bỏ, mở giỏ mới (như cart-sync).
-    if (existing && (existingCount > 0 || existing.fulfillmentType !== fulfillmentType || existing.branchId !== ONLINE_BRANCH_ID)) {
+    if (existing && (existingCount > 0 || existing.fulfillmentType !== fulfillmentType || existing.branchId !== branchId)) {
       await orderApi.clearCart(ctx);
     }
-    await orderApi.ensureCart(ctx, ONLINE_BRANCH_ID);
+    await orderApi.ensureCart(ctx, branchId);
 
     const added: ReorderLineRef[] = [];
     const failed: ReorderFailure[] = [];
@@ -258,6 +265,7 @@ export async function reorderOnlineOrder(orderId: number, options: ReorderOption
 
     // Lấy lại giỏ từ server: giá/tổng do server tính, và phát hiện giỏ biến mất giữa chừng (404 → ném, không báo "tất cả lỗi" sai).
     const cart = await orderApi.getCurrentCart(ctx, signal);
+    assertAccount();
     if (added.length > 0) {
       mirrorServerCart(cart, fulfillmentType, new Map(lines.map((l) => [l.key, l])));
     }

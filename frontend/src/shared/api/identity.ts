@@ -122,6 +122,12 @@ export const refresh = async (refreshToken: string): Promise<RefreshedTokens> =>
 
 export const getMe = async () => toUser(await http.get<WireUser>('/users/me'));
 export const updateProfile = async (input: { fullName: string }) => toUser(await http.put<WireUser>('/users/me', input, { snake: true }));
+export const requestPhoneChangeOtp = (newPhone: string) =>
+  http.post<string>('/users/me/contact/otp', { newPhone }, { snake: true });
+export const updatePhoneWithOtp = async (newPhone: string, otpCode: string) =>
+  toUser(await http.put<WireUser>('/users/me/contact', { newPhone, otpCode }, { snake: true }));
+export const changePassword = (input: { currentPassword: string; newPassword: string }) =>
+  http.put<string>('/auth/change-password', input, { snake: true });
 export const listRoles = () => http.get<Role[]>('/admin/roles');
 
 // ── Địa chỉ giao hàng (spec "1. Identity / Địa chỉ giao hàng", Customer, Bearer) ──

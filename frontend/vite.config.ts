@@ -50,6 +50,16 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/orders/, '/api/v1/orders'),
       },
+      '/orders-svc': {
+        target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8080',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/orders-svc/, '/api/v1/orders'),
+      },
+      '/loyalty': {
+        target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8080',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/loyalty/, '/api/v1/loyalty'),
+      },
       // Admin pages call the Store service with service-relative paths.
       // Forward these through the gateway just like the versioned production API.
       '/branches': {
@@ -62,9 +72,20 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/tables/, '/api/v1/tables'),
       },
+      '/staff-profiles': {
+        target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8080',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/staff-profiles/, '/api/v1/staff-profiles'),
+      },
       '/api': {
         target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8080',
         changeOrigin: true,
+      },
+      // Chat Service route in API Gateway: /api/v1/chat/**.
+      '/chat': {
+        target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8080',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/chat/, '/api/v1/chat'),
       },
     },
   },

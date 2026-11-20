@@ -8,21 +8,20 @@ import App from "./App";
 import { USE_MOCK, configureHttp } from "@/shared/api/http";
 import { useAuthStore } from "@/features/auth/store";
 import { queryClient } from "@/app/providers";
+import { bindAuthQueryCache } from "@/features/auth/query-cache";
+import { bindOnlineCartToAuth } from "@/features/online-order/auth-session";
 
 async function bootstrap() {
   // 1) Nối http client với auth store — đúng 1 lần, trước mọi request.
   configureHttp({
     getToken: () => useAuthStore.getState().accessToken,
+    getAccountId: () => useAuthStore.getState().user?.id ?? null,
     onUnauthorized: () => useAuthStore.getState().clear(),
     refresh: () => useAuthStore.getState().refresh(),
   });
 
-  useAuthStore.subscribe((s, prev) => {
-    if (prev.status !== "anonymous" && s.status === "anonymous") {
-      void queryClient.cancelQueries();
-      queryClient.clear();
-    }
-  });
+  bindAuthQueryCache(queryClient);
+  bindOnlineCartToAuth();
 
   // 2) MSW phải sẵn sàng TRƯỚC khi hydrate, nếu không /me sẽ đi thẳng ra mạng thật.
   //    enableMocking() cũng seed đơn demo và gắn window.__mock (db, auth helpers).

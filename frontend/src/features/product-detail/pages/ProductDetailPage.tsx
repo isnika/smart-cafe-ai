@@ -16,7 +16,7 @@ const Shell = ({ children }: { children: ReactNode }) => (
   </div>
 );
 
-/** /menu/:id – chi tiết món: chọn size/tuỳ chọn, số lượng, thêm vào giỏ Online, và đánh giá của món. */
+/** /menu/:id – chi tiết món: chọn size/tuỳ chọn, số lượng và thêm vào giỏ Online. */
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const productId = parseProductId(id);

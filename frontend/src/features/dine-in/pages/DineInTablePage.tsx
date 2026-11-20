@@ -214,6 +214,7 @@ function MenuView() {
 
       <ProductOptionsModal
         product={picking}
+        branchId={branchId}
         onClose={() => setPicking(null)}
         onAdd={(line, quantity) => {
           void addLine(line, quantity).then((added) => {

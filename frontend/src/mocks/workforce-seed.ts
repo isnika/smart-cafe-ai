@@ -1,4 +1,4 @@
-import type { Schedule, Shift, StaffProfile } from '@/shared/types';
+import type { LeaveRequest, Schedule, Shift, StaffProfile } from '@/shared/types';
 import { BRANCH_ID } from './fixtures';
 
 /** Múi giờ của chi nhánh seed (Branch.timezone mặc định). */
@@ -12,7 +12,7 @@ export const todayIn = (tz: string = BRANCH_TZ, at: Date = new Date()): string =
  * Seed Workforce: 2 ca của chi nhánh 1 + hồ sơ của tài khoản u-staff.
  * u-staff chỉ có lịch Ca sáng hôm nay → quét QR Ca chiều sẽ bị từ chối (không có lịch).
  */
-export function buildWorkforceSeed(): { shifts: Shift[]; staffProfiles: StaffProfile[]; schedules: Schedule[] } {
+export function buildWorkforceSeed(): { shifts: Shift[]; staffProfiles: StaffProfile[]; schedules: Schedule[]; leaveRequests: LeaveRequest[] } {
   const shifts: Shift[] = [
     { id: 1, branchId: BRANCH_ID, name: 'Ca sáng', startTime: '06:00:00', endTime: '14:00:00', isOvernight: false, isActive: true },
     { id: 2, branchId: BRANCH_ID, name: 'Ca qua đêm', startTime: '22:00:00', endTime: '06:00:00', isOvernight: true, isActive: true },
@@ -27,5 +27,8 @@ export function buildWorkforceSeed(): { shifts: Shift[]; staffProfiles: StaffPro
   const schedules: Schedule[] = [
     { id: 1, branchId: BRANCH_ID, staffId: 1, shiftId: 1, workDate: todayIn(), status: 'Scheduled' },
   ];
-  return { shifts, staffProfiles, schedules };
+  const leaveRequests: LeaveRequest[] = [
+    { id: 1, staffId: 1, leaveType: 'Annual', startDate: todayIn(), endDate: todayIn(), reason: 'Việc gia đình', status: 'Pending', approverStaffId: null, reviewedAt: null, createdAt: at, updatedAt: at },
+  ];
+  return { shifts, staffProfiles, schedules, leaveRequests };
 }

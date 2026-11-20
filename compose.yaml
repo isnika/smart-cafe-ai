@@ -81,7 +81,7 @@ services:
       dockerfile: Dockerfile
 
     ports:
-      - "${FRONTEND_PORT:-5173}:5173"
+      - "${FRONTEND_PORT:-5173}:80"
 
     env_file:
       - ./frontend/.env
