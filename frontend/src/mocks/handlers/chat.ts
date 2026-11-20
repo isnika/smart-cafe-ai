@@ -40,10 +40,10 @@ function sellableCatalog(branchId: number): ChatCatalogItem[] {
 }
 
 export const chatHandlers = [
-  // POST /intelligence/chat/sessions   body: { userId? | guestKey?, branchId? }
+  // POST /chat/sessions   body: { userId? | guestKey?, branchId? }
   // Idempotent theo chủ phiên: còn phiên chưa đóng của cùng userId/guestKey thì trả lại phiên đó (200) để mở lại panel vẫn thấy lịch sử.
   http.post(
-    url('/intelligence/chat/sessions'),
+    url('/chat/sessions'),
     guarded(async ({ request }) => {
       const body = await readJson<CreateChatSessionInput>(request);
       const userId = body.userId?.trim() || undefined;
@@ -73,19 +73,19 @@ export const chatHandlers = [
     }),
   ),
 
-  // GET /intelligence/chat/sessions/:id/messages  → lịch sử theo thứ tự thời gian
+  // GET /chat/sessions/:id/messages  → lịch sử theo thứ tự thời gian
   http.get(
-    url('/intelligence/chat/sessions/:id/messages'),
+    url('/chat/sessions/:id/messages'),
     guarded(({ params }) => {
       const session = findSession(params.id);
       return HttpResponse.json<ChatMessage[]>(db.chatMessages.filter((m) => m.sessionId === session.id).sort((a, b) => a.id - b.id));
     }),
   ),
 
-  // POST /intelligence/chat/sessions/:id/messages   body: { content }
+  // POST /chat/sessions/:id/messages   body: { content }
   // → { messages: [tin khách, (tin AI)], session }. Phiên đã chuyển nhân viên thì KHÔNG có lượt AI tự động.
   http.post(
-    url('/intelligence/chat/sessions/:id/messages'),
+    url('/chat/sessions/:id/messages'),
     guarded(async ({ request, params }) => {
       const body = await readJson<Partial<SendChatMessageInput>>(request);
       const session = findSession(params.id);
@@ -106,9 +106,9 @@ export const chatHandlers = [
     }),
   ),
 
-  // POST /intelligence/chat/sessions/:id/handoff → ChatSession (Waiting_Staff). Gọi lại khi đã chuyển thì trả nguyên trạng.
+  // POST /chat/sessions/:id/handoff → ChatSession (Waiting_Staff). Gọi lại khi đã chuyển thì trả nguyên trạng.
   http.post(
-    url('/intelligence/chat/sessions/:id/handoff'),
+    url('/chat/sessions/:id/handoff'),
     guarded(({ params }) => {
       const session = findSession(params.id);
       if (session.status === 'Closed') fail(409, 'CHAT_SESSION_CLOSED', 'Phiên chat đã đóng');
@@ -119,4 +119,34 @@ export const chatHandlers = [
       return HttpResponse.json<ChatSession>(session);
     }),
   ),
+
+  http.get(url('/chat/sessions'), guarded(({ request }) => {
+    const status = new URL(request.url).searchParams.getAll('status');
+    return HttpResponse.json(db.chatSessions.filter((s) => !status.length || status.includes(s.status)).sort((a, b) => b.id - a.id));
+  })),
+  http.post(url('/chat/sessions/:id/claim'), guarded(({ params }) => {
+    const session = findSession(params.id);
+    if (session.status === 'Closed') fail(409, 'CHAT_SESSION_CLOSED', 'Phiên chat đã đóng');
+    if (session.status === 'Waiting_Staff') {
+      session.status = 'Handed_Off';
+      session.staffUserId = 'mock-staff';
+    }
+    return HttpResponse.json(session);
+  })),
+  http.post(url('/chat/sessions/:id/close'), guarded(({ params }) => {
+    const session = findSession(params.id);
+    session.status = 'Closed';
+    session.closedAt = nowNaive();
+    return HttpResponse.json(session);
+  })),
+  http.post(url('/chat/sessions/:id/messages/staff'), guarded(async ({ request, params }) => {
+    const session = findSession(params.id);
+    const body = await readJson<Partial<SendChatMessageInput>>(request);
+    const content = typeof body.content === 'string' ? body.content.trim() : '';
+    if (!content || content.length > MAX_CONTENT_LENGTH) fail(400, 'VALIDATION_ERROR', 'Tin nhắn phải có từ 1 đến 1000 ký tự');
+    if (session.status !== 'Handed_Off') fail(409, 'CHAT_SESSION_NOT_CLAIMED', 'Nhân viên cần tiếp nhận phiên chat trước');
+    const message = pushMessage(session.id, 'Staff', content);
+    message.senderUserId = session.staffUserId;
+    return HttpResponse.json<ChatReply>({ messages: [message], session }, { status: 201 });
+  })),
 ];

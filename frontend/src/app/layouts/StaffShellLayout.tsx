@@ -11,6 +11,7 @@ import {
   ScanLine,
   Sparkles,
   Users,
+  CalendarDays,
 } from "lucide-react";
 import type { ComponentType } from "react";
 import { useAuthStore } from "@/features/auth/store";
@@ -33,16 +34,20 @@ const navByRole: Record<Exclude<RoleName, "Customer">, NavItem[]> = {
     { to: "/staff/queue", label: "Hàng đợi đơn", icon: ClipboardList },
     { to: "/staff/tables", label: "Bàn & phiên", icon: LayoutGrid },
     { to: "/staff/checkin", label: "Check-in QR", icon: ScanLine },
+    { to: "/staff/leave", label: "Lịch & nghỉ phép", icon: CalendarDays },
   ],
   Manager: [
     { to: "/manager", label: "Tổng quan", icon: LayoutDashboard, end: true },
     { to: "/manager/inventory", label: "Kho", icon: Package },
     { to: "/manager/forecast", label: "Dự báo AI", icon: Sparkles },
+    { to: "/manager/leave-requests", label: "Duyệt nghỉ phép", icon: CalendarDays },
   ],
   Admin: [
     { to: "/admin", label: "Tổng quan", icon: LayoutDashboard, end: true },
     { to: "/admin/branches", label: "Chi nhánh", icon: Building2 },
     { to: "/admin/tables", label: "Bàn & QR", icon: QrCode },
+    { to: "/admin/products", label: "Sản phẩm", icon: Coffee },
+    { to: "/admin/menus", label: "Thực đơn chi nhánh", icon: ClipboardList },
     { to: "/admin/users", label: "Tài khoản & Quyền", icon: Users },
   ],
 };

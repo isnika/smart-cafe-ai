@@ -1,5 +1,5 @@
 import type {
-  LoyaltySummary,
+  LoyaltyCard,
   LoyaltyTransaction,
   Notification,
   Page,
@@ -12,9 +12,12 @@ import { http } from './http';
 
 const P = '/engagement';
 
-// Loyalty
-export const getLoyaltySummary = () => http.get<LoyaltySummary>(`${P}/loyalty/me`);
-export const getLoyaltyTransactions = (page = 1, size = 20) => http.get<Page<LoyaltyTransaction>>(`${P}/loyalty/me/transactions`, { query: { page, size } });
+// Loyalty uses the gateway's /api/v1/loyalty routes. The response is the card itself.
+export const getLoyaltySummary = () => http.get<LoyaltyCard>('/loyalty/me');
+export const getLoyaltyTransactions = async (page = 1, size = 20): Promise<Page<LoyaltyTransaction>> => {
+  const { data, meta } = await http.getWithMeta<LoyaltyTransaction[]>('/loyalty/me/transactions', { query: { page, size } });
+  return { items: data, total: meta?.total ?? data.length, page: meta?.page ?? page, pageSize: meta?.size ?? size };
+};
 
 // Voucher
 export const validateVoucher = (input: ValidateVoucherInput) => http.post<VoucherValidation>(`${P}/vouchers/validate`, input);

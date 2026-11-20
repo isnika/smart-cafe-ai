@@ -1,0 +1,13 @@
+services:
+  frontend:
+    image: ${FRONTEND_IMAGE:-smartcafe/frontend:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - '${FRONTEND_PORT:-5173}:80'
+    env_file:
+      - .env
+    environment:
+      API_PROXY_TARGET: ${API_PROXY_TARGET:-http://host.docker.internal:8080}
+    restart: unless-stopped

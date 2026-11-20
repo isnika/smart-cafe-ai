@@ -40,7 +40,7 @@ beforeEach(() => {
 async function loginAs(identifier = 'customer@smartcafe.vn') {
   useAuthStore.getState().applySession(await identityApi.login({ identifier, password: MOCK_PASSWORD }));
 }
-const listRequests = () => requests.filter((r) => r.startsWith('GET') && r.endsWith('/intelligence/recommendations/me'));
+const listRequests = () => requests.filter((r) => r.startsWith('GET') && r.endsWith('/ai/recommendations/me'));
 const clickRequests = () => requests.filter((r) => r.startsWith('POST') && /\/intelligence\/recommendations\/\d+\/click$/.test(r));
 const server500 = (method: 'get' | 'post', path: string, once = false) =>
   http[method](url(path), () => HttpResponse.json({ message: 'Máy chủ lỗi' }, { status: 500 }), { once });
@@ -91,7 +91,7 @@ describe('useRecommendations', () => {
   });
 
   it('error khi server 500, refetch thành công thì sang ready', async () => {
-    server.use(server500('get', '/intelligence/recommendations/me', true));
+    server.use(server500('get', '/ai/recommendations/me', true));
     await loginAs();
     const { result } = renderHook(() => useRecommendations(), { wrapper: hookWrapper() });
     await waitFor(() => expect(result.current.state).toBe('error'));
@@ -171,7 +171,7 @@ describe('RecommendationSection – Home', () => {
   });
 
   it('lỗi: thông báo nhẹ + nút Thử lại; bấm thử lại thì hiện gợi ý; phần còn lại của trang không vỡ', async () => {
-    server.use(server500('get', '/intelligence/recommendations/me', true));
+    server.use(server500('get', '/ai/recommendations/me', true));
     await loginAs();
     renderApp('/home');
     const alert = await screen.findByRole('alert');
@@ -200,7 +200,7 @@ describe('RecommendationSection – click & thêm giỏ', () => {
 
   it('track lỗi 500 không chặn điều hướng, chỉ log cảnh báo', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    server.use(server500('post', '/intelligence/recommendations/:id/click'));
+    server.use(server500('post', '/ai/recommendations/:id/click'));
     await loginAs();
     const { router } = renderApp('/home');
     await waitFor(() => expect(cardNames()).toEqual(CUSTOMER_ORDER));
@@ -261,7 +261,7 @@ describe('RecommendationSection – ProductDetail', () => {
     expect(screen.queryByRole('heading', { name: /Gợi ý cho bạn/ })).toBeNull();
     first.unmount();
 
-    server.use(server500('get', '/intelligence/recommendations/me'));
+    server.use(server500('get', '/ai/recommendations/me'));
     renderApp('/menu/5');
     expect(await screen.findByRole('heading', { level: 2, name: 'Trà đào cam sả' })).toBeTruthy();
     await waitFor(() => expect(listRequests()).toHaveLength(2));

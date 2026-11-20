@@ -37,7 +37,7 @@ const day = (offset: number) => {
 };
 
 async function raw(query: string, bearer: string | undefined = token) {
-  const res = await fetch(url(`/intelligence/forecasts?${query}`), { headers: bearer ? { Authorization: `Bearer ${bearer}` } : {} });
+  const res = await fetch(url(`/ai/forecasts?${query}`), { headers: bearer ? { Authorization: `Bearer ${bearer}` } : {} });
   return { status: res.status, body: (await res.json()) as AIForecast[] & { code?: string } };
 }
 
@@ -58,7 +58,7 @@ describe('seed dự báo', () => {
   });
 });
 
-describe('GET /intelligence/forecasts', () => {
+describe('GET /ai/forecasts', () => {
   it('trả doanh thu (targetId 0) tăng dần theo ngày và bỏ lượt chạy cũ', async () => {
     const { status, body } = await raw(`branchId=${BRANCH_ID}&forecastType=Revenue`);
     expect(status).toBe(200);

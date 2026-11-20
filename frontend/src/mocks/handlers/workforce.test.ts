@@ -18,11 +18,45 @@ async function tokenOf() {
   return ((await res.json()) as { accessToken: string }).accessToken;
 }
 async function call<T>(path: string, token: string, body?: unknown) {
-  const res = await fetch(url(path), { method: body === undefined ? 'GET' : 'POST', headers: { Authorization: `Bearer ${token}`, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const method = path.includes('/decision') ? 'PATCH' : body === undefined ? 'GET' : 'POST';
+  const res = await fetch(url(path), { method, headers: { Authorization: `Bearer ${token}`, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
   return { status: res.status, body: await res.json() as T };
 }
 
+async function tokenOfManager() {
+  const res = await fetch(url('/identity/auth/login'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ identifier: 'manager@smartcafe.vn', password: MOCK_PASSWORD }) });
+  return ((await res.json()) as { accessToken: string }).accessToken;
+}
+
 describe('staff schedules and timekeeping API', () => {
+  it('manager lists pending leave requests and approves one; staff sees the decision', async () => {
+    const staffToken = await tokenOf();
+    const managerToken = await tokenOfManager();
+    const initial = await call<Array<{ id: number; status: string; staff?: { userInfo?: { fullName?: string } } }>>('/leave-requests?status=Pending', managerToken);
+    expect(initial.status).toBe(200);
+    expect(initial.body).toContainEqual(expect.objectContaining({ id: 1, status: 'Pending', staff: { userInfo: { fullName: 'Nhân Viên' } } }));
+
+    const decision = await call<{ id: number; status: string; approverStaffId: number | null }>('/leave-requests/1/decision', managerToken, { status: 'Approved' });
+    expect(decision.status).toBe(200);
+    expect(decision.body).toMatchObject({ id: 1, status: 'Approved', approverStaffId: null });
+    expect(db.leaveRequests[0]?.reviewedAt).toBeTruthy();
+
+    const mine = await call<Array<{ id: number; status: string }>>('/leave-requests/me', staffToken);
+    expect(mine.body).toContainEqual(expect.objectContaining({ id: 1, status: 'Approved' }));
+    expect((await call('/leave-requests/1/decision', managerToken, { status: 'Rejected' })).status).toBe(409);
+  });
+
+  it('staff can create and cancel own pending request; manager sees current state', async () => {
+    const staffToken = await tokenOf();
+    const managerToken = await tokenOfManager();
+    const created = await call<{ id: number; status: string }>('/leave-requests', staffToken, { leave_type: 'Sick', start_date: todayIn(), end_date: todayIn(), reason: 'Không khỏe' });
+    expect(created.status).toBe(201);
+    expect(created.body.status).toBe('Pending');
+    expect((await call(`/leave-requests/${created.body.id}/cancel`, staffToken, {})).body).toMatchObject({ status: 'Cancelled' });
+    const rows = await call<Array<{ id: number; status: string }>>('/leave-requests?status=Cancelled', managerToken);
+    expect(rows.body).toContainEqual(expect.objectContaining({ id: created.body.id, status: 'Cancelled' }));
+  });
+
   it('returns today work schedule, including server overnight metadata', async () => {
     const token = await tokenOf();
     db.schedules.push({ id: 2, branchId: 1, staffId: 1, shiftId: 2, workDate: todayIn(), status: 'Scheduled' });

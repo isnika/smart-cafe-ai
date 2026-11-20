@@ -113,6 +113,7 @@ public class OrderService {
             order.deliveryLatitude=r.deliveryLatitude();order.deliveryLongitude=r.deliveryLongitude();order.deliveryFee=OrderPolicy.delivery(branch,r.deliveryLatitude(),r.deliveryLongitude());
         }else if(r.deliveryName()!=null||r.deliveryPhone()!=null||r.deliveryAddress()!=null||r.deliveryLatitude()!=null||r.deliveryLongitude()!=null)throw ApiException.invalid("Chỉ Delivery nhận thông tin giao hàng.");
         var resolved=dependencies.resolve(r.branchId(),lines);
+        dependencies.requireStock(r.branchId(),lines);
         int reward=-1;
         if(r.redeemReward()){
             reward=r.rewardItemIndex()==null?-1:r.rewardItemIndex();

@@ -34,3 +34,25 @@ eureka:
     register-with-eureka: true
   instance:
     prefer-ip-address: true
+
+# AI Service Configuration
+ai:
+  service:
+    base-url: ${AI_SERVICE_URL:http://localhost:8000}
+    reindex-key: ${CHAT_REINDEX_API_KEY:smart-cafe-reindex-secret}
+    timeout-seconds: ${AI_TIMEOUT_SECONDS:15}
+  internal:
+    api-key: ${DATA_API_KEY:smart-cafe-internal-ai-key}
+
+jwt:
+  secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+
+# Internal backend dependencies for Snapshot & Lookup
+services:
+  internal:
+    key: ${INTERNAL_API_KEY:smart-cafe-internal-key}
+    catalog-url: ${CATALOG_INTERNAL_BASE_URL:http://localhost:8082}
+    order-url: ${ORDER_INTERNAL_BASE_URL:http://localhost:8084}
+    store-url: ${STORE_INTERNAL_BASE_URL:http://localhost:8083}
+    inventory-url: ${INVENTORY_INTERNAL_BASE_URL:http://localhost:8086}
+

@@ -27,11 +27,11 @@ export const latte: NewCartLine = {
 /** Đưa mọi store/mock về trạng thái ban đầu giữa các test. */
 export function resetWorld(): void {
   // main.tsx cấu hình getToken ở entry; test không qua entry nên nối Bearer từ auth store tại đây.
-  configureHttp({ getToken: () => useAuthStore.getState().accessToken });
+  configureHttp({ getToken: () => useAuthStore.getState().accessToken, getAccountId: () => useAuthStore.getState().user?.id ?? null });
   resetDb();
   resetOnlineSubmitState();
   resetOnlineCartSync();
-  useOnlineCartStore.setState({ fulfillmentType: null, lines: [], voucherCode: null, delivery: null });
+  useOnlineCartStore.setState({ ownerId: null, savedCarts: {}, fulfillmentType: null, branchId: null, lines: [], voucherCode: null, delivery: null });
   mockConfig.latencyMs = 0;
   mockConfig.enforceAuth = false;
   resetSubmitState();

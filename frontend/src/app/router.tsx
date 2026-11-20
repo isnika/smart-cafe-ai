@@ -33,7 +33,8 @@ import ManagerForecastPage from "@/features/manager-forecast/pages/ManagerForeca
 import StaffDashboardPage from "@/features/staff-dashboard/pages/StaffDashboardPage";
 import StaffCheckinPage from "@/features/staff-checkin/pages/StaffCheckinPage";
 import StaffTablesPage from "@/features/staff-tables/pages/StaffTablesPage";
-import { AdminDashboardPage, AdminBranchesPage, AdminTablesPage, AdminUsersPage } from "@/features/admin/pages/AdminPages";
+import { AdminDashboardPage, AdminBranchesPage, AdminTablesPage, AdminUsersPage, AdminProductsPage, AdminBranchMenusPage } from "@/features/admin/pages/AdminPages";
+import { StaffLeavePage, ManagerLeavePage } from "@/features/workforce/LeavePages";
 
 // Tải lười để trang này không đi vào bundle production
 const DesignSystemPage = lazy(() => import("@/pages/DesignSystemPage"));
@@ -129,6 +130,7 @@ export const routes: RouteObject[] = [
           { path: PATHS.staffQueue, element: <OrderQueuePage /> },
           { path: PATHS.staffOrder, element: <OrderDetailPage /> },
           { path: PATHS.staffCheckin, element: <StaffCheckinPage /> },
+          { path: PATHS.staffLeave, element: <StaffLeavePage /> },
           { path: PATHS.staffTables, element: <StaffTablesPage /> },
         ],
       },
@@ -143,6 +145,7 @@ export const routes: RouteObject[] = [
           { path: PATHS.manager, element: <ManagerDashboardPage /> },
           { path: PATHS.managerInventory, element: <InventoryPage /> },
           { path: PATHS.managerForecast, element: <ManagerForecastPage /> },
+          { path: PATHS.managerLeave, element: <ManagerLeavePage /> },
         ],
       },
     ],
@@ -157,6 +160,8 @@ export const routes: RouteObject[] = [
           { path: PATHS.adminBranches, element: <AdminBranchesPage /> },
           { path: PATHS.adminTables, element: <AdminTablesPage /> },
           { path: PATHS.adminUsers, element: <AdminUsersPage /> },
+          { path: PATHS.adminProducts, element: <AdminProductsPage /> },
+          { path: PATHS.adminMenus, element: <AdminBranchMenusPage /> },
         ],
       },
     ],

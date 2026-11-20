@@ -4,7 +4,7 @@ import { myOrderApi } from '@/shared/api';
 import type { MyOrderSummary, PaginatedResult } from '@/shared/api/order-me.types';
 import { TAB_STATUSES, type OrderTab } from '../format';
 
-/** Số đơn mỗi trang (spec: mặc định 20, tối đa 100). */
+/** Số đơn mỗi trang (backend cho phép 1..100). */
 export const MY_ORDERS_PAGE_SIZE = 10;
 
 /**

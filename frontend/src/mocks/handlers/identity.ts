@@ -28,6 +28,9 @@ export interface MockAccount {
 const ROLE_IDS: Record<RoleName, number> = { Customer: 1, Staff: 2, Manager: 3, Admin: 4 };
 export const MOCK_PASSWORD = '123456';
 
+/** Simulate Identity responses whose login/session omits branch_id. */
+export const identityMockConfig = { omitBranchId: false };
+
 function seedAccounts(): MockAccount[] {
   const at = '2026-01-01T00:00:00.000Z';
   const make = (
@@ -61,6 +64,7 @@ export const MOCK_ACCOUNTS: MockAccount[] = seedAccounts();
 
 export function resetAuthMock(): void {
   MOCK_ACCOUNTS.splice(0, MOCK_ACCOUNTS.length, ...seedAccounts());
+  identityMockConfig.omitBranchId = false;
   tokenEpoch = 0;
   usedRefreshTokens.clear();
 }
@@ -159,7 +163,7 @@ export function toSession(a: MockAccount): AuthSession {
     refreshToken: `${REFRESH_PREFIX}${a.id}:${tokenEpoch}`,
     user: toUser(a),
     roleName: a.roleName,
-    branchId: a.branchId,
+    branchId: identityMockConfig.omitBranchId && (a.roleName === 'Staff' || a.roleName === 'Manager') ? null : a.branchId,
   };
 }
 

@@ -111,7 +111,6 @@ export function InvoicePanel({ orderId, onBack }: { orderId: number; onBack: () 
             </p>
           </dl>
 
-          <p className="text-caption text-gray-500">Hóa đơn điện tử mock phục vụ demo, không có giá trị pháp lý.</p>
         </div>
       )}
     </section>

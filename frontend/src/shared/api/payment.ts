@@ -5,6 +5,7 @@ import type {
   CloseCashierShiftInput,
   CreateRefundInput,
   InvoiceDetail,
+  InvoiceRequestInput,
   OpenCashierShiftInput,
   Invoice,
   Payment,
@@ -18,6 +19,7 @@ import type {
 } from '@/shared/types';
 import { HEADER_IDEMPOTENCY_KEY } from './guest';
 import { http } from './http';
+import { useAuthStore } from '@/features/auth/store';
 
 const P = '/payment';
 
@@ -192,6 +194,20 @@ export const simulatePayment = (id: number, input: SimulatePaymentInput, opts?: 
  */
 export const getInvoiceByOrder = (orderId: number, signal?: AbortSignal) =>
   http.get<InvoiceDetail>(`${P}/invoices`, { query: { orderId }, signal });
+
+export const listMyInvoices = (page = 1, size = 20, signal?: AbortSignal) =>
+  http.get<InvoiceDetail[]>('/invoices/me', { query: { page, size }, signal });
+export const requestInvoice = (input: InvoiceRequestInput & { orderId: number }) =>
+  http.post<InvoiceDetail>('/invoices', input, { snake: true });
+export const downloadInvoice = async (id: number, signal?: AbortSignal): Promise<Blob> => {
+  const token = useAuthStore.getState().accessToken;
+  const response = await fetch(`${(import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/+$/, '')}/invoices/${id}/pdf`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    signal,
+  });
+  if (!response.ok) throw new Error(`Không thể tải hóa đơn (${response.status})`);
+  return response.blob();
+};
 
 // Cashier shift
 export const getCurrentCashierShift = (branchId: number, registerCode?: string) =>

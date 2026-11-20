@@ -19,6 +19,7 @@ public class CartController {
     private final CartService service;
     private final Access access;
     @PostMapping public ResponseEntity<ApiResponse> create(@Valid @RequestBody CartCreate body,HttpServletRequest request){var result=service.create(body,access.context(request));return ResponseEntity.status(result.created()?201:200).body(ApiResponse.ok(result.cart()));}
+    @PostMapping("/merge") public ApiResponse merge(@Valid @RequestBody CartMerge body,HttpServletRequest request){return ApiResponse.ok(service.merge(body,access.context(request)));}
     @GetMapping("/current") public ApiResponse current(@RequestParam Source source,HttpServletRequest request){return ApiResponse.ok(service.get(source,access.context(request)));}
     @PostMapping("/current/items") public ResponseEntity<ApiResponse> add(@RequestParam Source source,@Valid @RequestBody Item body,HttpServletRequest request){return ResponseEntity.status(201).body(ApiResponse.ok(service.add(source,body,access.context(request))));}
     @PutMapping("/current/items/{itemId}") public ApiResponse update(@RequestParam Source source,@PathVariable @Positive Long itemId,@Valid @RequestBody ItemUpdate body,HttpServletRequest request){return ApiResponse.ok(service.update(source,itemId,body,access.context(request)));}

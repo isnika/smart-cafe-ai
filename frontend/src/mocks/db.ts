@@ -1,6 +1,6 @@
 import type {
   AIForecast, AIRecommendation, ChatMessage, ChatSession, Ingredient, Inventory, InventoryLog, Invoice, InvoiceItem, InvoiceRequestInput, MenuProduct, OrderDetail, Payment, PaymentOrderAllocation,
-  ProductReviewView, ProductVariant, Schedule, Shift, StaffProfile, Table, TableSession, Timekeeping,
+  LeaveRequest, ProductReviewView, ProductVariant, Schedule, Shift, StaffProfile, Table, TableSession, Timekeeping,
 } from '@/shared/types';
 import { BRANCH_ID, seedProducts, seedTables, type SeedProduct } from './fixtures';
 import { buildForecastSeed } from './forecast-seed';
@@ -123,6 +123,7 @@ export interface MockDb {
   staffProfiles: StaffProfile[];
   schedules: Schedule[];
   timekeepings: Timekeeping[];
+  leaveRequests: LeaveRequest[];
   seq: {
     order: number; item: number; option: number; history: number; session: number;
     payment: number; allocation: number; invoice: number; invoiceItem: number; cashierShift: number; inventoryLog: number;
@@ -161,6 +162,7 @@ const createDb = (): MockDb => {
     staffProfiles: wf.staffProfiles,
     schedules: wf.schedules,
     timekeepings: [],
+    leaveRequests: wf.leaveRequests,
     seq: {
       order: 0, item: 0, option: 0, history: 0, session: 0, payment: 0, allocation: 0, invoice: 0, invoiceItem: 0, cashierShift: 0,
       inventoryLog: inv.logs.length, chatSession: 0, chatMessage: 0, timekeeping: 0, cart: 0, cartItem: 0, onlineCart: 0, address: 0,

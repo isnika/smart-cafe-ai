@@ -49,10 +49,10 @@ function requireAccount(request: Request): MockAccount {
 }
 
 export const intelligenceHandlers = [
-  // GET /intelligence/forecasts?branchId=&forecastType=&targetId=&from=&to=   (from/to: IsoDate, gồm cả hai đầu)
+  // GET /ai/forecasts?branchId=&forecastType=&targetId=&from=&to=   (from/to: IsoDate, gồm cả hai đầu)
   // Chỉ trả lượt chạy mới nhất (isLatest), sắp theo targetId rồi forecastDate tăng dần.
   http.get(
-    url('/intelligence/forecasts'),
+    url('/ai/forecasts'),
     guarded(({ request }) => {
       requireManager(request);
       const sp = new URL(request.url).searchParams;
@@ -73,11 +73,11 @@ export const intelligenceHandlers = [
       return HttpResponse.json<AIForecast[]>(rows);
     }),
   ),
-  // GET /intelligence/recommendations/me?branchId=
+  // GET /ai/recommendations/me?branchId=
   // Chỉ gợi ý của chính người gọi (lấy từ token), còn hạn, và món còn bán ở chi nhánh; điểm tin cậy giảm dần.
   // `product` ghép từ catalog fixtures (cùng nguồn với GET /catalog/products). Không có gợi ý nào → [].
   http.get(
-    url('/intelligence/recommendations/me'),
+    url('/ai/recommendations/me'),
     guarded(({ request }) => {
       const account = requireAccount(request);
       const branchId = intParam(new URL(request.url).searchParams, 'branchId', false) ?? BRANCH_ID;
@@ -96,10 +96,10 @@ export const intelligenceHandlers = [
     }),
   ),
 
-  // POST /intelligence/recommendations/:id/click → 204 (không body, khớp `post<void>` của trackRecommendationClick)
+  // POST /ai/recommendations/:id/click → 204 (không body, khớp `post<void>` của trackRecommendationClick)
   // Chỉ ghi clickedAt của gợi ý thuộc về người gọi; idempotent (giữ lần bấm đầu). Gợi ý của người khác → 404 (không lộ sự tồn tại).
   http.post(
-    url('/intelligence/recommendations/:id/click'),
+    url('/ai/recommendations/:id/click'),
     guarded(({ request, params }) => {
       const account = requireAccount(request);
       const id = Number(params.id);
