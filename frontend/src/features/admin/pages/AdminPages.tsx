@@ -293,6 +293,7 @@ export function AdminDashboardPage() {
           ) : branches.data.length === 0 ? (
             <EmptyState
               title="Chưa có chi nhánh"
+              message="Chưa có chi nhánh nào trong hệ thống."
               icon={Building2}
             />
           ) : (

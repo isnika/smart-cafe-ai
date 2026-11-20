@@ -86,7 +86,7 @@ export default function HomePage() {
 
         {categories.data && categories.data.length > 0 && <CategoryChips categories={categories.data} activeId={categoryId} onChange={setCategoryId} />}
 
-        {menu.isPending && <MenuSkeleton />}
+        {branchId !== null && menu.isPending && <MenuSkeleton />}
         {menu.isError && <MenuError error={menu.error} onRetry={() => void menu.refetch()} />}
         {menu.isSuccess && featured.length === 0 && <MenuEmpty>Danh mục này hiện chưa có món để hiển thị.</MenuEmpty>}
         {featured.length > 0 && (

@@ -52,7 +52,7 @@ export default function MenuBrowsePage() {
           />
         )}
 
-        {menu.isPending && <MenuSkeleton />}
+        {branchId !== null && menu.isPending && <MenuSkeleton />}
         {menu.isError && <MenuError error={menu.error} onRetry={() => void menu.refetch()} />}
         {menu.isSuccess && products.length === 0 && <MenuEmpty>Chưa có món nào trong danh mục này.</MenuEmpty>}
         {products.length > 0 && (
