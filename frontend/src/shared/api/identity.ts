@@ -122,6 +122,12 @@ export const refresh = async (refreshToken: string): Promise<RefreshedTokens> =>
 
 export const getMe = async () => toUser(await http.get<WireUser>('/users/me'));
 export const updateProfile = async (input: { fullName: string }) => toUser(await http.put<WireUser>('/users/me', input, { snake: true }));
+export const uploadAvatar = async (file: File): Promise<string> => {
+  const form = new FormData();
+  form.append('file', file);
+  const result = await http.post<{ avatar: string }>('/users/me/avatar', form);
+  return result.avatar;
+};
 export const requestPhoneChangeOtp = (newPhone: string) =>
   http.post<string>('/users/me/contact/otp', { newPhone }, { snake: true });
 export const updatePhoneWithOtp = async (newPhone: string, otpCode: string) =>

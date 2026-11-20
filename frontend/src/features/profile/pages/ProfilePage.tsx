@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type SyntheticEvent } from 'react';
+import { useRef, useState, type ChangeEvent, type FormEvent, type SyntheticEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Camera, Check, ChevronRight, Gift, MapPin, Pencil, Plus, Trash2, UserRound, Bell, FileText, LockKeyhole, Download, BadgeCheck, Phone } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -37,6 +37,11 @@ export default function ProfilePage() {
   const [phoneNotice, setPhoneNotice] = useState('');
   const [phoneBusy, setPhoneBusy] = useState(false);
   const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarError, setAvatarError] = useState('');
+  const [avatarNotice, setAvatarNotice] = useState('');
   const addresses = useQuery({ queryKey: ['identity', 'addresses', user?.id], enabled: !!user?.id, queryFn: () => identityApi.listAddresses() });
   const loyalty = useQuery({ queryKey: ['engagement', 'loyalty', user?.id], enabled: !!user?.id, queryFn: () => engagementApi.getLoyaltySummary() });
   const transactions = useQuery({ queryKey: ['engagement', 'loyalty-transactions', user?.id], enabled: !!user?.id, queryFn: () => engagementApi.getLoyaltyTransactions(1, 5) });
@@ -85,6 +90,57 @@ export default function ProfilePage() {
     finally { setPhoneBusy(false); }
   }
 
+  async function onAvatarChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setAvatarError('');
+    setAvatarNotice('');
+    if (!['image/jpeg', 'image/png'].includes(file.type)) {
+      setAvatarError('Chỉ hỗ trợ ảnh JPG hoặc PNG.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setAvatarError('Kích thước ảnh không được vượt quá 5 MB.');
+      return;
+    }
+
+    const preview = URL.createObjectURL(file);
+    const dimensions = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+      image.onerror = () => reject(new Error('Không thể đọc ảnh này.'));
+      image.src = preview;
+    }).catch((e: unknown) => {
+      setAvatarError(e instanceof Error ? e.message : 'Không thể đọc ảnh này.');
+      URL.revokeObjectURL(preview);
+      return null;
+    });
+    if (!dimensions) return;
+    if (dimensions.width <= 0 || dimensions.height <= 0 || dimensions.width > 4096 || dimensions.height > 4096) {
+      setAvatarError('Chiều rộng và chiều cao ảnh không được vượt quá 4096 px.');
+      URL.revokeObjectURL(preview);
+      return;
+    }
+
+    setAvatarPreview(preview);
+    setAvatarLoadFailed(false);
+    setAvatarBusy(true);
+    try {
+      const avatar = await identityApi.uploadAvatar(file);
+      const current = useAuthStore.getState().user;
+      if (current) useAuthStore.setState({ user: { ...current, avatar } });
+      setAvatarPreview(null);
+      setAvatarNotice('Đã cập nhật ảnh đại diện.');
+    } catch (e) {
+      setAvatarPreview(null);
+      setAvatarError(e instanceof Error ? e.message : 'Không thể cập nhật ảnh đại diện.');
+    } finally {
+      URL.revokeObjectURL(preview);
+      setAvatarBusy(false);
+    }
+  }
+
   function editAddress(address?: Address) {
     setEditingAddressId(address?.id ?? null);
     setAddressDraft(address ? { label: address.label ?? '', receiverName: address.receiverName, phone: address.phone, province: address.province, district: address.district ?? '', ward: address.ward, addressLine: address.addressLine, latitude: address.latitude ?? null, longitude: address.longitude ?? null, isDefault: address.isDefault } : { ...blankAddress });
@@ -105,11 +161,23 @@ export default function ProfilePage() {
   return <div className="min-h-screen bg-primary-50 pb-8">
     <PageHeader title="Trang cá nhân" back={PATHS.home} />
     <section className="flex items-center gap-4 border-b border-gray-100 bg-white px-5 py-5">
-      <div className="relative grid size-20 shrink-0 place-items-center overflow-hidden rounded-full border-2 border-primary-100 bg-gradient-to-br from-primary-100 to-primary-200 text-primary-700 shadow-sm">
-        {user?.avatar && !avatarLoadFailed ? <img src={user.avatar} alt="Ảnh đại diện" onError={(event: SyntheticEvent<HTMLImageElement>) => { event.currentTarget.hidden = true; setAvatarLoadFailed(true); }} className="absolute inset-0 size-full object-cover" /> : <UserRound className="size-9" aria-hidden />}
-        <button type="button" aria-label="Cập nhật ảnh đại diện" title="Cập nhật ảnh đại diện" className="absolute -bottom-1 -right-1 rounded bg-primary-700 p-1.5 text-white"><Camera className="size-4" aria-hidden /></button>
-      </div>
+      <button
+        type="button"
+        aria-label="Cập nhật ảnh đại diện"
+        title="Nhấn để cập nhật ảnh đại diện"
+        disabled={avatarBusy}
+        onClick={() => avatarInputRef.current?.click()}
+        className="relative grid size-20 shrink-0 place-items-center overflow-hidden rounded-full border-2 border-primary-100 bg-gradient-to-br from-primary-100 to-primary-200 text-primary-700 shadow-sm disabled:cursor-wait"
+      >
+        {avatarPreview ? <img src={avatarPreview} alt="Xem trước ảnh đại diện" className="absolute inset-0 size-full object-cover" /> : user?.avatar && !avatarLoadFailed ? <img src={user.avatar} alt="Ảnh đại diện" onError={(event: SyntheticEvent<HTMLImageElement>) => { event.currentTarget.hidden = true; setAvatarLoadFailed(true); }} className="absolute inset-0 size-full object-cover" /> : <UserRound className="size-9" aria-hidden />}
+        <span className="absolute -bottom-0.5 -right-0.5 grid size-7 place-items-center rounded-full border-2 border-white bg-primary-700 text-white">
+          <Camera className={cn('size-3.5', avatarBusy && 'animate-pulse')} aria-hidden />
+        </span>
+      </button>
+      <input ref={avatarInputRef} type="file" accept="image/jpeg,image/png" className="hidden" onChange={(event) => void onAvatarChange(event)} />
       <div className="min-w-0"><h2 className="text-h4">{user?.fullName ?? 'Khách hàng'}</h2><p className="text-caption text-gray-600">Thành viên từ {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('vi-VN', { month: 'numeric', year: 'numeric' }) : 'Smart Café'}</p></div>
+      {avatarNotice && <p role="status" className="ml-auto max-w-52 text-right text-caption text-primary-700">{avatarNotice}</p>}
+      {avatarError && <p role="alert" className="ml-auto max-w-52 text-right text-caption text-error-strong">{avatarError}</p>}
     </section>
     <div className="space-y-6 px-5 py-5">
       <section aria-labelledby="personal-info"><h2 id="personal-info" className="mb-3 text-body-lg font-semibold">Thông tin cá nhân</h2><div className="divide-y divide-gray-100 rounded-lg bg-white">

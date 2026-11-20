@@ -157,7 +157,8 @@ async function execute<T>(method: HttpMethod, path: string, opts: RequestOptions
   const headers = new Headers(opts.headers);
   headers.set('Accept', 'application/json');
   const hasBody = opts.body !== undefined;
-  if (hasBody) headers.set('Content-Type', 'application/json');
+  const isFormData = typeof FormData !== 'undefined' && opts.body instanceof FormData;
+  if (hasBody && !isFormData) headers.set('Content-Type', 'application/json');
 
   const useAuth = opts.auth !== false;
   const assertAccount = (includeAnonymous = false) => {
@@ -180,7 +181,7 @@ async function execute<T>(method: HttpMethod, path: string, opts: RequestOptions
     res = await fetch(url, {
       method,
       headers,
-      body: hasBody ? JSON.stringify(opts.snake ? toSnakeKeys(opts.body) : opts.body) : undefined,
+      body: hasBody ? (isFormData ? opts.body as FormData : JSON.stringify(opts.snake ? toSnakeKeys(opts.body) : opts.body)) : undefined,
       signal: opts.signal,
     });
   } catch (e) {
