@@ -90,6 +90,16 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     @Transactional
     public PaymentResponse createPayment(CreatePaymentRequest request, String currentUserId, String clientIp) {
+        // Hỗ trợ trích xuất order_id từ allocations nếu client truyền dạng allocations mảng
+        if (request.getOrderId() == null && request.getAllocations() != null && !request.getAllocations().isEmpty()) {
+            for (var alloc : request.getAllocations()) {
+                if (alloc.getOrderId() != null) {
+                    request.setOrderId(alloc.getOrderId());
+                    break;
+                }
+            }
+        }
+
         // [BR-PAY-01] Ràng buộc: Payments chỉ tham chiếu tới 1 trong 2: order_id HOẶC table_session_id
         boolean hasOrder = request.getOrderId() != null;
         boolean hasSession = request.getTableSessionId() != null;
@@ -303,10 +313,8 @@ public class PaymentServiceImpl implements PaymentService {
             return response;
         }
 
-        Long paymentId;
-        try {
-            paymentId = Long.parseLong(txnRef);
-        } catch (NumberFormatException e) {
+        Long paymentId = parsePaymentId(txnRef);
+        if (paymentId == null) {
             response.put("RspCode", "01");
             response.put("Message", "Order not found");
             return response;
@@ -370,7 +378,10 @@ public class PaymentServiceImpl implements PaymentService {
             throw new BusinessException("INVALID_RETURN", "Mã đơn thanh toán không hợp lệ", HttpStatus.BAD_REQUEST);
         }
 
-        Long paymentId = Long.parseLong(txnRef);
+        Long paymentId = parsePaymentId(txnRef);
+        if (paymentId == null) {
+            throw new BusinessException("INVALID_RETURN", "Mã đơn thanh toán không hợp lệ", HttpStatus.BAD_REQUEST);
+        }
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Giao dịch thanh toán", paymentId));
 
@@ -427,10 +438,8 @@ public class PaymentServiceImpl implements PaymentService {
             return response;
         }
 
-        Long paymentId;
-        try {
-            paymentId = Long.parseLong(orderIdStr);
-        } catch (NumberFormatException e) {
+        Long paymentId = parsePaymentId(orderIdStr);
+        if (paymentId == null) {
             response.put("resultCode", 1);
             response.put("message", "Order not found");
             return response;
@@ -496,10 +505,8 @@ public class PaymentServiceImpl implements PaymentService {
             throw new BusinessException("INVALID_RETURN", "Mã đơn thanh toán MoMo không hợp lệ", HttpStatus.BAD_REQUEST);
         }
 
-        Long paymentId;
-        try {
-            paymentId = Long.parseLong(orderIdStr);
-        } catch (NumberFormatException e) {
+        Long paymentId = parsePaymentId(orderIdStr);
+        if (paymentId == null) {
             throw new BusinessException("INVALID_RETURN", "Mã đơn thanh toán MoMo không hợp lệ", HttpStatus.BAD_REQUEST);
         }
 
@@ -568,11 +575,13 @@ public class PaymentServiceImpl implements PaymentService {
 
     private String generateMomoPaymentUrl(Payment payment, String customReturnUrl) {
         long amount = payment.getAmount().longValue();
-        String orderId = String.valueOf(payment.getId());
-        String requestId = orderId + "_" + System.currentTimeMillis();
-        String orderInfo = "Thanh toan don hang #" + orderId + " - Smart Cafe AI";
+        String orderId = payment.getId() + "_" + System.currentTimeMillis();
+        String requestId = orderId;
+        String orderInfo = "Thanh toan don hang #" + payment.getId() + " - Smart Cafe AI";
         String redirectUrl = customReturnUrl != null && !customReturnUrl.isBlank() ? customReturnUrl : momoReturnUrl;
-        String ipnUrl = momoNotifyUrl;
+        String ipnUrl = (momoNotifyUrl != null && !momoNotifyUrl.startsWith("http://localhost") && !momoNotifyUrl.startsWith("http://127.0.0.1"))
+                ? momoNotifyUrl
+                : "https://smartcafe.vn/api/payments/momo/ipn";
         String extraData = "";
         String requestType = "captureWallet";
 
@@ -698,6 +707,18 @@ public class PaymentServiceImpl implements PaymentService {
             gatewayLogRepository.save(logEntry);
         } catch (Exception e) {
             log.error("Failed to save gateway log: {}", e.getMessage());
+        }
+    }
+
+    private Long parsePaymentId(String ref) {
+        if (ref == null || ref.isBlank()) {
+            return null;
+        }
+        String idStr = ref.contains("_") ? ref.split("_")[0] : ref;
+        try {
+            return Long.parseLong(idStr);
+        } catch (NumberFormatException e) {
+            return null;
         }
     }
 

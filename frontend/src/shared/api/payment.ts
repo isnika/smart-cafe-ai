@@ -135,11 +135,13 @@ export function toPayResult(raw: unknown): PayResult {
  * Header Idempotency-Key BẮT BUỘC. Không gửi số tiền tổng/giá: chỉ allocations do caller cung cấp.
  * Lỗi (409 IDEMPOTENCY_KEY_REUSED, ORDER_ALREADY_PAID, ...) được ném dưới dạng `ApiError`.
  */
-export const createPayment = async (input: CreatePaymentInput, ctx: CreatePaymentCtx): Promise<PayResult> =>
-  toPayResult(
+export const createPayment = async (input: CreatePaymentInput, ctx: CreatePaymentCtx): Promise<PayResult> => {
+  const firstOrderId = input.allocations?.[0]?.orderId;
+  return toPayResult(
     await http.post<unknown>(
       '/payments',
       {
+        ...(firstOrderId !== undefined ? { orderId: firstOrderId, order_id: firstOrderId } : {}),
         branchId: input.branchId,
         paymentMethod: input.paymentMethod,
         allocations: input.allocations.map((a) => ({ orderId: a.orderId, allocatedAmount: a.allocatedAmount })),
@@ -154,6 +156,7 @@ export const createPayment = async (input: CreatePaymentInput, ctx: CreatePaymen
       },
     ),
   );
+};
 
 /** Gắn shift hiện hành và giữ nguyên Idempotency-Key qua mọi lần retry giao dịch cashier. */
 export async function confirmCashPayment(id: number, input: { cashierShiftId: number; cashReceived: number }, signal?: AbortSignal): Promise<PayResult> {
