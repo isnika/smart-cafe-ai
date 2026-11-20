@@ -3,11 +3,13 @@ import { ArrowRight, Coffee, ListChecks, QrCode, ShoppingCart, Sparkles, Utensil
 import { Link } from "react-router-dom";
 import { PATHS } from "@/app/routes";
 import { useAuthStore } from "@/features/auth/store";
+import { useOnlineCartStore } from '@/features/online-order/store';
 import { RecommendationSection } from "@/features/recommendation/components/RecommendationSection";
 import { CategoryChips } from "../components/CategoryChips";
 import { MenuEmpty, MenuError, MenuSkeleton } from "../components/MenuStates";
 import { ProductTile } from "../components/ProductTile";
 import { useCategories, usePublicMenu } from "../hooks/useMenu";
+import { useDefaultBranch } from "../hooks/useDefaultBranch";
 
 const FEATURED_COUNT = 4;
 
@@ -23,6 +25,7 @@ export default function HomePage() {
   const authed = useAuthStore((s) => s.status === "authenticated");
   const categories = useCategories();
   const menu = usePublicMenu();
+  const { branchId, branches } = useDefaultBranch();
   const [categoryId, setCategoryId] = useState<number | null>(null);
 
   const featured = (menu.data ?? []).filter((p) => categoryId === null || p.categoryId === categoryId).slice(0, FEATURED_COUNT);
@@ -62,6 +65,14 @@ export default function HomePage() {
       </section>
 
       <RecommendationSection variant="home" />
+
+      <section className="rounded-xl border border-primary-100 bg-white p-4">
+        <label htmlFor="home-branch" className="mb-2 block text-body font-semibold">Chi nhánh xem thực đơn</label>
+        <select id="home-branch" aria-label="Chi nhánh xem thực đơn" value={branchId ?? ''} disabled={branches.isPending} onChange={(event) => useOnlineCartStore.getState().setBranch(event.target.value ? Number(event.target.value) : null)} className="h-11 w-full rounded-md border border-gray-300 bg-white px-3 text-body">
+          <option value="">Đang chọn chi nhánh…</option>
+          {branches.data?.filter((branch) => branch.status === 'Active' && branch.acceptsOnlineOrders).map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+        </select>
+      </section>
 
       <section aria-labelledby="featured-title" className="space-y-4">
         <div className="flex items-center justify-between">

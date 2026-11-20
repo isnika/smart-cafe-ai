@@ -4,6 +4,9 @@ import { guestHeaders, HEADER_IDEMPOTENCY_KEY } from './guest';
 
 const P = '/orders-svc';
 
+/** Branch with the most completed orders; public aggregate only. */
+export const getBestSellingBranchId = () => http.get<number | null>('/orders/public/best-selling-branch', { auth: false });
+
 // ── Giỏ hàng QR (spec "4. Order / Giỏ hàng"; guest = X-Table-Session-Code + X-Client-Key + ?source=QR) ──
 export interface QrCartOption {
   optionId: number;

@@ -164,6 +164,11 @@ function detailView(o: OrderDetail, viewer: MockAccount) {
 }
 
 export const orderReadV1Handlers = [
+  http.get(url('/orders/public/best-selling-branch'), guardedV1(() => {
+    const best = db.orders.filter((o) => o.status === 'Completed').reduce((counts, order) => counts.set(order.branchId, (counts.get(order.branchId) ?? 0) + 1), new Map<number, number>());
+    const branchId = [...best].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]?.[0] ?? 1;
+    return ok(branchId);
+  })),
   // GET /orders?branch_id=&page=&size=&sort= — Manager/Staff branch scoped list.
   http.get(url('/orders'), guardedV1(({ request }) => {
     const viewer = staffOf(request);

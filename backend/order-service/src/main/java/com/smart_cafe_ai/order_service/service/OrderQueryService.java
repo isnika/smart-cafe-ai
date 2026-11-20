@@ -68,6 +68,9 @@ public class OrderQueryService {
         }
         return products.values().stream().sorted(Comparator.<Map<String,Object>,Long>comparing(r->(Long)r.get("quantity_sold")).reversed().thenComparing(r->(Integer)r.get("variant_id"))).limit(limit).toList();
     }
+    public Integer bestSellingBranchId(){
+        return repository.findBestSellingBranchIds(PageRequest.of(0,1)).stream().findFirst().orElse(null);
+    }
     private void range(LocalDate from,LocalDate to){if(from==null||to==null||to.isBefore(from)||to.isAfter(from.plusDays(366)))throw ApiException.invalid("Khoảng báo cáo cần from <= to và tối đa 367 ngày.");}
     private void sum(Map<String,Object> row,String key,BigDecimal value){row.put(key,((BigDecimal)row.getOrDefault(key,BigDecimal.ZERO)).add(value));}
     private Specification<CafeOrder> spec(Filter f,Integer branch,String user,boolean completedTime){

@@ -11,11 +11,10 @@ import { useOnlineCartStore } from "@/features/online-order/store";
 import type { MenuProduct } from "@/shared/types";
 import { formatVnd } from "@/shared/lib";
 import { Button } from "@/shared/ui";
-import { useQuery } from '@tanstack/react-query';
-import { storeApi } from '@/shared/api';
 import { CategoryChips } from "../components/CategoryChips";
 import { MenuEmpty, MenuError, MenuSkeleton } from "../components/MenuStates";
 import { useCategories, usePublicMenu } from "../hooks/useMenu";
+import { useDefaultBranch } from "../hooks/useDefaultBranch";
 
 /**
  * Thực đơn công khai; khách có thể thêm món vào giỏ trước khi chọn cách nhận hàng.
@@ -29,7 +28,7 @@ export default function MenuBrowsePage() {
   const addLine = useOnlineCartStore((s) => s.addLine);
   const branchId = useOnlineCartStore((s) => s.branchId);
   const setBranch = useOnlineCartStore((s) => s.setBranch);
-  const branches = useQuery({ queryKey: ['store', 'branches', 'online'], queryFn: () => storeApi.listBranches({ status: 'Active' }) });
+  const { branches } = useDefaultBranch();
   const [picking, setPicking] = useState<MenuProduct | null>(null);
 
   const raw = Number(params.get("category"));

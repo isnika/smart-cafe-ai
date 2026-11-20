@@ -50,6 +50,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/orders/, '/api/v1/orders'),
       },
+      '/orders-svc': {
+        target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8080',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/orders-svc/, '/api/v1/orders'),
+      },
       '/loyalty': {
         target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8080',
         changeOrigin: true,
