@@ -326,7 +326,9 @@ class OperationalDataClient:
         if not self.enabled:
             return None
         url = self.settings.data_api_base_url + "/" + self.settings.data_api_catalog_path.lstrip("/")
-        params: dict[str, str | int] = {"q": query, "intent": intent.value}
+        # The Spring contract uses lower-case intent names (for example
+        # ``product_price``), while the internal enum is upper-case.
+        params: dict[str, str | int] = {"q": query, "intent": intent.value.lower()}
         if branch_id is not None:
             params["branch_id"] = branch_id
         try:
@@ -352,9 +354,19 @@ class OperationalDataClient:
         if not self.enabled or not authorization:
             return None
         encoded_code = quote(order_code, safe="")
-        path = self.settings.data_api_order_path.replace(":order_code", encoded_code).format(
-            order_code=encoded_code
-        )
+        path = self.settings.data_api_order_path
+        # Keep older placeholder spellings compatible for local deployments
+        # that override DATA_API_ORDER_PATH; the contract default is
+        # /api/ai/orders/{order_code}.
+        for placeholder in (
+            "{id}",
+            ":id",
+            "{order_id}",
+            ":order_id",
+            "{order_code}",
+            ":order_code",
+        ):
+            path = path.replace(placeholder, encoded_code)
         url = self.settings.data_api_base_url + "/" + path.lstrip("/")
         try:
             async with httpx.AsyncClient(timeout=self.settings.data_api_timeout_seconds) as client:

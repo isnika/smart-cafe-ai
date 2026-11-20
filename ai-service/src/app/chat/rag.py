@@ -287,16 +287,21 @@ def _last_meaningful_user_question(history: list[dict]) -> str:
 def _looks_like_order_code(value: str) -> bool:
     compact = value.strip()
     return bool(
-        re.fullmatch(r"[A-Za-z0-9-]{6,24}", compact)
-        and re.search(r"\d", compact)
+        re.fullmatch(r"\d{1,20}", compact)
+        or (
+            re.fullmatch(r"[A-Za-z0-9-]{6,24}", compact)
+            and re.search(r"\d", compact)
+        )
     )
 
 
 def _extract_order_code(value: str) -> str | None:
     if _looks_like_order_code(value):
         return value.strip()
-    for candidate in re.findall(r"(?<!\w)[A-Za-z0-9-]{6,24}(?!\w)", value):
-        if re.search(r"\d", candidate) and re.search(r"[A-Za-z]", candidate):
+    for candidate in re.findall(
+        r"(?<!\w)(?:[A-Za-z0-9-]{6,24}|\d{1,20})(?!\w)", value
+    ):
+        if re.search(r"\d", candidate):
             return candidate
     return None
 

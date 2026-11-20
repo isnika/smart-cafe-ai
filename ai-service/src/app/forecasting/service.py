@@ -539,7 +539,7 @@ def get_forecast_service(
             )
             _CACHE[key] = _CacheEntry(service=service, expires_at=now + settings.cache_ttl_seconds)
             return service
-        except (ForecastingBranchRequired, ForecastingDataQualityError, ForecastingDataUnavailable) as exc:
+        except ForecastingDataUnavailable as exc:
             if entry:
                 entry.service.mark_stale(exc)
                 entry.expires_at = now + settings.cache_ttl_seconds

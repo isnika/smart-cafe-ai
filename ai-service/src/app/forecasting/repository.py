@@ -117,6 +117,29 @@ def _complete_through(
     return local
 
 
+def _validate_live_branch_scope(
+    records: list[dict[str, Any]],
+    label: str,
+    branch_id: int,
+) -> None:
+    """Reject rows that cannot be proven to belong to the requested branch."""
+    for index, record in enumerate(records):
+        if "branch_id" not in record:
+            raise ForecastingDataQualityError(
+                f"Live snapshot {label}[{index}] thiếu branch_id."
+            )
+        try:
+            record_branch = int(record["branch_id"])
+        except (TypeError, ValueError) as exc:
+            raise ForecastingDataQualityError(
+                f"Live snapshot {label}[{index}] có branch_id không hợp lệ."
+            ) from exc
+        if record_branch != int(branch_id):
+            raise ForecastingDataQualityError(
+                f"Live snapshot {label}[{index}] không thuộc branch_id={branch_id}."
+            )
+
+
 def _normalize_snapshot(
     payload: dict[str, Any],
     branch_id: int,
@@ -127,7 +150,12 @@ def _normalize_snapshot(
     generated_at: pd.Timestamp | None,
     demo_product_recipe_mapping: bool = False,
 ) -> ForecastingSnapshot:
-    timezone = str(_payload_value(payload, "timezone", settings.timezone) or settings.timezone)
+    raw_timezone = _payload_value(payload, "timezone")
+    if source_mode == "live" and not str(raw_timezone or "").strip():
+        raise ForecastingDataQualityError(
+            "Live forecasting snapshot phải có timezone của branch."
+        )
+    timezone = str(raw_timezone or settings.timezone).strip()
     try:
         pd.Timestamp.now(tz=timezone)
     except Exception as exc:
@@ -137,6 +165,11 @@ def _normalize_snapshot(
     raw_items = _records(payload, "order_items", "items", "demand_items")
     raw_recipes = _records(payload, "recipes")
     raw_inventory = _records(payload, "inventory", "inventories")
+    if source_mode == "live":
+        _validate_live_branch_scope(raw_orders, "orders", branch_id)
+        _validate_live_branch_scope(raw_items, "order_items", branch_id)
+        _validate_live_branch_scope(raw_recipes, "recipes", branch_id)
+        _validate_live_branch_scope(raw_inventory, "inventory", branch_id)
     if not raw_orders:
         raise ForecastingDataUnavailable("Forecasting snapshot không có orders hợp lệ.")
     if not raw_items:
@@ -281,11 +314,13 @@ class OperationalForecastingRepository:
         self.settings = settings
 
     def _headers(self, authorization: str | None) -> dict[str, str]:
+        # Forecasting snapshots are service-to-service. The route deliberately
+        # does not pass the caller's user token; keep this adapter defensive as
+        # well so a future caller cannot accidentally forward it.
+        del authorization
         headers = {"Accept": "application/json"}
         if self.settings.data_api_key:
             headers["X-API-Key"] = self.settings.data_api_key
-        if authorization:
-            headers["Authorization"] = authorization
         return headers
 
     def load_snapshot(
@@ -321,7 +356,12 @@ class OperationalForecastingRepository:
             ) from exc
         if not isinstance(payload, dict):
             raise ForecastingDataQualityError("Backend forecasting snapshot phải là object JSON.")
-        version = str(_payload_value(payload, "version", "unknown"))
+        raw_version = _payload_value(payload, "version")
+        if not str(raw_version or "").strip():
+            raise ForecastingDataQualityError(
+                "Live forecasting snapshot phải có version để kiểm soát độ mới dữ liệu."
+            )
+        version = str(raw_version).strip()
         generated_raw = _payload_value(payload, "generated_at")
         generated_at = pd.to_datetime(generated_raw, errors="coerce", utc=True) if generated_raw else None
         if generated_at is not None and pd.isna(generated_at):
