@@ -159,6 +159,7 @@ public class InventoryServiceImpl implements InventoryService {
     public AvailabilityCheckResponse checkAvailability(AvailabilityCheckRequest request) {
         List<AvailabilityCheckResponse.InsufficientItem> insufficientItems = new ArrayList<>();
         List<AvailabilityCheckResponse.VariantAvailabilityResult> variantResults = new ArrayList<>();
+        Map<Integer, BigDecimal> totalDemand = new HashMap<>();
 
         for (var item : request.getItems()) {
             int orderQty = item.getQuantity() != null && item.getQuantity() > 0 ? item.getQuantity() : 1;
@@ -186,12 +187,15 @@ public class InventoryServiceImpl implements InventoryService {
                 }
             }
 
-            // If no recipe and no adjustments, consider available
-            if (requiredPerUnitMap.isEmpty()) {
+            // Without a base recipe, available quantity cannot be verified.
+            if (recipes.isEmpty()) {
+                insufficientItems.add(AvailabilityCheckResponse.InsufficientItem.builder()
+                        .variantId(item.getVariantId()).ingredientName("Chưa cấu hình công thức")
+                        .required(BigDecimal.valueOf(orderQty)).available(BigDecimal.ZERO).build());
                 variantResults.add(AvailabilityCheckResponse.VariantAvailabilityResult.builder()
                         .variantId(item.getVariantId())
-                        .canMake(true)
-                        .maxQuantity(9999)
+                        .canMake(false)
+                        .maxQuantity(0)
                         .missingIngredients(new ArrayList<>())
                         .build());
                 continue;
@@ -211,6 +215,7 @@ public class InventoryServiceImpl implements InventoryService {
                 }
 
                 BigDecimal totalRequired = perUnit.multiply(BigDecimal.valueOf(orderQty));
+                totalDemand.merge(ingredientId, totalRequired, BigDecimal::add);
 
                 Optional<Inventory> inv = inventoryRepository.findByBranchIdAndIngredientId(
                         request.getBranchId(), ingredientId);
@@ -263,6 +268,20 @@ public class InventoryServiceImpl implements InventoryService {
                     .build());
         }
 
+        // Several lines can consume the same ingredient. Checking each separately
+        // would accept an order whose combined demand exceeds the available stock.
+        for (var demand : totalDemand.entrySet()) {
+            BigDecimal stock = inventoryRepository.findByBranchIdAndIngredientId(request.getBranchId(), demand.getKey())
+                    .map(i -> (i.getQuantityInStock() == null ? BigDecimal.ZERO : i.getQuantityInStock())
+                            .subtract(i.getReservedQuantity() == null ? BigDecimal.ZERO : i.getReservedQuantity()).max(BigDecimal.ZERO))
+                    .orElse(BigDecimal.ZERO);
+            if (stock.compareTo(demand.getValue()) < 0) {
+                Ingredient ingredient = ingredientRepository.findById(demand.getKey()).orElse(null);
+                insufficientItems.add(AvailabilityCheckResponse.InsufficientItem.builder()
+                        .ingredientId(demand.getKey()).ingredientName(ingredient == null ? "Unknown" : ingredient.getName())
+                        .required(demand.getValue()).available(stock).build());
+            }
+        }
         boolean overallAvailable = insufficientItems.isEmpty();
 
         return AvailabilityCheckResponse.builder()

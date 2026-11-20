@@ -71,6 +71,10 @@ eureka:
 jwt:
   secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
 app:
+  inventory:
+    internal-base-url: ${INVENTORY_INTERNAL_BASE_URL:http://localhost:8086/internal/inventory}
+    auth-header: ${INVENTORY_INTERNAL_AUTH_HEADER:X-Service-Key}
+    auth-value: ${INVENTORY_INTERNAL_API_KEY:smart-cafe-internal-inventory-key}
   engagement:
     internal-base-url: ${ENGAGEMENT_INTERNAL_BASE_URL:http://localhost:8087/api/v1/internal}
     auth-value: ${ENGAGEMENT_INTERNAL_API_KEY:smart-cafe-internal-engagement-key}

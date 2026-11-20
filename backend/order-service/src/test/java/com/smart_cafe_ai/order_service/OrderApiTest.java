@@ -88,6 +88,24 @@ class OrderApiTest {
         call(delete("/api/v1/carts/current?source=Online"),customer,null).andExpect(status().isNoContent());
         call(get("/api/v1/carts/current?source=Online"),customer,null).andExpect(status().isNotFound());
     }
+    @Test void mergeKeepsExistingItemsAndIsSafeToRetry() throws Exception {
+        cart();
+        String body="{\"branch_id\":1,\"fulfillment_type\":\"Pickup\",\"items\":[{\"variant_id\":1,\"quantity\":3,\"options\":[{\"option_id\":5,\"quantity\":2}]},{\"variant_id\":2,\"quantity\":1}]}";
+        for(int i=0;i<2;i++)call(post("/api/v1/carts/merge"),customer,body).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(2))
+                .andExpect(jsonPath("$.data.items[0].quantity").value(3));
+        call(get("/api/v1/carts/current?source=Online"),other,null).andExpect(status().isNotFound());
+        call(post("/api/v1/carts/merge"),null,body).andExpect(status().isUnauthorized());
+    }
+    @Test void insufficientStockRejectsCheckoutWithoutConvertingCart() throws Exception {
+        long id=cart();
+        doThrow(new com.smart_cafe_ai.order_service.exception.ApiException(org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY,"OUT_OF_STOCK","Hết nguyên liệu"))
+                .when(dependencies).requireStock(anyInt(),anyList());
+        call(post("/api/v1/orders").header("Idempotency-Key","stock-fail"),customer,orderBody(id,null))
+                .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.error.code").value("OUT_OF_STOCK"));
+        assertThat(orders.count()).isZero();
+        assertThat(jdbc.queryForObject("select status from Carts where id=?",String.class,id)).isEqualTo("Active");
+    }
     @Test void createCartReturnsExistingAndRejectsContextChange() throws Exception {
         long id=cart();call(post("/api/v1/carts"),customer,"{\"cart_source\":\"Online\",\"branch_id\":1,\"fulfillment_type\":\"Pickup\"}").andExpect(status().isOk()).andExpect(jsonPath("$.data.id").value(id));
         call(post("/api/v1/carts"),customer,"{\"cart_source\":\"Online\",\"branch_id\":2,\"fulfillment_type\":\"Pickup\"}").andExpect(status().isConflict());

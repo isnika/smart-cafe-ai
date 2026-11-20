@@ -24,7 +24,7 @@ class HttpOrderDependenciesTest {
         status=200;response="{\"success\":true,\"data\":{\"id\":1,\"status\":\"Active\",\"accepts_online_orders\":true,\"delivery_fee\":10000,\"name\":\"extra field\"}}";
         path=new AtomicReference<>();body=new AtomicReference<>();credential=new AtomicReference<>();server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
         server.createContext("/",exchange->{path.set(exchange.getRequestURI().getRawPath());credential.set(exchange.getRequestHeaders().getFirst("X-Service-Key"));body.set(new String(exchange.getRequestBody().readAllBytes(),StandardCharsets.UTF_8));byte[] bytes=response.getBytes(StandardCharsets.UTF_8);exchange.sendResponseHeaders(status,bytes.length);exchange.getResponseBody().write(bytes);exchange.close();});server.start();
-        env=new MockEnvironment();for(String service:List.of("store","catalog","identity")){env.withProperty("app."+service+".internal-base-url","http://127.0.0.1:"+server.getAddress().getPort()+"/internal/"+service).withProperty("app."+service+".auth-value","secret");}
+        env=new MockEnvironment();for(String service:List.of("store","catalog","identity","inventory")){env.withProperty("app."+service+".internal-base-url","http://127.0.0.1:"+server.getAddress().getPort()+"/internal/"+service).withProperty("app."+service+".auth-value","secret");}
         var json=new ObjectMapper().registerModule(new JavaTimeModule()).setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE).enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
         client=new HttpOrderDependencies(env,json);
     }
@@ -38,4 +38,15 @@ class HttpOrderDependenciesTest {
         response=response.replace("\"variant_id\":1","\"variant_id\":2");assertThatThrownBy(()->client.resolve(1,List.of(new Item(1,2,null,List.of(new Option(5,2)))))).isInstanceOf(ApiException.class);
     }
     @Test void posCustomerLookupUsesIdentityBatchIdsAndRoleName(){response="{\"success\":true,\"data\":[{\"id\":\"customer\",\"status\":\"Active\",\"role_name\":\"ROLE_CUSTOMER\"}]}";client.requireCustomer("customer");assertThat(body.get()).isEqualTo("{\"ids\":[\"customer\"]}");assertThat(path.get()).endsWith("/users/batch");}
+    @Test void inventoryReceivesQuantitiesAndFailsClosed(){
+        var items=List.of(new Item(1,3,null,List.of(new Option(5,2))));
+        response="{\"success\":true,\"data\":{\"available\":true,\"can_make\":true}}";
+        client.requireStock(1,items);
+        assertThat(path.get()).endsWith("/inventory/availability");
+        assertThat(body.get()).contains("\"variant_id\":1","\"quantity\":3","\"option_id\":5");
+        response="{\"success\":true,\"data\":{\"available\":false,\"can_make\":false}}";
+        assertThatThrownBy(()->client.requireStock(1,items)).isInstanceOfSatisfying(ApiException.class,e->assertThat(e.code).isEqualTo("OUT_OF_STOCK"));
+        response="{\"success\":true,\"data\":{}}";
+        assertThatThrownBy(()->client.requireStock(1,items)).isInstanceOfSatisfying(ApiException.class,e->assertThat(e.code).isEqualTo("INVENTORY_UNAVAILABLE"));
+    }
 }

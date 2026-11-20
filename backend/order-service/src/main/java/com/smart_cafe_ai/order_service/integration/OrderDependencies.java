@@ -21,5 +21,6 @@ public interface OrderDependencies {
     Session sessionById(Long id);
     Staff staff(String userId);
     List<ResolvedItem> resolve(Integer branchId,List<Item> items);
+    void requireStock(Integer branchId,List<Item> items);
     void requireCustomer(String userId);
 }

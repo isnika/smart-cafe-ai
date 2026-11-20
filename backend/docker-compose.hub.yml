@@ -63,9 +63,9 @@ services:
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
-      timeout: 5s
+      timeout: 15s
       retries: 6
-      start_period: 25s
+      start_period: 360s
     networks:
       - smartcafe-network
     deploy:
@@ -90,7 +90,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-      start_period: 25s
+      start_period: 180s
     networks:
       - smartcafe-network
     deploy:
@@ -134,6 +134,8 @@ services:
   # ============================================================================
 
   identity-service:
+    # Local source changes must be packaged and built with this image name/tag
+    # before running up -d; see the Identity update commands in README.md.
     image: ${DOCKERHUB_USERNAME:-nguyenchanhkhue}/smartcafe-identity-service:${TAG:-latest}
     container_name: smartcafe-identity-service
     restart: unless-stopped
@@ -271,6 +273,7 @@ services:
       STORE_INTERNAL_BASE_URL: http://store-service:8083/internal
       STORE_INTERNAL_API_KEY: ${STORE_INTERNAL_API_KEY:-smart-cafe-internal-store-key}
       CATALOG_INTERNAL_BASE_URL: http://catalog-service:8082/internal/catalog
+      INVENTORY_INTERNAL_BASE_URL: http://inventory-service:8086/internal/inventory
       CATALOG_INTERNAL_API_KEY: ${CATALOG_INTERNAL_API_KEY:-smart-cafe-internal-catalog-key}
       IDENTITY_INTERNAL_BASE_URL: http://identity-service:8081/api/v1/internal
       IDENTITY_INTERNAL_API_KEY: ${IDENTITY_INTERNAL_API_KEY:-smart-cafe-internal-identity-key}
