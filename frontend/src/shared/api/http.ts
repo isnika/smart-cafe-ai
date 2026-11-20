@@ -5,10 +5,10 @@ import { normalizeTimestamps, toCamelKeys, toSnakeKeys } from '@/shared/lib';
  * API client dùng service paths (/auth, /users, ...); Vite proxy dịch sang /api/v1 khi dev.
  * Với bản deploy, đặt VITE_API_BASE_URL tới prefix gateway /api/v1.
  */
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/+$/, '');
+const BASE_URL = (window.__SMART_CAFE_CONFIG__?.apiBaseUrl ?? import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/+$/, '');
 
 /** true → entry (main.tsx) khởi động MSW; false/không đặt → mọi request đi ra mạng thật. */
-export const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
+export const USE_MOCK = window.__SMART_CAFE_CONFIG__?.useMock ?? import.meta.env.VITE_USE_MOCK === 'true';
 
 // ── Error ─────────────────────────────────────────────────────────────
 export const API_ERROR_CODES = {
