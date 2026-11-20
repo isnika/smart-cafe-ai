@@ -1,402 +1,102 @@
 name: smart-cafe
 
-x-spring-service: &spring-service
-  image: maven:3.9.9-eclipse-temurin-17
-  working_dir: /app
-  command: ["mvn", "-DskipTests", "spring-boot:run"]
-  restart: on-failure
-  networks:
-    - smartcafe-network
-
-x-spring-env: &spring-env
-  SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-root}
-  SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-root}
-  EUREKA_SERVER_URL: http://discovery-server:8761/eureka/
-  JWT_SECRET: ${JWT_SECRET:-404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
-  JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--Xms128m -Xmx384m}
-
-x-rabbit-env: &rabbit-env
-  RABBITMQ_HOST: rabbitmq
-  RABBITMQ_PORT: 5672
-  RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-smartcafe}
-  RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-smartcafe-local}
-  RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/}
-
 services:
-  mysql:
-    image: mysql:8.0
-    container_name: smartcafe-mysql
-    restart: unless-stopped
-    command: >-
-      --character-set-server=utf8mb4
-      --collation-server=utf8mb4_unicode_ci
-      --default-authentication-plugin=mysql_native_password
+  database:
+    image: mysql:8.4
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-smart_cafe}
+      MYSQL_USER: ${MYSQL_USER:-smart_cafe}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Dien MYSQL_PASSWORD trong .env root}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Dien MYSQL_ROOT_PASSWORD trong .env root}
+
     ports:
-      - "${MYSQL_HOST_PORT:-3306}:3306"
+      - "${MYSQL_PORT:-3306}:3306"
+
     volumes:
       - mysql-data:/var/lib/mysql
-      - ./database/smart_cafe_db.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
-      - ./database/seed_data.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      test:
+        - CMD-SHELL
+        - 'mysqladmin ping -h localhost -uroot -p"$$MYSQL_ROOT_PASSWORD" --silent'
       interval: 10s
       timeout: 5s
       retries: 15
       start_period: 30s
-    networks:
-      - smartcafe-network
 
-  rabbitmq:
-    image: rabbitmq:3.13-management
-    container_name: smartcafe-rabbitmq
     restart: unless-stopped
-    environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-smartcafe}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-smartcafe-local}
-    ports:
-      - "${RABBITMQ_HOST_PORT:-5672}:5672"
-      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
-    volumes:
-      - rabbitmq-data:/var/lib/rabbitmq
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 20s
-    networks:
-      - smartcafe-network
 
-  mailpit:
-    image: axllent/mailpit:v1.20
-    container_name: smartcafe-mailpit
-    restart: unless-stopped
-    ports:
-      - "${MAILPIT_SMTP_PORT:-1025}:1025"
-      - "${MAILPIT_UI_PORT:-8025}:8025"
-    networks:
-      - smartcafe-network
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
 
-  discovery-server:
-    <<: *spring-service
-    volumes:
-      - ./backend/discovery-server:/app:ro
-      - discovery-target:/app/target
-      - maven-cache:/root/.m2
-    ports:
-      - "${DISCOVERY_PORT:-8761}:8761"
-
-  api-gateway:
-    <<: *spring-service
-    volumes:
-      - ./backend/api-gateway:/app:ro
-      - api-gateway-target:/app/target
-      - maven-cache:/root/.m2
     ports:
       - "${BACKEND_PORT:-8080}:8080"
-    environment:
-      <<: *spring-env
-    depends_on:
-      discovery-server:
-        condition: service_started
 
-  identity-service:
-    <<: *spring-service
-    volumes:
-      - ./backend/identity-service:/app:ro
-      - identity-target:/app/target
-      - maven-cache:/root/.m2
-    ports:
-      - "${IDENTITY_PORT:-8081}:8081"
-    environment:
-      <<: [*spring-env, *rabbit-env]
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/smart_cafe_identity_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-      IDENTITY_INTERNAL_API_KEY: ${IDENTITY_INTERNAL_API_KEY:-smart-cafe-internal-identity-key}
-      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
-      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
-      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      OTP_LOG_CODES: ${OTP_LOG_CODES:-true}
-      OTP_EMAIL_PUBLISHER_ENABLED: ${OTP_EMAIL_PUBLISHER_ENABLED:-true}
-    depends_on:
-      mysql:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      discovery-server:
-        condition: service_started
+    env_file:
+      - ./backend/.env
 
-  catalog-service:
-    <<: *spring-service
-    volumes:
-      - ./backend/catalog-service:/app:ro
-      - catalog-target:/app/target
-      - maven-cache:/root/.m2
-    ports:
-      - "${CATALOG_PORT:-8082}:8082"
     environment:
-      <<: [*spring-env, *rabbit-env]
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/smart_cafe_catalog_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-      STORE_INTERNAL_BASE_URL: http://store-service:8083/internal
-      STORE_INTERNAL_API_KEY: ${STORE_INTERNAL_API_KEY:-smart-cafe-internal-store-key}
-      CATALOG_INTERNAL_API_KEY: ${CATALOG_INTERNAL_API_KEY:-smart-cafe-internal-catalog-key}
-      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
-      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
-      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
-    depends_on:
-      mysql:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      discovery-server:
-        condition: service_started
+      SERVER_PORT: 8080
+      SPRING_DATASOURCE_URL: jdbc:mysql://database:3306/${MYSQL_DATABASE:-smart_cafe}?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-smart_cafe}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:?Dien MYSQL_PASSWORD trong .env root}
 
-  store-service:
-    <<: *spring-service
-    volumes:
-      - ./backend/store-service:/app:ro
-      - store-target:/app/target
-      - maven-cache:/root/.m2
-    ports:
-      - "${STORE_PORT:-8083}:8083"
-    environment:
-      <<: *spring-env
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/smart_cafe_store_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-      STORE_INTERNAL_API_KEY: ${STORE_INTERNAL_API_KEY:-smart-cafe-internal-store-key}
-    depends_on:
-      mysql:
-        condition: service_healthy
-      discovery-server:
-        condition: service_started
-
-  order-service:
-    <<: *spring-service
-    volumes:
-      - ./backend/order-service:/app:ro
-      - order-target:/app/target
-      - maven-cache:/root/.m2
-    ports:
-      - "${ORDER_PORT:-8084}:8084"
-    environment:
-      <<: [*spring-env, *rabbit-env]
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/smart_cafe_order_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-      ORDER_INTERNAL_API_KEY: ${ORDER_INTERNAL_API_KEY:-smart-cafe-internal-order-key}
-      STORE_INTERNAL_BASE_URL: http://store-service:8083/internal
-      STORE_INTERNAL_API_KEY: ${STORE_INTERNAL_API_KEY:-smart-cafe-internal-store-key}
-      CATALOG_INTERNAL_BASE_URL: http://catalog-service:8082/internal/catalog
-      CATALOG_INTERNAL_API_KEY: ${CATALOG_INTERNAL_API_KEY:-smart-cafe-internal-catalog-key}
-      IDENTITY_INTERNAL_BASE_URL: http://identity-service:8081/api/v1/internal
-      IDENTITY_INTERNAL_API_KEY: ${IDENTITY_INTERNAL_API_KEY:-smart-cafe-internal-identity-key}
-      ENGAGEMENT_INTERNAL_BASE_URL: http://engagement-service:8087/api/v1/internal
-      ENGAGEMENT_INTERNAL_API_KEY: ${ENGAGEMENT_INTERNAL_API_KEY:-smart-cafe-internal-engagement-key}
-    depends_on:
-      mysql:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      discovery-server:
-        condition: service_started
-
-  payment-service:
-    <<: *spring-service
-    volumes:
-      - ./backend/payment-service:/app:ro
-      - payment-target:/app/target
-      - maven-cache:/root/.m2
-    ports:
-      - "${PAYMENT_PORT:-8085}:8085"
-    environment:
-      <<: [*spring-env, *rabbit-env]
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/smart_cafe_payment_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-      VNPAY_URL: ${VNPAY_URL:-https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
-      VNPAY_TMN_CODE: ${VNPAY_TMN_CODE:-}
-      VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET:-}
-      VNPAY_RETURN_URL: ${VNPAY_RETURN_URL:-http://localhost:5173/payment/vnpay-return}
-      MOMO_ENDPOINT: ${MOMO_ENDPOINT:-https://test-payment.momo.vn/v2/gateway/api/create}
-      MOMO_PARTNER_CODE: ${MOMO_PARTNER_CODE:-}
-      MOMO_ACCESS_KEY: ${MOMO_ACCESS_KEY:-}
-      MOMO_SECRET_KEY: ${MOMO_SECRET_KEY:-}
-      MOMO_RETURN_URL: ${MOMO_RETURN_URL:-http://localhost:5173/payment/momo-return}
-      MOMO_NOTIFY_URL: ${MOMO_NOTIFY_URL:-http://localhost:8085/payments/momo/ipn}
-    depends_on:
-      mysql:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      discovery-server:
-        condition: service_started
-
-  inventory-service:
-    <<: *spring-service
-    volumes:
-      - ./backend/inventory-service:/app:ro
-      - inventory-target:/app/target
-      - maven-cache:/root/.m2
-    ports:
-      - "${INVENTORY_PORT:-8086}:8086"
-    environment:
-      <<: [*spring-env, *rabbit-env]
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/smart_cafe_inventory_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-    depends_on:
-      mysql:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      discovery-server:
-        condition: service_started
-
-  engagement-service:
-    <<: *spring-service
-    volumes:
-      - ./backend/engagement-service:/app:ro
-      - engagement-target:/app/target
-      - maven-cache:/root/.m2
-    ports:
-      - "${ENGAGEMENT_PORT:-8087}:8087"
-    environment:
-      <<: [*spring-env, *rabbit-env]
-      ENGAGEMENT_DATASOURCE_URL: jdbc:mysql://mysql:3306/smart_cafe_engagement_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-      ENGAGEMENT_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-root}
-      ENGAGEMENT_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-root}
-      ENGAGEMENT_INTERNAL_API_KEY: ${ENGAGEMENT_INTERNAL_API_KEY:-smart-cafe-internal-engagement-key}
-      NOTIFICATION_INTERNAL_TOKEN: ${NOTIFICATION_INTERNAL_TOKEN:-smart-cafe-notification-internal-token}
-      MAIL_HOST: mailpit
-      MAIL_PORT: 1025
-      MAIL_USERNAME: ${MAIL_USERNAME:-}
-      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
-      MAIL_FROM: ${MAIL_FROM:-no-reply@smartcafe.local}
-      MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-false}
-      MAIL_STARTTLS_ENABLE: ${MAIL_STARTTLS_ENABLE:-false}
-      MAIL_SSL_ENABLE: ${MAIL_SSL_ENABLE:-false}
-    depends_on:
-      mysql:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      mailpit:
-        condition: service_started
-      discovery-server:
-        condition: service_started
-
-  intelligence-service:
-    <<: *spring-service
-    volumes:
-      - ./backend/intelligence-service:/app:ro
-      - intelligence-target:/app/target
-      - maven-cache:/root/.m2
-    ports:
-      - "${INTELLIGENCE_PORT:-8088}:8088"
-    environment:
-      <<: *spring-env
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/smart_cafe_intelligence_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+      # Đổi tên biến theo cấu hình thực tế của backend.
       AI_SERVICE_URL: http://ai-service:8000
+
     depends_on:
-      mysql:
+      database:
         condition: service_healthy
-      discovery-server:
+      ai-service:
         condition: service_started
+
+    restart: unless-stopped
 
   ai-service:
     build:
       context: ./ai-service
       dockerfile: Dockerfile
-    container_name: smartcafe-ai-service
-    restart: unless-stopped
+
     ports:
       - "${AI_PORT:-8000}:8000"
+
+    env_file:
+      - ./ai-service/.env
+
     environment:
-      LLM_PROVIDER: ${LLM_PROVIDER:-openai_compatible}
+      # Ollama chạy trên máy Windows.
       LLM_BASE_URL: ${LLM_BASE_URL:-http://host.docker.internal:11434/v1}
-      LLM_API_KEY: ${LLM_API_KEY:-ollama}
-      LLM_MODEL: ${LLM_MODEL:-qwen2.5:7b}
-      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-45}
-      LLM_MAX_RETRIES: ${LLM_MAX_RETRIES:-2}
-      LLM_RETRY_BASE_SECONDS: ${LLM_RETRY_BASE_SECONDS:-0.4}
-      LLM_RETRY_MAX_SECONDS: ${LLM_RETRY_MAX_SECONDS:-4}
-      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.1}
-      RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-intfloat/multilingual-e5-small}
-      RAG_TOP_K: ${RAG_TOP_K:-4}
-      RAG_MIN_SCORE: ${RAG_MIN_SCORE:-0.68}
-      RAG_LEXICAL_WEIGHT: ${RAG_LEXICAL_WEIGHT:-0.30}
-      RAG_ALLOW_MODEL_DOWNLOAD: ${RAG_ALLOW_MODEL_DOWNLOAD:-true}
-      RAG_WARM_EMBEDDING_MODEL: ${RAG_WARM_EMBEDDING_MODEL:-true}
-      DATA_API_BASE_URL: ${DATA_API_BASE_URL:-http://api-gateway:8080}
-      DATA_API_KEY: ${DATA_API_KEY:-}
-      DATA_API_TIMEOUT_SECONDS: ${DATA_API_TIMEOUT_SECONDS:-3}
-      DATA_API_CATALOG_PATH: ${DATA_API_CATALOG_PATH:-/api/ai/catalog/search}
-      DATA_API_ORDER_PATH: ${DATA_API_ORDER_PATH:-/api/ai/orders/{order_code}}
-      RECOMMENDATION_SOURCE_MODE: ${RECOMMENDATION_SOURCE_MODE:-live}
-      RECOMMENDATION_SNAPSHOT_PATH: ${RECOMMENDATION_SNAPSHOT_PATH:-/api/ai/recommendation/snapshot}
-      RECOMMENDATION_VIEWER_PATH: ${RECOMMENDATION_VIEWER_PATH:-/api/ai/recommendation/viewer}
-      RECOMMENDATION_MODEL_VERSION: ${RECOMMENDATION_MODEL_VERSION:-hybrid-v2}
-      FORECASTING_SOURCE_MODE: ${FORECASTING_SOURCE_MODE:-live}
-      FORECASTING_DATA_API_BASE_URL: ${FORECASTING_DATA_API_BASE_URL:-http://api-gateway:8080}
-      FORECASTING_DATA_API_KEY: ${FORECASTING_DATA_API_KEY:-${DATA_API_KEY:-}}
-      FORECASTING_SNAPSHOT_PATH: ${FORECASTING_SNAPSHOT_PATH:-/api/ai/forecasting/snapshot}
-      FORECASTING_TIMEZONE: ${FORECASTING_TIMEZONE:-Asia/Ho_Chi_Minh}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
-      CHAT_RATE_LIMIT_ENABLED: ${CHAT_RATE_LIMIT_ENABLED:-true}
-      CHAT_RATE_LIMIT_PER_MINUTE: ${CHAT_RATE_LIMIT_PER_MINUTE:-60}
-      CHAT_SOURCE_MODE: ${CHAT_SOURCE_MODE:-metadata}
-      PRELOAD_CHAT: ${PRELOAD_CHAT:-false}
-      CHAT_NATURALIZE_RESPONSES: ${CHAT_NATURALIZE_RESPONSES:-true}
       HF_HOME: /app/.cache/huggingface
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+
     volumes:
       - huggingface-cache:/app/.cache/huggingface
-    depends_on:
-      api-gateway:
-        condition: service_started
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 90s
-    networks:
-      - smartcafe-network
+
+    restart: unless-stopped
 
   frontend:
-    image: node:22-alpine
-    container_name: smartcafe-frontend
-    working_dir: /app
-    restart: unless-stopped
-    command: ["sh", "-c", "npm ci --no-audit --no-fund && npm run dev -- --host 0.0.0.0"]
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+
     ports:
-      - "${FRONTEND_PORT:-5173}:5173"
+      - "${FRONTEND_PORT:-5173}:80"
+
+    env_file:
+      - ./frontend/.env
+
     environment:
-      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
-      VITE_API_PROXY_TARGET: ${VITE_API_PROXY_TARGET:-http://api-gateway:8080}
-      CHOKIDAR_USEPOLLING: ${CHOKIDAR_USEPOLLING:-true}
-    volumes:
-      - ./frontend:/app:ro
-      - frontend-node-modules:/app/node_modules
+      # Trình duyệt gọi backend qua cổng public trên máy.
+      # Đổi tên biến theo tên frontend đang sử dụng.
+      VITE_API_BASE_URL: http://localhost:${BACKEND_PORT:-8080}
+
     depends_on:
-      api-gateway:
+      backend:
         condition: service_started
-    networks:
-      - smartcafe-network
+
+    restart: unless-stopped
 
 volumes:
   mysql-data:
-  rabbitmq-data:
-  maven-cache:
-  discovery-target:
-  api-gateway-target:
-  identity-target:
-  catalog-target:
-  store-target:
-  order-target:
-  payment-target:
-  inventory-target:
-  engagement-target:
-  intelligence-target:
   huggingface-cache:
-  frontend-node-modules:
-
-networks:
-  smartcafe-network:
-    name: smartcafe-network
