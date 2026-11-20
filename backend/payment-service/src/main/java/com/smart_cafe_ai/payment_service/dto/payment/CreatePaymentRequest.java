@@ -39,4 +39,21 @@ public class CreatePaymentRequest {
     @JsonProperty("idempotency_key")
     @JsonAlias({"idempotencyKey", "idempotency_key"})
     private String idempotencyKey;
+
+    @JsonProperty("allocations")
+    private java.util.List<AllocationItem> allocations;
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class AllocationItem {
+        @JsonProperty("order_id")
+        @JsonAlias({"orderId", "order_id"})
+        private Long orderId;
+
+        @JsonProperty("allocated_amount")
+        @JsonAlias({"allocatedAmount", "allocated_amount"})
+        private java.math.BigDecimal allocatedAmount;
+    }
 }

@@ -17,7 +17,11 @@ export function useDefaultBranch() {
   const setBranch = useOnlineCartStore((state) => state.setBranch);
   const addressBook = useAddressBook(roleName === 'Customer');
   const branches = useQuery({ queryKey: ['store', 'branches', 'online'], queryFn: () => storeApi.listBranches({ status: 'Active' }), staleTime: 60_000 });
-  const bestSelling = useQuery({ queryKey: ['store', 'best-selling-branch'], queryFn: orderApi.getBestSellingBranchId, staleTime: 5 * 60_000 });
+  const bestSelling = useQuery({
+    queryKey: ['store', 'best-selling-branch'],
+    queryFn: async () => (await orderApi.getBestSellingBranchId()) ?? null,
+    staleTime: 5 * 60_000,
+  });
   const address = addressBook.data ? pickDefaultAddress(addressBook.data) : undefined;
 
   useEffect(() => {
@@ -38,8 +42,10 @@ export function useDefaultBranch() {
     if (bestSelling.data !== undefined) {
       const best = eligible.find((branch) => branch.id === bestSelling.data);
       setBranch((best ?? eligible[0]!).id);
+    } else if (bestSelling.isError || !bestSelling.isPending) {
+      setBranch(eligible[0]!.id);
     }
-  }, [address, addressBook.isError, addressBook.isPending, bestSelling.data, branchId, branches.data, roleName, setBranch, userId]);
+  }, [address, addressBook.isError, addressBook.isPending, bestSelling.data, bestSelling.isError, bestSelling.isPending, branchId, branches.data, roleName, setBranch, userId]);
 
   return { branchId, branches, addressBook };
 }
