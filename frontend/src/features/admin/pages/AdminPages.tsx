@@ -18,6 +18,9 @@ import {
   Users,
   ArrowRightLeft,
   History,
+  Pencil,
+  Tags,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
@@ -1110,6 +1113,320 @@ export function AdminProductsPage() {
         />
       </Modal>
     </div>
+  );
+}
+
+export function AdminCategoriesPage() {
+  const [term, setTerm] = useState("");
+  const [form, setForm] = useState<api.AdminCategory | null | undefined>(
+    undefined,
+  );
+  const categories = useQuery({
+    queryKey: keys.categories,
+    queryFn: ({ signal }) => api.listAdminCategories(signal),
+  });
+  const qc = useQueryClient();
+  const refreshCategoryData = () => {
+    void qc.invalidateQueries({ queryKey: keys.categories });
+    void qc.invalidateQueries({ queryKey: keys.products });
+    void qc.invalidateQueries({ queryKey: ["catalog", "categories"] });
+  };
+  const save = useMutation({
+    mutationFn: ({
+      id,
+      input,
+    }: {
+      id?: number;
+      input: api.AdminCategoryInput;
+    }) =>
+      id === undefined
+        ? api.createAdminCategory(input)
+        : api.updateAdminCategory(id, input),
+    onSuccess: (_category, variables) => {
+      toast.success(
+        variables.id === undefined
+          ? "Đã thêm danh mục"
+          : "Đã cập nhật danh mục",
+      );
+      setForm(undefined);
+      refreshCategoryData();
+    },
+    onError: (error) => toast.error(displayError(error)),
+  });
+  const remove = useMutation({
+    mutationFn: api.deleteAdminCategory,
+    onSuccess: () => {
+      toast.success("Đã xoá danh mục");
+      refreshCategoryData();
+    },
+    onError: (error) => toast.error(displayError(error)),
+  });
+  const visibleCategories = (categories.data ?? []).filter((category) =>
+    category.name.toLocaleLowerCase("vi").includes(term.trim().toLocaleLowerCase("vi")),
+  );
+
+  return (
+    <div className="mx-auto max-w-[1440px]">
+      <PageHeading
+        title="Danh mục"
+        description="Thêm, chỉnh sửa và xoá danh mục sản phẩm trong menu."
+        action={
+          <Button
+            leftIcon={<Plus className="size-4" />}
+            onClick={() => setForm(null)}
+          >
+            Thêm danh mục
+          </Button>
+        }
+      />
+      <Card className="mb-5 flex flex-wrap items-center gap-3 p-4">
+        <div className="min-w-[220px] flex-1">
+          <Input
+            aria-label="Tìm danh mục"
+            placeholder="Tìm theo tên danh mục"
+            leftIcon={<Search aria-hidden />}
+            value={term}
+            onChange={(event) => setTerm(event.target.value)}
+          />
+        </div>
+        <Button
+          variant="outline"
+          leftIcon={<RefreshCw className="size-4" />}
+          onClick={() => void categories.refetch()}
+        >
+          Làm mới
+        </Button>
+      </Card>
+      <Card padding="none" className="overflow-hidden">
+        {categories.isPending ? (
+          <Loading />
+        ) : categories.isError ? (
+          <div className="p-5">
+            <ErrorState
+              error={categories.error}
+              retry={() => void categories.refetch()}
+            />
+          </div>
+        ) : visibleCategories.length === 0 ? (
+          <EmptyState
+            title={
+              term.trim() ? "Không tìm thấy danh mục" : "Chưa có danh mục nào"
+            }
+            message={
+              term.trim()
+                ? "Thử tìm với từ khoá khác."
+                : "Thêm danh mục để sắp xếp sản phẩm trong menu."
+            }
+            icon={Tags}
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[700px] text-left text-sm">
+              <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+                <tr>
+                  {["Danh mục", "Sản phẩm", "Thứ tự", "Trạng thái", "Thao tác"].map(
+                    (heading) => (
+                      <th key={heading} className="px-5 py-3.5 font-semibold">
+                        {heading}
+                      </th>
+                    ),
+                  )}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {visibleCategories.map((category) => {
+                  const productCount =
+                    category.totalProductCount ?? category.productCount ?? 0;
+                  return (
+                    <tr key={category.id} className="hover:bg-gray-50/70">
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          {category.image ? (
+                            <img
+                              src={category.image}
+                              alt=""
+                              className="size-11 rounded-lg object-cover"
+                            />
+                          ) : (
+                            <span className="grid size-11 place-items-center rounded-lg bg-primary-50 text-primary-700">
+                              <Tags className="size-5" aria-hidden />
+                            </span>
+                          )}
+                          <div>
+                            <p className="font-semibold text-gray-900">
+                              {category.name}
+                            </p>
+                            <p className="mt-1 text-xs text-gray-500">
+                              Mã danh mục: #{category.id}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-gray-600">
+                        {productCount}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600">
+                        {category.sortOrder ?? 0}
+                      </td>
+                      <td className="px-5 py-4">
+                        <Badge
+                          tone={
+                            category.status === "Active" ? "success" : "neutral"
+                          }
+                        >
+                          {category.status === "Active" ? "Hoạt động" : "Tạm ẩn"}
+                        </Badge>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            leftIcon={<Pencil className="size-3.5" />}
+                            onClick={() => setForm(category)}
+                          >
+                            Sửa
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            leftIcon={<Trash2 className="size-3.5" />}
+                            loading={
+                              remove.isPending &&
+                              remove.variables === category.id
+                            }
+                            disabled={remove.isPending}
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  `Bạn có chắc muốn xoá danh mục "${category.name}"?`,
+                                )
+                              ) {
+                                remove.mutate(category.id);
+                              }
+                            }}
+                          >
+                            Xoá
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+      <Modal
+        open={form !== undefined}
+        onClose={() => {
+          if (!save.isPending) setForm(undefined);
+        }}
+        title={form ? "Chỉnh sửa danh mục" : "Thêm danh mục mới"}
+        size="md"
+      >
+        {form !== undefined && (
+          <AdminCategoryForm
+            key={form?.id ?? "new"}
+            initial={form ?? undefined}
+            busy={save.isPending}
+            onCancel={() => setForm(undefined)}
+            onSubmit={(input) => save.mutate({ id: form?.id, input })}
+          />
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+function AdminCategoryForm({
+  initial,
+  busy,
+  onCancel,
+  onSubmit,
+}: {
+  initial?: api.AdminCategory;
+  busy: boolean;
+  onCancel: () => void;
+  onSubmit: (input: api.AdminCategoryInput) => void;
+}) {
+  const [name, setName] = useState(initial?.name ?? "");
+  const [image, setImage] = useState(initial?.image ?? "");
+  const [sortOrder, setSortOrder] = useState(initial?.sortOrder ?? 0);
+  const [status, setStatus] = useState<"Active" | "Inactive">(
+    initial?.status === "Inactive" ? "Inactive" : "Active",
+  );
+  const [nameError, setNameError] = useState("");
+
+  return (
+    <form
+      className="space-y-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const normalizedName = name.trim();
+        if (!normalizedName) {
+          setNameError("Vui lòng nhập tên danh mục.");
+          return;
+        }
+        onSubmit({
+          name: normalizedName,
+          image: image.trim() || null,
+          sortOrder,
+          status,
+        });
+      }}
+    >
+      <Input
+        label="Tên danh mục"
+        placeholder="Ví dụ: Cà phê"
+        value={name}
+        onChange={(event) => {
+          setName(event.target.value);
+          if (event.target.value.trim()) setNameError("");
+        }}
+        error={nameError}
+        required
+        autoFocus
+      />
+      <Input
+        label="Đường dẫn hình ảnh"
+        placeholder="https://..."
+        type="url"
+        value={image}
+        onChange={(event) => setImage(event.target.value)}
+      />
+      <Input
+        label="Thứ tự hiển thị"
+        type="number"
+        min={0}
+        step={1}
+        value={sortOrder}
+        onChange={(event) => setSortOrder(Math.max(0, Number(event.target.value) || 0))}
+      />
+      <label className="flex flex-col gap-1.5 text-body font-medium text-gray-800">
+        Trạng thái
+        <select
+          aria-label="Trạng thái danh mục"
+          value={status}
+          onChange={(event) =>
+            setStatus(event.target.value as "Active" | "Inactive")
+          }
+          className="h-10 rounded-md border border-gray-300 bg-white px-3 text-body text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200"
+        >
+          <option value="Active">Hoạt động</option>
+          <option value="Inactive">Tạm ẩn</option>
+        </select>
+      </label>
+      <div className="flex justify-end gap-2 border-t border-gray-200 pt-4">
+        <Button variant="outline" onClick={onCancel} disabled={busy}>
+          Huỷ
+        </Button>
+        <Button type="submit" loading={busy}>
+          {initial ? "Lưu thay đổi" : "Thêm danh mục"}
+        </Button>
+      </div>
+    </form>
   );
 }
 

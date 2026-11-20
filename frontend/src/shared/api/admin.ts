@@ -31,7 +31,13 @@ export interface AdminProduct {
   sortOrder: number; status: 'Active' | 'Inactive'; price?: number | null; maxPrice?: number | null;
   variantCount: number; activeVariantCount: number;
 }
-export interface AdminCategory { id: number; name: string; status: string }
+export interface AdminCategory {
+  id: number; name: string; status: string; image?: string | null; sortOrder?: number;
+  totalProductCount?: number; activeProductCount?: number; productCount?: number;
+}
+export interface AdminCategoryInput {
+  name: string; image?: string | null; sortOrder: number; status: 'Active' | 'Inactive';
+}
 export interface AdminProductInput {
   categoryId: number; name: string; image?: string; description?: string; temperature?: string | null;
   caffeineLevel: string; flavorTags: string[]; sortOrder: number; status: 'Active' | 'Inactive';
@@ -118,6 +124,12 @@ export async function listAdminProducts(params: { page?: number; size?: number; 
 export async function listAdminCategories(signal?: AbortSignal): Promise<AdminCategory[]> {
   return unwrapList(await http.get<unknown>('/catalog/admin/categories', { query: { page: 1, size: 100 }, signal }));
 }
+export const createAdminCategory = async (input: AdminCategoryInput) =>
+  unwrapData<AdminCategory>(await http.post<unknown>('/catalog/categories', input, { snake: true }));
+export const updateAdminCategory = async (id: number, input: AdminCategoryInput) =>
+  unwrapData<AdminCategory>(await http.put<unknown>(`/catalog/categories/${id}`, input, { snake: true }));
+export const deleteAdminCategory = async (id: number) =>
+  unwrapData<{ id: number }>(await http.delete<unknown>(`/catalog/categories/${id}`));
 export const createAdminProduct = async (input: AdminProductCreateInput) => unwrapData<AdminProduct>(await http.post<unknown>('/catalog/products', input, { snake: true }));
 export const updateAdminProduct = async (id: number, input: AdminProductInput) => unwrapData<AdminProduct>(await http.put<unknown>(`/catalog/products/${id}`, input, { snake: true }));
 export const updateAdminProductStatus = async (id: number, status: 'Active' | 'Inactive') => unwrapData<AdminProduct>(await http.patch<unknown>(`/catalog/products/${id}/status`, { status }, { snake: true }));

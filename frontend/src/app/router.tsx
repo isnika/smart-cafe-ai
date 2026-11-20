@@ -33,7 +33,7 @@ import ManagerForecastPage from "@/features/manager-forecast/pages/ManagerForeca
 import StaffDashboardPage from "@/features/staff-dashboard/pages/StaffDashboardPage";
 import StaffCheckinPage from "@/features/staff-checkin/pages/StaffCheckinPage";
 import StaffTablesPage from "@/features/staff-tables/pages/StaffTablesPage";
-import { AdminDashboardPage, AdminBranchesPage, AdminTablesPage, AdminUsersPage, AdminProductsPage, AdminBranchMenusPage } from "@/features/admin/pages/AdminPages";
+import { AdminDashboardPage, AdminBranchesPage, AdminTablesPage, AdminUsersPage, AdminProductsPage, AdminCategoriesPage, AdminBranchMenusPage } from "@/features/admin/pages/AdminPages";
 import { StaffLeavePage, ManagerLeavePage } from "@/features/workforce/LeavePages";
 
 // Tải lười để trang này không đi vào bundle production
@@ -161,6 +161,7 @@ export const routes: RouteObject[] = [
           { path: PATHS.adminTables, element: <AdminTablesPage /> },
           { path: PATHS.adminUsers, element: <AdminUsersPage /> },
           { path: PATHS.adminProducts, element: <AdminProductsPage /> },
+          { path: PATHS.adminCategories, element: <AdminCategoriesPage /> },
           { path: PATHS.adminMenus, element: <AdminBranchMenusPage /> },
         ],
       },

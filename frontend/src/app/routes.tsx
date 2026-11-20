@@ -47,6 +47,7 @@ export const PATHS = {
   adminTables: "/admin/tables",
   adminUsers: "/admin/users",
   adminProducts: "/admin/products",
+  adminCategories: "/admin/categories",
   adminMenus: "/admin/menus",
 } as const;
 
@@ -79,7 +80,7 @@ export function homeAfterLogin(roleName: RoleName, requestedPath?: string | null
     Customer: [PATHS.home, PATHS.menu, PATHS.cart, PATHS.checkout, PATHS.orders, PATHS.profile],
     Staff: [PATHS.staff, PATHS.staffQueue, PATHS.staffCheckin, PATHS.staffTables, '/staff/orders/'],
     Manager: [PATHS.manager, PATHS.managerInventory, PATHS.managerForecast],
-    Admin: [PATHS.admin, PATHS.adminBranches, PATHS.adminTables, PATHS.adminUsers, PATHS.adminProducts, PATHS.adminMenus],
+    Admin: [PATHS.admin, PATHS.adminBranches, PATHS.adminTables, PATHS.adminUsers, PATHS.adminProducts, PATHS.adminCategories, PATHS.adminMenus],
   };
   const canOpen = allowed[roleName].some((path) =>
     path.endsWith('/') ? requestedPath.startsWith(path) : requestedPath === path || requestedPath.startsWith(`${path}/`),
