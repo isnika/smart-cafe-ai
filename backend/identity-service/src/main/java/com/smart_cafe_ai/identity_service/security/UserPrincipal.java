@@ -27,7 +27,7 @@ public class UserPrincipal implements UserDetails {
     }
 
     public Integer getBranchId() {
-        return null;
+        return user.getBranchId();
     }
 
     public String getRoleName() {

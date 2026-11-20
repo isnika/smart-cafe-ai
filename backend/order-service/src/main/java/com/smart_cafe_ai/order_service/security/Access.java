@@ -16,7 +16,8 @@ import static org.springframework.http.HttpStatus.*;
 
 @Component
 public class Access {
-    public record Actor(String userId,String role) {
+    public record Actor(String userId,String role,Integer branchId) {
+        public Actor(String userId,String role){this(userId,role,null);}
         public boolean staff(){return Set.of("ROLE_STAFF","ROLE_CASHIER","ROLE_BARISTA","ROLE_MANAGER","ROLE_ADMIN").contains(role);}
         public boolean admin(){return "ROLE_ADMIN".equals(role);}
         public boolean manager(){return "ROLE_MANAGER".equals(role)||admin();}
@@ -45,7 +46,8 @@ public class Access {
                     throw new ApiException(FORBIDDEN,code,"Tài khoản không hoạt động. Vui lòng kiểm tra lại trạng thái tài khoản.");
                 }
             });
-            return new Actor(sub,role);
+            Integer branchId = c.get("branch_id", Integer.class);
+            return new Actor(sub,role,branchId);
         }catch(ExpiredJwtException ex){throw new ApiException(UNAUTHORIZED,"TOKEN_EXPIRED","Phiên đăng nhập đã hết hạn.");}
         catch(JwtException|IllegalArgumentException ex){throw new ApiException(UNAUTHORIZED,"UNAUTHORIZED","Token không hợp lệ.");}
     }

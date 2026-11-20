@@ -26,6 +26,8 @@ public class User {
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "role_id", nullable = false)
     private Role role;
+    @Column(name = "branch_id")
+    private Integer branchId;
     @Enumerated(EnumType.STRING)
     @Column(columnDefinition = "ENUM(\'Unverified\', \'Active\', \'Banned\', \'Deactivated\') DEFAULT \'Unverified\'")
     private UserStatus status;
@@ -60,6 +62,7 @@ public class User {
         private String fullName;
         private String avatar;
         private Role role;
+        private Integer branchId;
         private UserStatus status;
         private LocalDateTime emailVerifiedAt;
         private LocalDateTime phoneVerifiedAt;
@@ -133,6 +136,11 @@ public class User {
             return this;
         }
 
+        public User.UserBuilder branchId(final Integer branchId) {
+            this.branchId = branchId;
+            return this;
+        }
+
         /**
          * @return {@code this}.
          */
@@ -181,12 +189,12 @@ public class User {
             return this;
         }
         public User build() {
-            return new User(this.id, this.email, this.phone, this.passwordHash, this.googleId, this.fullName, this.avatar, this.role, this.status, this.emailVerifiedAt, this.phoneVerifiedAt, this.lastLoginAt, this.createdAt, this.updatedAt);
+            return new User(this.id, this.email, this.phone, this.passwordHash, this.googleId, this.fullName, this.avatar, this.role, this.branchId, this.status, this.emailVerifiedAt, this.phoneVerifiedAt, this.lastLoginAt, this.createdAt, this.updatedAt);
         }
 
         @java.lang.Override
         public java.lang.String toString() {
-            return "User.UserBuilder(id=" + this.id + ", email=" + this.email + ", phone=" + this.phone + ", passwordHash=" + this.passwordHash + ", googleId=" + this.googleId + ", fullName=" + this.fullName + ", avatar=" + this.avatar + ", role=" + this.role + ", status=" + this.status + ", emailVerifiedAt=" + this.emailVerifiedAt + ", phoneVerifiedAt=" + this.phoneVerifiedAt + ", lastLoginAt=" + this.lastLoginAt + ", createdAt=" + this.createdAt + ", updatedAt=" + this.updatedAt + ")";
+            return "User.UserBuilder(id=" + this.id + ", email=" + this.email + ", phone=" + this.phone + ", passwordHash=" + this.passwordHash + ", googleId=" + this.googleId + ", fullName=" + this.fullName + ", avatar=" + this.avatar + ", role=" + this.role + ", branchId=" + this.branchId + ", status=" + this.status + ", emailVerifiedAt=" + this.emailVerifiedAt + ", phoneVerifiedAt=" + this.phoneVerifiedAt + ", lastLoginAt=" + this.lastLoginAt + ", createdAt=" + this.createdAt + ", updatedAt=" + this.updatedAt + ")";
         }
     }
     public static User.UserBuilder builder() {
@@ -215,6 +223,9 @@ public class User {
     }
     public Role getRole() {
         return this.role;
+    }
+    public Integer getBranchId() {
+        return this.branchId;
     }
     public UserStatus getStatus() {
         return this.status;
@@ -258,6 +269,9 @@ public class User {
     public void setRole(final Role role) {
         this.role = role;
     }
+    public void setBranchId(final Integer branchId) {
+        this.branchId = branchId;
+    }
     public void setStatus(final UserStatus status) {
         this.status = status;
     }
@@ -279,6 +293,9 @@ public class User {
     public User() {
     }
     public User(final String id, final String email, final String phone, final String passwordHash, final String googleId, final String fullName, final String avatar, final Role role, final UserStatus status, final LocalDateTime emailVerifiedAt, final LocalDateTime phoneVerifiedAt, final LocalDateTime lastLoginAt, final LocalDateTime createdAt, final LocalDateTime updatedAt) {
+        this(id, email, phone, passwordHash, googleId, fullName, avatar, role, null, status, emailVerifiedAt, phoneVerifiedAt, lastLoginAt, createdAt, updatedAt);
+    }
+    public User(final String id, final String email, final String phone, final String passwordHash, final String googleId, final String fullName, final String avatar, final Role role, final Integer branchId, final UserStatus status, final LocalDateTime emailVerifiedAt, final LocalDateTime phoneVerifiedAt, final LocalDateTime lastLoginAt, final LocalDateTime createdAt, final LocalDateTime updatedAt) {
         this.id = id;
         this.email = email;
         this.phone = phone;
@@ -287,6 +304,7 @@ public class User {
         this.fullName = fullName;
         this.avatar = avatar;
         this.role = role;
+        this.branchId = branchId;
         this.status = status;
         this.emailVerifiedAt = emailVerifiedAt;
         this.phoneVerifiedAt = phoneVerifiedAt;

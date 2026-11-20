@@ -45,11 +45,13 @@ public class AdminUserService {
 
     @Transactional(readOnly = true)
     public ApiResponse<List<UserResponse>> getAllUsers(Integer roleId, Integer branchId, UserStatus status, String query, Pageable pageable) {
-        rejectBranchScope(branchId);
         Specification<User> spec = (root, q, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             if (roleId != null) {
                 predicates.add(cb.equal(root.get("role").get("id"), roleId));
+            }
+            if (branchId != null) {
+                predicates.add(cb.equal(root.get("branchId"), branchId));
             }
             if (status != null) {
                 predicates.add(cb.equal(root.get("status"), status));
@@ -86,7 +88,6 @@ public class AdminUserService {
 
     @Transactional
     public ApiResponse<UserResponse> createUser(AdminUserCreateRequest request) {
-        rejectBranchScope(request.getBranchId());
         if (request.getEmail() != null && userRepository.existsByEmail(request.getEmail())) {
             return ApiResponse.error("CONFLICT", "Email đã được sử dụng");
         }
@@ -109,6 +110,7 @@ public class AdminUserService {
                 .phone(request.getPhone())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .role(role)
+                .branchId(request.getBranchId())
                 .status(request.getStatus() != null ? request.getStatus() : UserStatus.Active)
                 .build();
 
@@ -125,14 +127,23 @@ public class AdminUserService {
         if (request.getEmail() != null) user.setEmail(request.getEmail());
         if (request.getPhone() != null) user.setPhone(request.getPhone());
         if (request.getAvatar() != null) user.setAvatar(request.getAvatar());
+        if (request.getBranchId() != null) user.setBranchId(request.getBranchId());
 
         User updated = userRepository.save(user);
         return ApiResponse.success(UserResponse.fromEntity(updated));
     }
 
     @Transactional
+    public ApiResponse<UserResponse> updateUserBranch(String id, Integer branchId) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy tài khoản"));
+        user.setBranchId(branchId);
+        User updated = userRepository.save(user);
+        return ApiResponse.success(UserResponse.fromEntity(updated));
+    }
+
+    @Transactional
     public ApiResponse<UserResponse> updateUserRole(String id, AdminUserRoleRequest request) {
-        rejectBranchScope(request.getBranchId());
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy tài khoản"));
 
@@ -146,6 +157,9 @@ public class AdminUserService {
         }
 
         user.setRole(role);
+        if (request.getBranchId() != null) {
+            user.setBranchId(request.getBranchId());
+        }
 
         User updated = userRepository.save(user);
         return ApiResponse.success(UserResponse.fromEntity(updated));
@@ -171,10 +185,6 @@ public class AdminUserService {
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepository.save(user);
         return ApiResponse.success(null);
-    }
-    private void rejectBranchScope(Integer branchId) {
-        if(branchId!=null) throw new com.smart_cafe_ai.identity_service.exception.ApiException(org.springframework.http.HttpStatus.BAD_REQUEST,
-                "VALIDATION_ERROR","Chi nhánh và hồ sơ nhân viên thuộc Store Service. Identity chỉ quản lý tài khoản và vai trò; không nhận branch_id cho thao tác này.");
     }
 }
 

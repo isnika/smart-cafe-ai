@@ -50,6 +50,15 @@ public class JwtService {
         return getClaims(token).getSubject();
     }
 
+    public Integer extractBranchId(String token) {
+        Claims claims = getClaims(token);
+        Object branchId = claims.get("branch_id");
+        if (branchId instanceof Number number) {
+            return number.intValue();
+        }
+        return null;
+    }
+
     public String extractUsername(String token) {
         Claims claims = getClaims(token);
         Object email = claims.get("email");
