@@ -187,15 +187,12 @@ public class InventoryServiceImpl implements InventoryService {
                 }
             }
 
-            // Without a base recipe, available quantity cannot be verified.
+            // If no base recipe is defined, treat as unconstrained by inventory
             if (recipes.isEmpty()) {
-                insufficientItems.add(AvailabilityCheckResponse.InsufficientItem.builder()
-                        .variantId(item.getVariantId()).ingredientName("Chưa cấu hình công thức")
-                        .required(BigDecimal.valueOf(orderQty)).available(BigDecimal.ZERO).build());
                 variantResults.add(AvailabilityCheckResponse.VariantAvailabilityResult.builder()
                         .variantId(item.getVariantId())
-                        .canMake(false)
-                        .maxQuantity(0)
+                        .canMake(true)
+                        .maxQuantity(9999)
                         .missingIngredients(new ArrayList<>())
                         .build());
                 continue;
