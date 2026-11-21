@@ -184,9 +184,13 @@ public class OrderService {
     public Integer requireBranch(Context context,Integer requested){
         var actor=access.staff(context);
         if(actor.admin())return requested;
-        var staff=dependencies.staff(actor.userId());
-        if(!"Active".equals(staff.status()))throw ApiException.forbidden();
-        if(requested!=null&&!requested.equals(staff.branchId()))throw ApiException.forbidden();return staff.branchId();
+        Integer branchId=actor.branchId();
+        if(branchId==null){
+            var staff=dependencies.staff(actor.userId());
+            if(!"Active".equals(staff.status()))throw ApiException.forbidden();
+            branchId=staff.branchId();
+        }
+        if(requested!=null&&!requested.equals(branchId))throw ApiException.forbidden();return branchId;
     }
     public CafeOrder find(Long id){return orders.findById(id).orElseThrow(ApiException::missing);}
     public Object mine(Long id,Context context){var user=access.customer(context);var order=find(id);if(!Objects.equals(user.userId(),order.userId))throw ApiException.missing();return events.snapshot(order);}

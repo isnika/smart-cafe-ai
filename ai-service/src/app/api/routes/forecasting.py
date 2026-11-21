@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, HTTPException
 
 from src.app.forecasting.config import get_forecasting_settings
 from src.app.forecasting.exceptions import (
@@ -41,13 +41,11 @@ def _validate_metadata(payload: dict) -> dict:
 @router.post("", response_model=RevenueForecastResponse)
 def forecast(
     request: ForecastingRequest,
-    authorization: str | None = Header(default=None),
 ):
     """Dự báo doanh thu từ ngày hoàn tất dữ liệu tiếp theo."""
     try:
         payload = get_forecast_service(
             branch_id=request.branch_id,
-            authorization=authorization,
         ).forecast(request.start_date.isoformat(), request.days)
         return _validate_metadata(payload)
     except Exception as exc:
@@ -57,13 +55,11 @@ def forecast(
 @router.post("/products", response_model=ProductForecastResponse)
 def forecast_products(
     request: TargetDateRequest,
-    authorization: str | None = Header(default=None),
 ):
     """Dự báo expected quantity theo product/variant."""
     try:
         payload = get_forecast_service(
             branch_id=request.branch_id,
-            authorization=authorization,
         ).forecast_products(request.target_date.isoformat())
         return _validate_metadata(payload)
     except Exception as exc:
@@ -73,13 +69,11 @@ def forecast_products(
 @router.post("/inventory", response_model=InventoryForecastResponse)
 def forecast_inventory(
     request: TargetDateRequest,
-    authorization: str | None = Header(default=None),
 ):
     """Tính usage nguyên liệu và recommended purchase theo recipe variant."""
     try:
         payload = get_forecast_service(
             branch_id=request.branch_id,
-            authorization=authorization,
         ).forecast_inventory(request.target_date.isoformat())
         return _validate_metadata(payload)
     except Exception as exc:

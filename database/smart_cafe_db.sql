@@ -54,6 +54,7 @@ CREATE TABLE Users (
     full_name VARCHAR(100) NOT NULL,
     avatar VARCHAR(255),
     role_id INT NOT NULL,
+    branch_id INT NULL COMMENT 'Branch ID assigned to this user/staff',
     status ENUM('Unverified', 'Active', 'Banned', 'Deactivated') NOT NULL DEFAULT 'Unverified'
         COMMENT 'Deactivated is set when a staff member is terminated (Store event) or the user closes the account',
     email_verified_at DATETIME NULL,
@@ -65,7 +66,8 @@ CREATE TABLE Users (
     CONSTRAINT chk_users_identifier CHECK (email IS NOT NULL OR phone IS NOT NULL OR google_id IS NOT NULL),
     CONSTRAINT chk_users_credential CHECK (password_hash IS NOT NULL OR google_id IS NOT NULL),
     INDEX idx_users_status (status),
-    INDEX idx_users_role (role_id)
+    INDEX idx_users_role (role_id),
+    INDEX idx_users_branch (branch_id)
 );
 
 CREATE TABLE Refresh_Tokens (

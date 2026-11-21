@@ -16,6 +16,8 @@ public class UserResponse {
     private Integer roleId;
     @JsonProperty("role_name")
     private String roleName;
+    @JsonProperty("branch_id")
+    private Integer branchId;
     private UserStatus status;
     @JsonProperty("email_verified_at")
     private LocalDateTime emailVerifiedAt;
@@ -43,7 +45,7 @@ public class UserResponse {
         if (!roleName.startsWith("ROLE_")) {
             roleName = "ROLE_" + roleName.toUpperCase();
         }
-        return UserResponse.builder().id(user.getId()).fullName(user.getFullName()).email(user.getEmail()).phone(user.getPhone()).avatar(user.getAvatar()).roleId(roleId).roleName(roleName).status(user.getStatus()).emailVerifiedAt(user.getEmailVerifiedAt()).phoneVerifiedAt(user.getPhoneVerifiedAt()).lastLoginAt(user.getLastLoginAt()).createdAt(user.getCreatedAt()).updatedAt(user.getUpdatedAt()).build();
+        return UserResponse.builder().id(user.getId()).fullName(user.getFullName()).email(user.getEmail()).phone(user.getPhone()).avatar(user.getAvatar()).roleId(roleId).roleName(roleName).branchId(user.getBranchId()).status(user.getStatus()).emailVerifiedAt(user.getEmailVerifiedAt()).phoneVerifiedAt(user.getPhoneVerifiedAt()).lastLoginAt(user.getLastLoginAt()).createdAt(user.getCreatedAt()).updatedAt(user.getUpdatedAt()).build();
     }
     public static class UserResponseBuilder {
         private String id;
@@ -53,6 +55,7 @@ public class UserResponse {
         private String avatar;
         private Integer roleId;
         private String roleName;
+        private Integer branchId;
         private UserStatus status;
         private LocalDateTime emailVerifiedAt;
         private LocalDateTime phoneVerifiedAt;
@@ -121,6 +124,12 @@ public class UserResponse {
             return this;
         }
 
+        @JsonProperty("branch_id")
+        public UserResponse.UserResponseBuilder branchId(final Integer branchId) {
+            this.branchId = branchId;
+            return this;
+        }
+
         /**
          * @return {@code this}.
          */
@@ -174,12 +183,12 @@ public class UserResponse {
             return this;
         }
         public UserResponse build() {
-            return new UserResponse(this.id, this.fullName, this.email, this.phone, this.avatar, this.roleId, this.roleName, this.status, this.emailVerifiedAt, this.phoneVerifiedAt, this.lastLoginAt, this.createdAt, this.updatedAt);
+            return new UserResponse(this.id, this.fullName, this.email, this.phone, this.avatar, this.roleId, this.roleName, this.branchId, this.status, this.emailVerifiedAt, this.phoneVerifiedAt, this.lastLoginAt, this.createdAt, this.updatedAt);
         }
 
         @java.lang.Override
         public java.lang.String toString() {
-            return "UserResponse.UserResponseBuilder(id=" + this.id + ", fullName=" + this.fullName + ", email=" + this.email + ", phone=" + this.phone + ", avatar=" + this.avatar + ", roleId=" + this.roleId + ", roleName=" + this.roleName + ", status=" + this.status + ", emailVerifiedAt=" + this.emailVerifiedAt + ", phoneVerifiedAt=" + this.phoneVerifiedAt + ", lastLoginAt=" + this.lastLoginAt + ", createdAt=" + this.createdAt + ", updatedAt=" + this.updatedAt + ")";
+            return "UserResponse.UserResponseBuilder(id=" + this.id + ", fullName=" + this.fullName + ", email=" + this.email + ", phone=" + this.phone + ", avatar=" + this.avatar + ", roleId=" + this.roleId + ", roleName=" + this.roleName + ", branchId=" + this.branchId + ", status=" + this.status + ", emailVerifiedAt=" + this.emailVerifiedAt + ", phoneVerifiedAt=" + this.phoneVerifiedAt + ", lastLoginAt=" + this.lastLoginAt + ", createdAt=" + this.createdAt + ", updatedAt=" + this.updatedAt + ")";
         }
     }
     public static UserResponse.UserResponseBuilder builder() {
@@ -205,6 +214,9 @@ public class UserResponse {
     }
     public String getRoleName() {
         return this.roleName;
+    }
+    public Integer getBranchId() {
+        return this.branchId;
     }
     public UserStatus getStatus() {
         return this.status;
@@ -244,6 +256,9 @@ public class UserResponse {
     }
     public void setRoleName(final String roleName) {
         this.roleName = roleName;
+    }
+    public void setBranchId(final Integer branchId) {
+        this.branchId = branchId;
     }
     public void setStatus(final UserStatus status) {
         this.status = status;
@@ -355,6 +370,9 @@ public class UserResponse {
     public UserResponse() {
     }
     public UserResponse(final String id, final String fullName, final String email, final String phone, final String avatar, final Integer roleId, final String roleName, final UserStatus status, final LocalDateTime emailVerifiedAt, final LocalDateTime phoneVerifiedAt, final LocalDateTime lastLoginAt, final LocalDateTime createdAt, final LocalDateTime updatedAt) {
+        this(id, fullName, email, phone, avatar, roleId, roleName, null, status, emailVerifiedAt, phoneVerifiedAt, lastLoginAt, createdAt, updatedAt);
+    }
+    public UserResponse(final String id, final String fullName, final String email, final String phone, final String avatar, final Integer roleId, final String roleName, final Integer branchId, final UserStatus status, final LocalDateTime emailVerifiedAt, final LocalDateTime phoneVerifiedAt, final LocalDateTime lastLoginAt, final LocalDateTime createdAt, final LocalDateTime updatedAt) {
         this.id = id;
         this.fullName = fullName;
         this.email = email;
@@ -362,6 +380,7 @@ public class UserResponse {
         this.avatar = avatar;
         this.roleId = roleId;
         this.roleName = roleName;
+        this.branchId = branchId;
         this.status = status;
         this.emailVerifiedAt = emailVerifiedAt;
         this.phoneVerifiedAt = phoneVerifiedAt;

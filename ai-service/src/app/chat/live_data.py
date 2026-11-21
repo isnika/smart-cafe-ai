@@ -174,11 +174,28 @@ def _catalog_source(product: LiveProduct) -> SourceChunk:
     )
 
 
+def _max_product_price(product: LiveProduct) -> int | None:
+    prices = [variant.price for variant in product.variants if variant.price is not None]
+    return max(prices) if prices else None
+
+
 def format_catalog_answer(
     intent: Intent,
     products: tuple[LiveProduct, ...],
     branch_id: int | None,
+    sort_by: str | None = None,
 ) -> tuple[str, list[SourceChunk]]:
+    if sort_by in {"asc", "desc"}:
+        priced = [product for product in products if _max_product_price(product) is not None]
+        unpriced = [product for product in products if _max_product_price(product) is None]
+        products = tuple(
+            sorted(
+                priced,
+                key=lambda product: _max_product_price(product) or 0,
+                reverse=sort_by == "desc",
+            )
+            + unpriced
+        )
     sources = [_catalog_source(product) for product in products[:8]]
     if not products:
         return (
@@ -223,6 +240,13 @@ def format_catalog_answer(
             rows.append(f"{product.name}: {_variant_prices(product)}; {detail}")
         return "So sánh theo menu hiện tại: " + ". ".join(rows) + ".", sources
     if intent is Intent.PRODUCT_FILTER:
+        if sort_by in {"asc", "desc"} and products and _max_product_price(products[0]) is not None:
+            label = "đắt nhất" if sort_by == "desc" else "rẻ nhất"
+            return (
+                f"Món {label} hiện tại là {products[0].name} "
+                f"({_variant_prices(products[0])}).",
+                sources[:1],
+            )
         rows = "; ".join(f"{product.name} ({_variant_prices(product)})" for product in products[:6])
         return f"Các món phù hợp là {rows}.", sources
     if intent in {
@@ -302,7 +326,9 @@ class OperationalDataClient:
         if not self.enabled:
             return None
         url = self.settings.data_api_base_url + "/" + self.settings.data_api_catalog_path.lstrip("/")
-        params: dict[str, str | int] = {"q": query, "intent": intent.value}
+        # The Spring contract uses lower-case intent names (for example
+        # ``product_price``), while the internal enum is upper-case.
+        params: dict[str, str | int] = {"q": query, "intent": intent.value.lower()}
         if branch_id is not None:
             params["branch_id"] = branch_id
         try:
@@ -328,9 +354,19 @@ class OperationalDataClient:
         if not self.enabled or not authorization:
             return None
         encoded_code = quote(order_code, safe="")
-        path = self.settings.data_api_order_path.replace(":order_code", encoded_code).format(
-            order_code=encoded_code
-        )
+        path = self.settings.data_api_order_path
+        # Keep older placeholder spellings compatible for local deployments
+        # that override DATA_API_ORDER_PATH; the contract default is
+        # /api/ai/orders/{order_code}.
+        for placeholder in (
+            "{id}",
+            ":id",
+            "{order_id}",
+            ":order_id",
+            "{order_code}",
+            ":order_code",
+        ):
+            path = path.replace(placeholder, encoded_code)
         url = self.settings.data_api_base_url + "/" + path.lstrip("/")
         try:
             async with httpx.AsyncClient(timeout=self.settings.data_api_timeout_seconds) as client:

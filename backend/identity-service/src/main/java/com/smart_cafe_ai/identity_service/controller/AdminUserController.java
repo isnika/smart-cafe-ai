@@ -1,6 +1,7 @@
 package com.smart_cafe_ai.identity_service.controller;
 
 import com.smart_cafe_ai.identity_service.dto.ApiResponse;
+import com.smart_cafe_ai.identity_service.dto.admin.AdminUserBranchRequest;
 import com.smart_cafe_ai.identity_service.dto.admin.AdminUserCreateRequest;
 import com.smart_cafe_ai.identity_service.dto.admin.AdminUserResetPasswordRequest;
 import com.smart_cafe_ai.identity_service.dto.admin.AdminUserRoleRequest;
@@ -65,6 +66,14 @@ public class AdminUserController {
             @RequestBody AdminUserRoleRequest request
     ) {
         return ResponseEntity.ok(adminUserService.updateUserRole(id, request));
+    }
+
+    @PatchMapping("/{id}/branch")
+    public ResponseEntity<ApiResponse<UserResponse>> updateUserBranch(
+            @PathVariable String id,
+            @RequestBody AdminUserBranchRequest request
+    ) {
+        return ResponseEntity.ok(adminUserService.updateUserBranch(id, request.getBranchId()));
     }
 
     @PatchMapping("/{id}/status")

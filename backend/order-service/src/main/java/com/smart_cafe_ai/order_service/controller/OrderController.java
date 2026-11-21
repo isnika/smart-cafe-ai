@@ -46,5 +46,13 @@ public class OrderController {
             @RequestParam(name="group_by",defaultValue="day") String group,@RequestParam(name="order_source",required=false) Source source,@RequestParam(name="fulfillment_type",required=false) Fulfillment fulfillment,HttpServletRequest req){
         return ApiResponse.ok(queries.sales(branch,from,to,group,source,fulfillment,access.context(req)));
     }
+    @GetMapping("/reports/revenue") public ApiResponse revenue(@RequestParam(name="branch_id",required=false) Integer branch,@RequestParam(required=false) LocalDate from,@RequestParam(required=false) LocalDate to,
+            @RequestParam(name="group_by",defaultValue="day") String group,@RequestParam(name="order_source",required=false) Source source,@RequestParam(name="fulfillment_type",required=false) Fulfillment fulfillment,HttpServletRequest req){
+        return ApiResponse.ok(queries.revenueOverview(branch,from,to,group,source,fulfillment,access.context(req)));
+    }
+    @GetMapping("/reports/revenue/branches") public ApiResponse revenueBranches(@RequestParam(name="branch_id",required=false) Integer branch,@RequestParam(required=false) LocalDate from,@RequestParam(required=false) LocalDate to,
+            @RequestParam(name="order_source",required=false) Source source,@RequestParam(name="fulfillment_type",required=false) Fulfillment fulfillment,HttpServletRequest req){
+        return ApiResponse.ok(queries.revenueByBranches(branch,from,to,source,fulfillment,access.context(req)));
+    }
     @GetMapping("/reports/top-products") public ApiResponse top(@RequestParam(name="branch_id",required=false) Integer branch,@RequestParam LocalDate from,@RequestParam LocalDate to,@RequestParam(defaultValue="10") int limit,HttpServletRequest req){return ApiResponse.ok(queries.top(branch,from,to,limit,access.context(req)));}
 }

@@ -4,6 +4,7 @@ from src.app.recommendation.config import get_recommendation_settings
 from src.app.recommendation.exceptions import (
     RecommendationAuthorizationError,
     RecommendationDataUnavailable,
+    RecommendationSnapshotEmpty,
 )
 from src.app.recommendation.repository import OperationalRecommendationRepository
 from src.app.recommendation.schemas.schemas import (
@@ -72,7 +73,24 @@ def recommend(
     except FileNotFoundError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except RecommendationAuthorizationError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+        status_code = exc.status_code if exc.status_code in {401, 403} else 403
+        raise HTTPException(
+            status_code=status_code,
+            detail="Không thể xác thực người dùng với backend.",
+        ) from exc
+    except RecommendationSnapshotEmpty:
+        # Empty is a valid, observable snapshot state. Do not hide it by
+        # switching to demo data or pretending that a recommendation exists.
+        return RecommendationResponse(
+            user_id=effective_user_id if effective_mode in {"personalized", "reorder"} else None,
+            product_id=request.product_id,
+            branch_id=x_branch_id,
+            strategy="trending",
+            fallback_reason="empty_backend_snapshot",
+            discovery=request.discovery,
+            model_version=settings.model_version,
+            recommendations=[],
+        )
     except RecommendationDataUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ValueError as exc:

@@ -466,12 +466,35 @@ def test_matcha_alias_only_returns_grounded_matcha_products():
     assert all(source.source == "products.csv" for source in sources)
 
 
+def test_highest_price_query_selects_the_most_expensive_menu_item():
+    answer, sources = asyncio.run(_offline_pipeline().answer("minh xin mon dat nhat menu"))
+
+    assert "Matcha kem cheese" in answer
+    assert "61.000" in answer
+    assert "Một số món hiện có" not in answer
+    assert sources and sources[0].heading.endswith("Matcha kem cheese")
+
+
+def test_lowest_price_query_selects_the_cheapest_menu_item():
+    assert classify_intent("minh xin mon re nhat menu").matched_rule == "lowest-price"
+    answer, sources = asyncio.run(_offline_pipeline().answer("minh xin mon re nhat menu"))
+
+    assert "Nước suối" in answer
+    assert "15.000" in answer
+    assert "Món rẻ nhất" in answer
+    assert sources and sources[0].heading.endswith("Nước suối")
+
+
 def test_unknown_product_does_not_borrow_the_price_of_a_similar_menu_item():
     answer, sources = asyncio.run(_offline_pipeline().answer("Trà sữa khoai môn giá bao nhiêu?"))
 
     assert sources == []
     assert "chưa tìm thấy đúng món" in answer.lower()
     assert "29.000" not in answer and "49.000" not in answer
+
+
+def test_highest_price_query_routes_to_product_filter():
+    assert classify_intent("minh xin mon dat nhat menu").intent is Intent.PRODUCT_FILTER
 
 
 def test_generic_recommendation_lists_three_to_five_real_menu_products():

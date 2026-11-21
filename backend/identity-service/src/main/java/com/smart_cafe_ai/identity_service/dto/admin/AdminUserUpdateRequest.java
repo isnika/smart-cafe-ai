@@ -8,11 +8,14 @@ public class AdminUserUpdateRequest {
     private String email;
     private String phone;
     private String avatar;
+    @JsonProperty("branch_id")
+    private Integer branchId;
     public static class AdminUserUpdateRequestBuilder {
         private String fullName;
         private String email;
         private String phone;
         private String avatar;
+        private Integer branchId;
         AdminUserUpdateRequestBuilder() {
         }
 
@@ -48,8 +51,13 @@ public class AdminUserUpdateRequest {
             this.avatar = avatar;
             return this;
         }
+
+        public AdminUserUpdateRequest.AdminUserUpdateRequestBuilder branchId(final Integer branchId) {
+            this.branchId = branchId;
+            return this;
+        }
         public AdminUserUpdateRequest build() {
-            return new AdminUserUpdateRequest(this.fullName, this.email, this.phone, this.avatar);
+            return new AdminUserUpdateRequest(this.fullName, this.email, this.phone, this.avatar, this.branchId);
         }
 
         @java.lang.Override
@@ -72,6 +80,9 @@ public class AdminUserUpdateRequest {
     public String getAvatar() {
         return this.avatar;
     }
+    public Integer getBranchId() {
+        return this.branchId;
+    }
     public void setFullName(final String fullName) {
         this.fullName = fullName;
     }
@@ -83,6 +94,9 @@ public class AdminUserUpdateRequest {
     }
     public void setAvatar(final String avatar) {
         this.avatar = avatar;
+    }
+    public void setBranchId(final Integer branchId) {
+        this.branchId = branchId;
     }
 
     @java.lang.Override
@@ -131,10 +145,14 @@ public class AdminUserUpdateRequest {
     public AdminUserUpdateRequest() {
     }
     public AdminUserUpdateRequest(final String fullName, final String email, final String phone, final String avatar) {
+        this(fullName, email, phone, avatar, null);
+    }
+    public AdminUserUpdateRequest(final String fullName, final String email, final String phone, final String avatar, final Integer branchId) {
         this.fullName = fullName;
         this.email = email;
         this.phone = phone;
         this.avatar = avatar;
+        this.branchId = branchId;
     }
 }
 

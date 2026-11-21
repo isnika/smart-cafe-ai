@@ -64,6 +64,18 @@ Backend cần tạo snapshot/response đã lọc từ database của mình:
    branch và metadata coverage/cutoff.
 4. Có thể refresh theo TTL của AI; backend không cần gửi toàn bộ DB mỗi request.
 
+Các path Backend mà AI service gọi theo contract triển khai này:
+
+- `GET /api/ai/catalog/search?q=...&intent=...&branch_id=...` (service auth).
+- `GET /api/ai/orders/{order_code}` (forward `Authorization` của user và service auth nếu cấu hình).
+- `GET /api/ai/recommendation/viewer` (forward `Authorization` của user).
+- `GET /api/ai/recommendation/snapshot?branch_id=...` (service-to-service auth).
+- `GET /api/ai/forecasting/snapshot?branch_id=...` (service-to-service auth).
+
+`DATA_API_CATALOG_PATH`, `DATA_API_ORDER_PATH`, `RECOMMENDATION_*_PATH` và
+`FORECASTING_SNAPSHOT_PATH` vẫn cho phép override theo môi trường, nhưng default
+phải giữ các path trên.
+
 Các adapter AI đều dùng HTTP read-only. Chat dùng `httpx.AsyncClient` tại
 `src/app/chat/live_data.py:296-360`; recommendation dùng HTTP GET tại
 `src/app/recommendation/repository.py:202-282`; forecasting dùng HTTP GET tại
@@ -221,7 +233,9 @@ Request:
 - `days`: mặc định `1`, giới hạn `1..90`.
 - `branch_id`: integer `>=1` hoặc null theo schema, nhưng live repository thực
   tế yêu cầu branch và trả `400` khi thiếu.
-- Header `Authorization` tùy chọn trong route, được forward tới snapshot backend.
+- Forecasting snapshot dùng service-to-service credential (`X-API-Key`); không
+  forward token người dùng vào snapshot. Token người dùng chỉ được forward cho
+  order lookup và recommendation viewer.
 
 Response gồm `start_date`, `days`, `branch_id`, `currency="VND"`, `model`,
 `model_version`, validation/test metrics, `interval_available=false`,
@@ -479,7 +493,8 @@ Các adapter gửi:
 
 - `Accept: application/json`.
 - `X-API-Key: <DATA_API_KEY>` nếu cấu hình.
-- `Authorization` nguyên vẹn nếu route AI nhận được header đó.
+- `Authorization` nguyên vẹn chỉ cho order lookup và recommendation viewer.
+  Recommendation/forecasting snapshot dùng `X-API-Key` service-to-service.
 
 Code tạo headers tại `src/app/chat/live_data.py:288-294`,
 `src/app/recommendation/repository.py:212-218` và
@@ -526,10 +541,10 @@ RECOMMENDATION_SOURCE_MODE=live
 FORECASTING_SOURCE_MODE=live
 ```
 
-Nếu BE được thêm vào cùng Docker Compose, dùng tên service DNS thật, ví dụ
-`http://spring-backend:8080`; tên này là ví dụ cấu hình, chưa tồn tại trong
-compose hiện tại. Các default path/port thực tế nằm tại
-`docker-compose.yml:10-50`; AI expose port 8000.
+Trong root `compose.yaml` hiện tại, gateway backend có service name là
+`api-gateway`, vì vậy AI container dùng `DATA_API_BASE_URL=http://api-gateway:8080`.
+Nếu triển khai bằng compose khác, thay bằng đúng service DNS và port nội bộ của
+BE; không dùng `localhost` giữa các container.
 
 ## 6. Ví dụ gọi API
 
@@ -642,7 +657,7 @@ ingredient branch đúng, không có unit mismatch bị che thành usage 0.
   commit vào `.env.example`/log.
 - [ ] Implement `GET catalog search` nhận `q`, `intent`, `branch_id`; chỉ trả
   Product/Category/Variant active và availability branch đúng schema.
-- [ ] Implement `GET order lookup` theo `order_code`; bắt buộc xác minh order
+- [ ] Implement `GET /api/ai/orders/{order_code}`; bắt buộc xác minh order
   thuộc user từ Authorization, không chỉ dựa mã đơn.
 - [ ] Implement `GET recommendation snapshot`; trả version/generated_at, catalog
   active và interaction aggregate theo contract. Không trả PII.

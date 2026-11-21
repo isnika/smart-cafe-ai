@@ -387,7 +387,7 @@ public class AuthService {
         if (!roleName.startsWith("ROLE_")) {
             roleName = "ROLE_" + roleName.toUpperCase();
         }
-        String accessToken = jwtService.generateAccessToken(user.getId(), roleName);
+        String accessToken = jwtService.generateAccessToken(user.getId(), roleName, user.getBranchId());
         String refreshToken = jwtService.generateRefreshToken(user.getId());
         saveRefreshTokenInDb(user, refreshToken, deviceInfo);
         return AuthResponse.builder().accessToken(accessToken).refreshToken(refreshToken)

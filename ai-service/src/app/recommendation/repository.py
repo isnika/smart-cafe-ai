@@ -12,6 +12,7 @@ from src.app.recommendation.config import RecommendationSettings
 from src.app.recommendation.exceptions import (
     RecommendationAuthorizationError,
     RecommendationDataUnavailable,
+    RecommendationSnapshotEmpty,
 )
 from src.app.recommendation.preprocessing.preprocessing import (
     load_interactions,
@@ -60,6 +61,18 @@ def _records(payload: Any, *keys: str) -> list[dict[str, Any]]:
         if isinstance(value, list):
             return [item for item in value if isinstance(item, dict)]
     return []
+
+
+def _payload_root(payload: Any) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {}
+    nested = payload.get("data")
+    return nested if isinstance(nested, dict) else payload
+
+
+def _has_empty_collection(payload: Any, *keys: str) -> bool:
+    root = _payload_root(payload)
+    return any(key in root and isinstance(root.get(key), list) and not root[key] for key in keys)
 
 
 def _text(value: Any) -> str:
@@ -222,6 +235,8 @@ class OperationalRecommendationRepository:
         path: str,
         params: dict[str, int | str] | None = None,
         authorization: str | None = None,
+        *,
+        preserve_authorization_errors: bool = False,
     ) -> Any:
         if not self.enabled:
             raise RecommendationDataUnavailable(
@@ -233,6 +248,19 @@ class OperationalRecommendationRepository:
                 response = client.get(url, params=params, headers=self._headers(authorization))
                 response.raise_for_status()
             return response.json()
+        except httpx.HTTPStatusError as exc:
+            status_code = exc.response.status_code
+            if preserve_authorization_errors and status_code in {401, 403}:
+                raise RecommendationAuthorizationError(
+                    "Backend không xác thực được người dùng.", status_code=status_code
+                ) from exc
+            logger.warning(
+                "Recommendation operational API không khả dụng (status=%s)",
+                status_code,
+            )
+            raise RecommendationDataUnavailable(
+                "Không thể đọc dữ liệu recommendation từ backend."
+            ) from exc
         except (httpx.HTTPError, ValueError, TypeError) as exc:
             logger.warning(
                 "Recommendation operational API không khả dụng (error_type=%s)",
@@ -248,9 +276,14 @@ class OperationalRecommendationRepository:
         authorization: str | None = None,
     ) -> RecommendationSnapshot:
         params = {"branch_id": branch_id} if branch_id is not None else None
-        payload = self._get(self.settings.snapshot_path, params, authorization)
+        # Snapshot access is service-to-service. Keep the protocol parameter
+        # for repository compatibility, but never forward a viewer token.
+        del authorization
+        payload = self._get(self.settings.snapshot_path, params, authorization=None)
         raw_products = _records(payload, "products", "catalog")
         if not raw_products:
+            if _has_empty_collection(payload, "products", "catalog"):
+                raise RecommendationSnapshotEmpty()
             raise RecommendationDataUnavailable(
                 "Backend recommendation snapshot không có sản phẩm hợp lệ."
             )
@@ -268,9 +301,10 @@ class OperationalRecommendationRepository:
             )
         version = None
         generated_at = None
-        if isinstance(payload, dict):
-            version = _text(payload.get("version")) or None
-            raw_time = payload.get("generated_at")
+        root = _payload_root(payload)
+        if root:
+            version = _text(root.get("version")) or None
+            raw_time = root.get("generated_at")
             generated_at = pd.to_datetime(raw_time, errors="coerce") if raw_time else None
         return RecommendationSnapshot(
             products=products,
@@ -284,7 +318,11 @@ class OperationalRecommendationRepository:
             raise RecommendationAuthorizationError(
                 "Cần Authorization để lấy recommendation cá nhân hóa."
             )
-        payload = self._get(self.settings.viewer_path, authorization=authorization)
+        payload = self._get(
+            self.settings.viewer_path,
+            authorization=authorization,
+            preserve_authorization_errors=True,
+        )
         if isinstance(payload, dict) and isinstance(payload.get("data"), dict):
             payload = payload["data"]
         user_id = _text(payload.get("user_id")) if isinstance(payload, dict) else ""

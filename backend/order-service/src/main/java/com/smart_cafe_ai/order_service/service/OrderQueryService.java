@@ -41,10 +41,170 @@ public class OrderQueryService {
         Integer branch=orders.requireBranch(context,filter.branchId());
         var rows=repository.findAll(spec(filter,branch,null,false));
         Map<String,Long> byStatus=new TreeMap<>(),bySource=new TreeMap<>(),byFulfillment=new TreeMap<>();
-        for(var o:rows){byStatus.merge(o.status.name(),1L,Long::sum);bySource.merge(o.orderSource.name(),1L,Long::sum);byFulfillment.merge(o.fulfillmentType.name(),1L,Long::sum);}
-        return Map.of("total_orders",rows.size(),"by_status",counts(byStatus,"status"),"by_source",counts(bySource,"order_source"),"by_fulfillment",counts(byFulfillment,"fulfillment_type"));
+        BigDecimal totalRevenue=BigDecimal.ZERO;
+        long completedOrders=0L;
+        for(var o:rows){
+            byStatus.merge(o.status.name(),1L,Long::sum);
+            bySource.merge(o.orderSource.name(),1L,Long::sum);
+            byFulfillment.merge(o.fulfillmentType.name(),1L,Long::sum);
+            if(o.status==Status.Completed){
+                totalRevenue=totalRevenue.add(o.finalAmount);
+                completedOrders++;
+            }
+        }
+        var m=new LinkedHashMap<String,Object>();
+        m.put("total_orders",rows.size());
+        m.put("completed_orders",completedOrders);
+        m.put("total_revenue",totalRevenue);
+        m.put("by_status",counts(byStatus,"status"));
+        m.put("by_source",counts(bySource,"order_source"));
+        m.put("by_fulfillment",counts(byFulfillment,"fulfillment_type"));
+        return m;
     }
     private List<Object> counts(Map<String,Long> values,String key){return values.entrySet().stream().map(e->(Object)Map.of(key,e.getKey(),"count",e.getValue())).toList();}
+    public Object revenueByBranches(Integer branch,LocalDate from,LocalDate to,Source source,Fulfillment fulfillment,Context context){
+        access.manager(context);
+        branch=orders.requireBranch(context,branch);
+        if(from==null)from=LocalDate.now().minusDays(30);
+        if(to==null)to=LocalDate.now();
+        range(from,to);
+        var filter=new Filter(branch,Status.Completed,null,source,fulfillment,from.toString(),to.toString());
+        var rows=repository.findAll(spec(filter,branch,null,true));
+        Map<Integer,Map<String,Object>> branchMap=new TreeMap<>();
+        BigDecimal totalRevenue=BigDecimal.ZERO;
+        for(var o:rows){
+            totalRevenue=totalRevenue.add(o.finalAmount);
+            var b=branchMap.computeIfAbsent(o.branchId,k->{
+                var row=new LinkedHashMap<String,Object>();
+                row.put("branch_id",k);
+                row.put("orders_count",0L);
+                row.put("sub_total",BigDecimal.ZERO);
+                row.put("item_discount_amount",BigDecimal.ZERO);
+                row.put("voucher_discount_amount",BigDecimal.ZERO);
+                row.put("delivery_fee",BigDecimal.ZERO);
+                row.put("vat_amount",BigDecimal.ZERO);
+                row.put("final_amount",BigDecimal.ZERO);
+                return row;
+            });
+            b.put("orders_count",(Long)b.get("orders_count")+1);
+            sum(b,"sub_total",o.subTotal);
+            sum(b,"item_discount_amount",o.itemDiscountAmount);
+            sum(b,"voucher_discount_amount",o.voucherDiscountAmount);
+            sum(b,"delivery_fee",o.deliveryFee);
+            sum(b,"vat_amount",o.vatAmount);
+            sum(b,"final_amount",o.finalAmount);
+        }
+        for(var b:branchMap.values()){
+            long count=(Long)b.get("orders_count");
+            BigDecimal branchRev=(BigDecimal)b.get("final_amount");
+            BigDecimal aov=count>0?branchRev.divide(BigDecimal.valueOf(count),2,java.math.RoundingMode.HALF_UP):BigDecimal.ZERO;
+            b.put("average_order_value",aov);
+            double percentage=totalRevenue.compareTo(BigDecimal.ZERO)>0?branchRev.multiply(BigDecimal.valueOf(100)).divide(totalRevenue,2,java.math.RoundingMode.HALF_UP).doubleValue():0.0;
+            b.put("revenue_percentage",percentage);
+        }
+        var list=branchMap.values().stream()
+                .sorted(Comparator.<Map<String,Object>,BigDecimal>comparing(b->(BigDecimal)b.get("final_amount")).reversed())
+                .toList();
+        var res=new LinkedHashMap<String,Object>();
+        res.put("from",from.toString());
+        res.put("to",to.toString());
+        res.put("branch_id",branch);
+        res.put("total_orders",(long)rows.size());
+        res.put("total_revenue",totalRevenue);
+        res.put("branches",list);
+        return res;
+    }
+    public Object revenueOverview(Integer branch,LocalDate from,LocalDate to,String group,Source source,Fulfillment fulfillment,Context context){
+        access.manager(context);
+        branch=orders.requireBranch(context,branch);
+        if(from==null)from=LocalDate.now().minusDays(30);
+        if(to==null)to=LocalDate.now();
+        range(from,to);
+        if(!Set.of("day","week","month").contains(group))throw ApiException.invalid("group_by phải là day, week hoặc month.");
+
+        var completedFilter=new Filter(branch,Status.Completed,null,source,fulfillment,from.toString(),to.toString());
+        var completedOrders=repository.findAll(spec(completedFilter,branch,null,true));
+
+        BigDecimal totalRevenue=BigDecimal.ZERO;
+        BigDecimal subTotal=BigDecimal.ZERO;
+        BigDecimal itemDiscount=BigDecimal.ZERO;
+        BigDecimal voucherDiscount=BigDecimal.ZERO;
+        BigDecimal deliveryFee=BigDecimal.ZERO;
+        BigDecimal vatAmount=BigDecimal.ZERO;
+
+        Map<Integer,Map<String,Object>> branchMap=new TreeMap<>();
+        var periods=new TreeMap<String,Map<String,Object>>();
+
+        for(var o:completedOrders){
+            totalRevenue=totalRevenue.add(o.finalAmount);
+            subTotal=subTotal.add(o.subTotal);
+            itemDiscount=itemDiscount.add(o.itemDiscountAmount);
+            voucherDiscount=voucherDiscount.add(o.voucherDiscountAmount);
+            deliveryFee=deliveryFee.add(o.deliveryFee);
+            vatAmount=vatAmount.add(o.vatAmount);
+
+            var b=branchMap.computeIfAbsent(o.branchId,k->{
+                var row=new LinkedHashMap<String,Object>();
+                row.put("branch_id",k);
+                row.put("orders_count",0L);
+                row.put("revenue",BigDecimal.ZERO);
+                return row;
+            });
+            b.put("orders_count",(Long)b.get("orders_count")+1);
+            sum(b,"revenue",o.finalAmount);
+
+            var date=o.completedAt.toLocalDate();
+            String period=switch(group){
+                case "week"->date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).toString();
+                case "month"->YearMonth.from(date).toString();
+                default->date.toString();
+            };
+            var row=periods.computeIfAbsent(period,k->{
+                var m2=new LinkedHashMap<String,Object>();
+                m2.put("period",k);
+                m2.put("orders_count",0L);
+                m2.put("revenue",BigDecimal.ZERO);
+                return m2;
+            });
+            row.put("orders_count",(Long)row.get("orders_count")+1);
+            sum(row,"revenue",o.finalAmount);
+        }
+
+        for(var b:branchMap.values()){
+            BigDecimal branchRev=(BigDecimal)b.get("revenue");
+            double percentage=totalRevenue.compareTo(BigDecimal.ZERO)>0?branchRev.multiply(BigDecimal.valueOf(100)).divide(totalRevenue,2,java.math.RoundingMode.HALF_UP).doubleValue():0.0;
+            b.put("percentage",percentage);
+        }
+
+        var allFilter=new Filter(branch,null,null,source,fulfillment,from.toString(),to.toString());
+        var allOrders=repository.findAll(spec(allFilter,branch,null,false));
+        long totalOrdersCount=allOrders.size();
+        long completedCount=completedOrders.size();
+        long cancelledCount=allOrders.stream().filter(o->o.status==Status.Cancelled||o.status==Status.Rejected).count();
+
+        BigDecimal aov=completedCount>0?totalRevenue.divide(BigDecimal.valueOf(completedCount),2,java.math.RoundingMode.HALF_UP):BigDecimal.ZERO;
+
+        var summary=new LinkedHashMap<String,Object>();
+        summary.put("total_revenue",totalRevenue);
+        summary.put("sub_total",subTotal);
+        summary.put("item_discount_amount",itemDiscount);
+        summary.put("voucher_discount_amount",voucherDiscount);
+        summary.put("delivery_fee",deliveryFee);
+        summary.put("vat_amount",vatAmount);
+        summary.put("total_orders",totalOrdersCount);
+        summary.put("completed_orders",completedCount);
+        summary.put("cancelled_orders",cancelledCount);
+        summary.put("average_order_value",aov);
+
+        var res=new LinkedHashMap<String,Object>();
+        res.put("from",from.toString());
+        res.put("to",to.toString());
+        res.put("branch_id",branch);
+        res.put("summary",summary);
+        res.put("by_branch",branchMap.values().stream().sorted(Comparator.<Map<String,Object>,BigDecimal>comparing(b->(BigDecimal)b.get("revenue")).reversed()).toList());
+        res.put("timeline",new ArrayList<>(periods.values()));
+        return res;
+    }
     public Object sales(Integer branch,LocalDate from,LocalDate to,String group,Source source,Fulfillment fulfillment,Context context){
         access.manager(context);branch=orders.requireBranch(context,branch);range(from,to);
         if(!Set.of("day","week","month").contains(group))throw ApiException.invalid("group_by phải là day, week hoặc month.");

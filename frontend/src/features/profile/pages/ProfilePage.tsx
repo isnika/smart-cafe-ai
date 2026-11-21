@@ -12,6 +12,8 @@ import { Modal } from '@/shared/ui/Modal';
 import { Button, Input } from '@/shared/ui';
 import { cn } from '@/shared/lib/cn';
 import { paymentApi } from '@/shared/api';
+import { LocationSelect } from '../components/LocationSelect';
+import { listProvinces, listWards } from '../locations';
 
 const blankAddress: AddressInput = { label: '', receiverName: '', phone: '', province: '', district: '', ward: '', addressLine: '', latitude: null, longitude: null, isDefault: false };
 const inputClass = 'w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-body focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-200';
@@ -24,6 +26,7 @@ export default function ProfilePage() {
   const [editingName, setEditingName] = useState(false);
   const [fullName, setFullName] = useState(user?.fullName ?? '');
   const [addressDraft, setAddressDraft] = useState<AddressInput | null>(null);
+  const [chosenWardCode, setChosenWardCode] = useState('');
   const [editingAddressId, setEditingAddressId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [passwordOpen, setPasswordOpen] = useState(false);
@@ -43,6 +46,12 @@ export default function ProfilePage() {
   const [avatarError, setAvatarError] = useState('');
   const [avatarNotice, setAvatarNotice] = useState('');
   const addresses = useQuery({ queryKey: ['identity', 'addresses', user?.id], enabled: !!user?.id, queryFn: () => identityApi.listAddresses() });
+  const provinces = useQuery({ queryKey: ['locations-v2', 'provinces'], enabled: addressDraft !== null, queryFn: ({ signal }) => listProvinces(signal), staleTime: 1000 * 60 * 60 });
+  const provinceMatches = provinces.data?.filter((p) => p.name === addressDraft?.province) ?? [];
+  const selectedProvince = provinceMatches.length === 1 ? provinceMatches[0].code : '';
+  const wards = useQuery({ queryKey: ['locations-v2', 'wards', selectedProvince], enabled: addressDraft !== null && !!selectedProvince, queryFn: ({ signal }) => listWards(selectedProvince, signal), staleTime: 1000 * 60 * 60 });
+  const wardMatches = wards.data?.filter((w) => w.name === addressDraft?.ward) ?? [];
+  const selectedWard = chosenWardCode || (wardMatches.length === 1 ? wardMatches[0].code : '');
   const loyalty = useQuery({ queryKey: ['engagement', 'loyalty', user?.id], enabled: !!user?.id, queryFn: () => engagementApi.getLoyaltySummary() });
   const transactions = useQuery({ queryKey: ['engagement', 'loyalty-transactions', user?.id], enabled: !!user?.id, queryFn: () => engagementApi.getLoyaltyTransactions(1, 5) });
   const notifications = useQuery({ queryKey: ['engagement', 'notifications', user?.id], enabled: !!user?.id, queryFn: () => engagementApi.listNotifications({ page: 1, pageSize: 5 }) });
@@ -142,6 +151,7 @@ export default function ProfilePage() {
   }
 
   function editAddress(address?: Address) {
+    setChosenWardCode('');
     setEditingAddressId(address?.id ?? null);
     setAddressDraft(address ? { label: address.label ?? '', receiverName: address.receiverName, phone: address.phone, province: address.province, district: address.district ?? '', ward: address.ward, addressLine: address.addressLine, latitude: address.latitude ?? null, longitude: address.longitude ?? null, isDefault: address.isDefault } : { ...blankAddress });
     setError(null);
@@ -150,7 +160,8 @@ export default function ProfilePage() {
   function submitAddress(event: FormEvent) {
     event.preventDefault();
     if (!addressDraft) return;
-    if (!addressDraft.receiverName.trim() || !addressDraft.phone.trim() || !addressDraft.province.trim() || !addressDraft.ward.trim() || !addressDraft.addressLine.trim()) return setError('Vui lòng điền tên người nhận, số điện thoại và địa chỉ đầy đủ.');
+    if (!addressDraft.receiverName.trim() || !addressDraft.phone.trim() || !addressDraft.addressLine.trim()) return setError('Vui lòng điền tên người nhận, số điện thoại và địa chỉ đầy đủ.');
+    if (!selectedProvince || !wards.data?.some((w) => w.code === selectedWard && w.provinceCode === selectedProvince && w.name === addressDraft.ward)) return setError('Vui lòng chọn tỉnh và phường/xã hợp lệ.');
     saveAddress.mutate(addressDraft);
   }
 
@@ -215,12 +226,13 @@ export default function ProfilePage() {
     </div>
     <Modal open={addressDraft !== null} onClose={() => { setAddressDraft(null); setEditingAddressId(null); }} title={editingAddressId ? 'Sửa địa chỉ' : 'Thêm địa chỉ mới'} size="md">
       {addressDraft && <form onSubmit={submitAddress} className="space-y-3">
-        <label className="block"><span className="mb-1 block text-body font-medium">Tên địa chỉ</span><input className={inputClass} placeholder="Nhà riêng, Công ty…" value={addressDraft.label ?? ''} onChange={(e) => setAddressDraft({ ...addressDraft, label: e.target.value })} /></label>
         <label className="block"><span className="mb-1 block text-body font-medium">Người nhận</span><input required className={inputClass} value={addressDraft.receiverName} onChange={(e) => setAddressDraft({ ...addressDraft, receiverName: e.target.value })} /></label>
         <label className="block"><span className="mb-1 block text-body font-medium">Số điện thoại</span><input required inputMode="tel" className={inputClass} value={addressDraft.phone} onChange={(e) => setAddressDraft({ ...addressDraft, phone: e.target.value })} /></label>
+        {editingAddressId && provinces.isSuccess && !selectedProvince && <p className="text-caption text-gray-600">Tỉnh đã lưu: {addressDraft.province}. Vui lòng chọn lại theo địa giới mới.</p>}
+        {editingAddressId && selectedProvince && wards.isSuccess && !selectedWard && <p className="text-caption text-gray-600">Phường/xã đã lưu: {addressDraft.ward}. Vui lòng chọn lại theo địa giới mới.</p>}
+        <LocationSelect label="Tỉnh / thành phố" placeholder="Chọn tỉnh / thành phố" value={selectedProvince} options={provinces.data ?? []} loading={provinces.isLoading} error={provinces.isError} onRetry={() => void provinces.refetch()} onChange={(code) => { const province = provinces.data?.find((p) => p.code === code); setChosenWardCode(''); setAddressDraft({ ...addressDraft, province: province?.name ?? '', ward: '', district: '' }); }} />
+        <LocationSelect key={selectedProvince} label="Phường / xã" placeholder="Chọn phường / xã" value={selectedWard} options={wards.data ?? []} disabled={!selectedProvince} loading={wards.isLoading} error={wards.isError} onRetry={() => void wards.refetch()} onChange={(code) => { const ward = wards.data?.find((w) => w.code === code); setChosenWardCode(code); setAddressDraft({ ...addressDraft, ward: ward?.name ?? '', district: '' }); }} />
         <label className="block"><span className="mb-1 block text-body font-medium">Địa chỉ chi tiết</span><input required className={inputClass} placeholder="Số nhà, tên đường" value={addressDraft.addressLine} onChange={(e) => setAddressDraft({ ...addressDraft, addressLine: e.target.value })} /></label>
-        <label className="block"><span className="mb-1 block text-body font-medium">Phường / xã</span><input required className={inputClass} value={addressDraft.ward} onChange={(e) => setAddressDraft({ ...addressDraft, ward: e.target.value })} /></label>
-        <label className="block"><span className="mb-1 block text-body font-medium">Tỉnh / thành phố</span><input required className={inputClass} value={addressDraft.province} onChange={(e) => setAddressDraft({ ...addressDraft, province: e.target.value })} /></label>
         <label className="flex items-center gap-2 text-body"><input type="checkbox" checked={addressDraft.isDefault} onChange={(e) => setAddressDraft({ ...addressDraft, isDefault: e.target.checked })} className="size-4 accent-primary-700" />Đặt làm địa chỉ mặc định</label>
         {error && <p role="alert" className="text-caption text-error-strong">{error}</p>}
         <div className="flex justify-end gap-2 border-t border-gray-100 pt-3"><Button type="button" variant="outline" onClick={() => { setAddressDraft(null); setEditingAddressId(null); }}>Huỷ</Button><Button type="submit" loading={saveAddress.isPending}>Lưu địa chỉ</Button></div>

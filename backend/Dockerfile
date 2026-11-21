@@ -1,12 +1,16 @@
-﻿# ==============================================================================
-# Multi-stage optimized Dockerfile for Spring Boot Microservice
+# ==============================================================================
+# Shared Multi-stage optimized Dockerfile for Spring Boot Microservices
 # Base Image: Eclipse Temurin JRE 17 Alpine (Lightweight & Secure)
 # ==============================================================================
 
 # Stage 1: Extract layers using Spring Boot layertools
 FROM eclipse-temurin:17-jre-alpine AS builder
 WORKDIR /builder
-ARG JAR_FILE=target/*.jar
+
+# Tên thư mục của service (ví dụ: api-gateway, identity-service, ...)
+ARG SERVICE_NAME
+ARG JAR_FILE=${SERVICE_NAME}/target/*.jar
+
 COPY ${JAR_FILE} app.jar
 RUN java -Djarmode=layertools -jar app.jar extract
 

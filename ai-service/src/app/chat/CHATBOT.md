@@ -260,7 +260,7 @@ Khi câu hỏi là ORDER_STATUS hoặc đang chờ mã đơn và user gửi mã:
 - Nếu API bật nhưng không có Authorization: yêu cầu user đăng nhập/dùng lại kênh
   đặt hàng.
 - Nếu có Authorization: gọi
-  GET {DATA_API_BASE_URL}{DATA_API_ORDER_PATH} với mã đơn đã URL-encode.
+  GET {DATA_API_BASE_URL}{DATA_API_ORDER_PATH} với order_code đã URL-encode.
 - Status và payment status được đổi sang nhãn tiếng Việt bởi format_order_answer().
 
 Các lỗi HTTP, JSON hoặc transport ở adapter được log theo loại lỗi và trả None, không
@@ -420,8 +420,8 @@ index in-memory.
 | CHAT_RATE_LIMIT_ENABLED | true. |
 | CHAT_RATE_LIMIT_PER_MINUTE | 60. |
 | DATA_API_BASE_URL | Rỗng; rỗng nghĩa là dùng knowledge base tĩnh cho catalog/order. |
-| DATA_API_CATALOG_PATH | /api/ai/catalog/search. |
-| DATA_API_ORDER_PATH | /api/ai/orders/{order_code}. |
+| DATA_API_CATALOG_PATH | /api/ai/catalog/search. Nhận `q`, `intent`, `branch_id`. |
+| DATA_API_ORDER_PATH | /api/ai/orders/{order_code}. Backend kiểm tra quyền sở hữu theo token. |
 | DATA_API_KEY | Rỗng; nếu có sẽ gửi bằng X-API-Key. |
 | CORS_ALLOWED_ORIGINS | http://localhost:5173,http://127.0.0.1:5173. |
 | CHAT_REINDEX_API_KEY | Rỗng; cần đặt để bật reindex endpoint. |

@@ -8,12 +8,14 @@ không phá vỡ chatbot khi schema SQL thay đổi.
 
 `GET {DATA_API_BASE_URL}{DATA_API_CATALOG_PATH}`
 
+Theo contract hiện tại, `DATA_API_CATALOG_PATH=/api/ai/catalog/search`.
+
 Query parameters:
 
 - `q`: câu hỏi đã contextualize.
-- `intent`: các truy vấn sản phẩm như `PRODUCT_PRICE`, `PRODUCT_DETAIL`,
-  `PRODUCT_INFO`, `MENU_QUERY`, `PRODUCT_RECOMMENDATION`, `PRODUCT_AVAILABILITY`,
-  `PRODUCT_FILTER` hoặc `PRODUCT_COMPARISON`.
+- `intent`: tên intent viết thường, ví dụ `product_price`, `product_detail`,
+  `product_info`, `menu_query`, `product_recommendation`, `product_availability`,
+  `product_filter` hoặc `product_comparison`.
 - `branch_id`: optional; bắt buộc nếu muốn khẳng định availability.
 
 Backend phải chỉ trả `Products.status=Active`, `Product_Variants.status=Active` và
@@ -136,8 +138,10 @@ không tự chuyển sang `data_mock`. CSV demo chỉ dùng khi bật tường m
 
 ## Order lookup
 
-`GET {DATA_API_BASE_URL}{DATA_API_ORDER_PATH}` với `:order_code` hoặc
-`{order_code}` là placeholder.
+`GET {DATA_API_BASE_URL}{DATA_API_ORDER_PATH}` với `{order_code}` là placeholder.
+
+Theo contract hiện tại, `DATA_API_ORDER_PATH=/api/ai/orders/{order_code}` và giá trị
+truyền vào là mã đơn `order_code` do khách cung cấp.
 
 AI service forward `Authorization` của request gốc và thêm `X-API-Key` nếu có.
 Order Service phải xác minh order thuộc user/token đó; không chỉ dựa vào mã
