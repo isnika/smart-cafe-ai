@@ -23,6 +23,10 @@ TRUNCATE TABLE smart_cafe_store_db.Branches;
 TRUNCATE TABLE smart_cafe_identity_db.Users;
 TRUNCATE TABLE smart_cafe_identity_db.Roles;
 
+TRUNCATE TABLE smart_cafe_order_db.Order_Item_Options;
+TRUNCATE TABLE smart_cafe_order_db.Order_Items;
+TRUNCATE TABLE smart_cafe_order_db.Orders;
+
 TRUNCATE TABLE smart_cafe_inventory_db.Inventories;
 TRUNCATE TABLE smart_cafe_inventory_db.Ingredients;
 TRUNCATE TABLE smart_cafe_inventory_db.Suppliers;
@@ -45,15 +49,16 @@ INSERT INTO Roles (id, name, description) VALUES
 ON DUPLICATE KEY UPDATE name=VALUES(name), description=VALUES(description);
 
 -- Mật khẩu mặc định: 123456 (BCrypt: $2a$10$VpiMImOFIQYYzkBLz.AwzO1bkHjE/Lyb5F/XDLCoo964rLqJR06tG)
-INSERT INTO Users (id, email, phone, password_hash, full_name, role_id, status) VALUES
-('usr_admin_001', 'admin@smartcafe.vn', '0901000001', '$2a$10$VpiMImOFIQYYzkBLz.AwzO1bkHjE/Lyb5F/XDLCoo964rLqJR06tG', 'Nguyễn Quản Trị', 1, 'Active'),
-('usr_manager_001', 'manager.q1@smartcafe.vn', '0901000002', '$2a$10$VpiMImOFIQYYzkBLz.AwzO1bkHjE/Lyb5F/XDLCoo964rLqJR06tG', 'Trần Quản Lý Q1', 2, 'Active'),
-('usr_cashier_001', 'cashier.q1@smartcafe.vn', '0901000003', '$2a$10$VpiMImOFIQYYzkBLz.AwzO1bkHjE/Lyb5F/XDLCoo964rLqJR06tG', 'Lê Thu Ngân', 3, 'Active'),
-('usr_barista_001', 'barista.q1@smartcafe.vn', '0901000004', '$2a$10$VpiMImOFIQYYzkBLz.AwzO1bkHjE/Lyb5F/XDLCoo964rLqJR06tG', 'Phạm Pha Chế', 4, 'Active'),
-('usr_staff_001', 'staff_001@smartcafe.vn', '0901000005', '$2a$10$VpiMImOFIQYYzkBLz.AwzO1bkHjE/Lyb5F/XDLCoo964rLqJR06tG', 'Võ Phục Vụ', 5, 'Active'),
-('usr_cust_001', 'nguyenvanan@gmail.com', '0988111222', '$2a$10$VpiMImOFIQYYzkBLz.AwzO1bkHjE/Lyb5F/XDLCoo964rLqJR06tG', 'Nguyễn Văn An', 6, 'Active'),
-('usr_cust_002', 'tranthibinh@gmail.com', '0988333444', '$2a$10$VpiMImOFIQYYzkBLz.AwzO1bkHjE/Lyb5F/XDLCoo964rLqJR06tG', 'Trần Thị Bình', 6, 'Active')
-ON DUPLICATE KEY UPDATE full_name=VALUES(full_name), status=VALUES(status), password_hash=VALUES(password_hash);
+INSERT INTO Users (id, email, phone, password_hash, full_name, role_id, branch_id, status) VALUES
+('usr_admin_001', 'admin@smartcafe.vn', '0901000001', '$2a$10$VpiMImOFIQYYzkBLz.AwzO1bkHjE/Lyb5F/XDLCoo964rLqJR06tG', 'Nguyễn Quản Trị', 1, NULL, 'Active'),
+('usr_manager_001', 'manager.q1@smartcafe.vn', '0901000002', '$2a$10$VpiMImOFIQYYzkBLz.AwzO1bkHjE/Lyb5F/XDLCoo964rLqJR06tG', 'Trần Quản Lý Q1', 2, 1, 'Active'),
+('usr_manager_002', 'manager.bt@smartcafe.vn', '0901000006', '$2a$10$VpiMImOFIQYYzkBLz.AwzO1bkHjE/Lyb5F/XDLCoo964rLqJR06tG', 'Hoàng Quản Lý BT', 2, 2, 'Active'),
+('usr_cashier_001', 'cashier.q1@smartcafe.vn', '0901000003', '$2a$10$VpiMImOFIQYYzkBLz.AwzO1bkHjE/Lyb5F/XDLCoo964rLqJR06tG', 'Lê Thu Ngân', 3, 1, 'Active'),
+('usr_barista_001', 'barista.q1@smartcafe.vn', '0901000004', '$2a$10$VpiMImOFIQYYzkBLz.AwzO1bkHjE/Lyb5F/XDLCoo964rLqJR06tG', 'Phạm Pha Chế', 4, 1, 'Active'),
+('usr_staff_001', 'staff_001@smartcafe.vn', '0901000005', '$2a$10$VpiMImOFIQYYzkBLz.AwzO1bkHjE/Lyb5F/XDLCoo964rLqJR06tG', 'Võ Phục Vụ', 5, 1, 'Active'),
+('usr_cust_001', 'nguyenvanan@gmail.com', '0988111222', '$2a$10$VpiMImOFIQYYzkBLz.AwzO1bkHjE/Lyb5F/XDLCoo964rLqJR06tG', 'Nguyễn Văn An', 6, NULL, 'Active'),
+('usr_cust_002', 'tranthibinh@gmail.com', '0988333444', '$2a$10$VpiMImOFIQYYzkBLz.AwzO1bkHjE/Lyb5F/XDLCoo964rLqJR06tG', 'Trần Thị Bình', 6, NULL, 'Active')
+ON DUPLICATE KEY UPDATE full_name=VALUES(full_name), status=VALUES(status), password_hash=VALUES(password_hash), branch_id=VALUES(branch_id);
 
 -- ----------------------------------------------------------------------------
 -- 2. STORE SERVICE (Chi nhánh, Bàn ăn, Nhân sự)
@@ -99,7 +104,8 @@ INSERT INTO Staff_Profiles (id, user_id, branch_id, employee_code, job_title, em
 (1, 'usr_manager_001', 1, 'EMP001', 'Store Manager', 'Full_Time', '2025-01-01', 'Active'),
 (2, 'usr_cashier_001', 1, 'EMP002', 'Head Cashier', 'Full_Time', '2025-02-01', 'Active'),
 (3, 'usr_barista_001', 1, 'EMP003', 'Lead Barista', 'Full_Time', '2025-02-15', 'Active'),
-(4, 'usr_staff_001', 1, 'EMP004', 'Server Staff', 'Part_Time', '2025-03-01', 'Active')
+(4, 'usr_staff_001', 1, 'EMP004', 'Server Staff', 'Part_Time', '2025-03-01', 'Active'),
+(5, 'usr_manager_002', 2, 'EMP005', 'Store Manager', 'Full_Time', '2025-01-15', 'Active')
 ON DUPLICATE KEY UPDATE job_title=VALUES(job_title), status=VALUES(status);
 
 -- ----------------------------------------------------------------------------
@@ -421,6 +427,50 @@ INSERT INTO Vouchers (code, name, discount_type, discount_value, min_order_amoun
 ('FREESHIP', 'Miễn phí giao hàng tận nơi', 'Fixed', 20000, 100000, 20000, 5000, 2, '2025-01-01 00:00:00', '2027-12-31 23:59:59', 'Active'),
 ('COFFEELOVER', 'Giảm 30K cho tín đồ mê cà phê', 'Fixed', 30000, 120000, 30000, 2000, 1, '2025-01-01 00:00:00', '2027-12-31 23:59:59', 'Active')
 ON DUPLICATE KEY UPDATE name=VALUES(name), status=VALUES(status);
+
+-- ----------------------------------------------------------------------------
+-- 8. ORDER SERVICE (Đơn hàng mẫu & Báo cáo doanh thu chi nhánh)
+-- ----------------------------------------------------------------------------
+USE smart_cafe_order_db;
+
+INSERT INTO Orders (
+    id, order_code, user_id, created_by, branch_id, table_session_id, order_source, fulfillment_type,
+    delivery_name, delivery_phone, delivery_address, delivery_latitude, delivery_longitude,
+    sub_total, item_discount_amount, voucher_code, voucher_discount_amount, delivery_fee, vat_amount, final_amount,
+    status, payment_status, completed_at, created_at
+) VALUES
+(1, 'ORD-20261101-0001', 'usr_cust_001', 'usr_cashier_001', 1, NULL, 'POS', 'Pickup',
+ NULL, NULL, NULL, NULL, NULL,
+ 74000, 0, NULL, 0, 0, 6727, 74000,
+ 'Completed', 'Paid', DATE_SUB(NOW(), INTERVAL 5 DAY), DATE_SUB(NOW(), INTERVAL 5 DAY)),
+(2, 'ORD-20261102-0002', 'usr_cust_002', NULL, 1, NULL, 'Online', 'Delivery',
+ 'Trần Thị Bình', '0988333444', '68 Nguyễn Huệ, Q1', 10.7735, 106.7038,
+ 110000, 0, 'FREESHIP', 20000, 20000, 10000, 110000,
+ 'Completed', 'Paid', DATE_SUB(NOW(), INTERVAL 3 DAY), DATE_SUB(NOW(), INTERVAL 3 DAY)),
+(3, 'ORD-20261103-0003', 'usr_cust_001', 'usr_manager_002', 2, NULL, 'POS', 'Pickup',
+ NULL, NULL, NULL, NULL, NULL,
+ 84000, 0, NULL, 0, 0, 7636, 84000,
+ 'Completed', 'Paid', DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_SUB(NOW(), INTERVAL 2 DAY)),
+(4, 'ORD-20261104-0004', 'usr_cust_002', NULL, 2, NULL, 'Online', 'Delivery',
+ 'Trần Thị Bình', '0988333444', 'Landmark 81, Bình Thạnh', 10.7951, 106.7218,
+ 138000, 0, NULL, 0, 18000, 12545, 156000,
+ 'Completed', 'Paid', DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY)),
+(5, 'ORD-20261105-0005', 'usr_cust_001', 'usr_cashier_001', 1, NULL, 'POS', 'Pickup',
+ NULL, NULL, NULL, NULL, NULL,
+ 98000, 0, NULL, 0, 0, 8909, 98000,
+ 'Completed', 'Paid', NOW(), NOW())
+ON DUPLICATE KEY UPDATE status=VALUES(status);
+
+INSERT INTO Order_Items (id, order_id, product_id, variant_id, product_name, variant_name, quantity, unit_price, options_unit_total, discount_amount, note) VALUES
+(1, 1, 1, 1, 'Cà phê đen đá', 'Size M', 1, 29000, 0, 0, NULL),
+(2, 1, 2, 4, 'Cà phê sữa đá', 'Size L', 1, 45000, 0, 0, NULL),
+(3, 2, 3, 5, 'Bạc xỉu Sài Gòn', 'Size M', 2, 39000, 0, 0, NULL),
+(4, 2, 4, 7, 'Cà phê muối', 'Size M', 1, 42000, 0, 0, NULL),
+(5, 3, 4, 7, 'Cà phê muối', 'Size M', 2, 42000, 0, 0, NULL),
+(6, 4, 2, 4, 'Cà phê sữa đá', 'Size L', 2, 45000, 0, 0, NULL),
+(7, 4, 6, 11, 'Cà phê cốt dừa', 'Size M', 1, 48000, 0, 0, NULL),
+(8, 5, 5, 9, 'Cà phê trứng', 'Size M', 2, 49000, 0, 0, NULL)
+ON DUPLICATE KEY UPDATE quantity=VALUES(quantity);
 
 SET FOREIGN_KEY_CHECKS = 1;
 
