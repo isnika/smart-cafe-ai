@@ -17,7 +17,7 @@ import { accountFromRequest, type MockAccount } from './identity';
  *  - Đơn của người khác và đơn không tồn tại đều trả 404 ORDER_NOT_FOUND (không lộ việc đơn có thật).
  *  - `status` (vòng đời đơn) và `payment_status` (read-model thanh toán) là hai trường riêng, không lẫn nhau.
  *  - Timestamp giữ đúng dạng DB (UTC, không hậu tố Z) để http.ts → normalizeTimestamps chạy thật.
- *  - Không đụng handler legacy /orders-svc/* (staff queue, cashier, dashboard vẫn dùng chúng trên cùng db.orders).
+ *  - Danh sách staff/manager dùng contract v1 /orders; các handler alias legacy chỉ giữ cho kiểm thử tương thích.
  */
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -176,9 +176,15 @@ export const orderReadV1Handlers = [
     const requestedBranch = sp.has('branch_id') ? intParam(sp, 'branch_id', 1, 1) : viewer.branchId;
     if (requestedBranch === null) fail(400, 'VALIDATION_ERROR', 'branch_id là bắt buộc');
     if (viewer.roleName !== 'Admin' && requestedBranch !== viewer.branchId) fail(403, 'FORBIDDEN', 'Không có quyền xem đơn của chi nhánh này');
+    const status = enumParam(sp, 'status', ORDER_STATUS_VALUES);
     const page = intParam(sp, 'page', 1, 1);
     const size = intParam(sp, 'size', DEFAULT_PAGE_SIZE, 1, MAX_PAGE_SIZE);
-    const rows = db.orders.filter((o) => o.branchId === requestedBranch).sort((a, b) => utcMs(b.createdAt) - utcMs(a.createdAt));
+    const sort = sortParam(sp);
+    const key = SORT_FIELDS[sort.field];
+    const rows = db.orders
+      .filter((o) => o.branchId === requestedBranch)
+      .filter((o) => status === undefined || o.status === status)
+      .sort((a, b) => sort.dir * (key(a) - key(b)) || sort.dir * (a.id - b.id));
     const start = (page - 1) * size;
     return ok(rows.slice(start, start + size), { page, size, total: rows.length, totalPages: Math.ceil(rows.length / size) });
   })),
@@ -208,6 +214,17 @@ export const orderReadV1Handlers = [
 
     const start = (page - 1) * size;
     return ok(rows.slice(start, start + size).map(summaryView), { page, size, total: rows.length });
+  })),
+
+  // GET /orders/{id} — Staff/Manager in the order's branch.
+  http.get(url('/orders/:id'), guardedV1(({ request, params }) => {
+    const viewer = staffOf(request);
+    const id = parseId(params.id);
+    const order = db.orders.find((candidate) =>
+      candidate.id === id && (viewer.roleName === 'Admin' || candidate.branchId === viewer.branchId),
+    );
+    if (!order) return notFound(id);
+    return ok(detailView(order, viewer));
   })),
 
   // GET /orders/me/:id

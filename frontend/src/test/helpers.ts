@@ -44,7 +44,7 @@ export function resetWorld(): void {
   if (typeof localStorage !== 'undefined') localStorage.clear();
   usePlacedOrders.setState({ orders: [] });
   if (typeof sessionStorage !== 'undefined') sessionStorage.clear();
-  useAuthStore.setState({ status: 'anonymous', accessToken: null, user: null, roleName: null });
+  useAuthStore.setState({ status: 'anonymous', accessToken: null, user: null, roleName: null, branchId: null });
 }
 
 /** Mở phiên bàn thật qua MSW rồi gắn vào giỏ — giống DineInTablePage làm khi vào /dine-in/table/:code. */
@@ -64,5 +64,6 @@ export function loginAs(roleName: 'Customer' | 'Staff', over: Partial<User> = {}
   // id là tài khoản mock (vd 'u-customer') → token hợp lệ của mock, dùng được với endpoint cần Bearer thật (giỏ/đơn Online, địa chỉ).
   // id khác → token giả 't' như trước (các test cũ không phụ thuộc Bearer).
   const accessToken = over.id && MOCK_ACCOUNTS.some((a) => a.id === over.id) ? mockAccessToken(over.id) : 't';
-  useAuthStore.setState({ status: 'authenticated', accessToken, user: fakeUser(over), roleName });
+  const branchId = over.branchId !== undefined ? over.branchId : roleName === 'Staff' ? 1 : null;
+  useAuthStore.setState({ status: 'authenticated', accessToken, user: fakeUser(over), roleName, branchId });
 }

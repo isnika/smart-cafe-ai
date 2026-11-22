@@ -1,6 +1,7 @@
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { configureHttp, orderApi, paymentApi } from '@/shared/api';
+import { getMyOrder } from '@/shared/api/order-me';
 import { ORDER_TRANSITIONS } from '@/shared/lib';
 import type { OrderDetail, OrderStatus, PaymentStatus } from '@/shared/types';
 import { db, resetDb } from '../db';
@@ -11,7 +12,7 @@ import { mockAccessToken, resetAuthMock, revokeAllTokens } from './identity';
 import { canActorTransition, EXCEL_ORDER_TRANSITIONS, isExcelTransition } from './order-cancel-v1';
 
 /**
- * PATCH /orders/{id}/status (SmartAPI v1) — khách hủy đơn của chính mình.
+ * PATCH /orders/{id}/status (SmartAPI v1) — Customer/Staff/Manager transitions.
  * Luật lấy từ Excel (sheet "Enum & Trạng thái"); các chỗ Excel không nêu rõ được ghi trong P4_MSW_CANCEL.md.
  */
 
@@ -142,10 +143,10 @@ describe('Hủy thành công', () => {
     expect(dbOrder(order.id).statusHistory.at(-1)!.note).toBe('Đổi ý');
   });
 
-  it('kết quả hiển thị đúng ở đọc đơn legacy (khách + nhân viên)', async () => {
+  it('Customer đọc qua /orders/me/{id}, Staff đọc qua /orders/{id}', async () => {
     const order = await placeOnlineOrder(A);
     await cancel(order.id, cancelBody(order));
-    const asOwner = await orderApi.getOrder(order.id);
+    const asOwner = await getMyOrder(order.id);
     expect(asOwner).toMatchObject({ status: 'Cancelled', version: 2, cancelReason: 'Đổi ý' });
     expect(asOwner.statusHistory.map((h) => h.status)).toEqual(['Pending_Payment', 'Cancelled']);
     as(STAFF);
@@ -309,12 +310,23 @@ describe('Xác thực & quyền sở hữu', () => {
     expect(snapshot(order.id)).toBe(before);
   });
 
-  it.each(['u-staff', 'u-manager', 'u-admin'])('%s không phải Customer → 403 FORBIDDEN (endpoint này chỉ cho chủ đơn)', async (who) => {
+  it('Admin không có quyền cập nhật đơn qua endpoint này', async () => {
     const order = await placeOnlineOrder(A);
     const before = snapshot(order.id);
-    const w = await cancel(order.id, cancelBody(order), who);
+    const w = await cancel(order.id, cancelBody(order), 'u-admin');
     expect([w.status, errorOf(w).code]).toEqual([403, 'FORBIDDEN']);
     expect(snapshot(order.id)).toBe(before);
+  });
+
+  it.each(['u-staff', 'u-manager'])('%s đổi được trạng thái đơn trong chi nhánh', async (who) => {
+    const order = await placeOnlineOrder(A, null);
+    const w = await raw(`/orders/${order.id}/status`, {
+      method: 'PATCH',
+      body: { status: 'Confirmed', version: order.version },
+      token: mockAccessToken(who),
+    });
+    expect(w.status).toBe(200);
+    expect(dbOrder(order.id)).toMatchObject({ status: 'Confirmed', version: order.version + 1 });
   });
 
   it('không hủy được đơn của user khác: 404 ORDER_NOT_FOUND, đơn của A nguyên vẹn', async () => {
@@ -408,11 +420,12 @@ describe('400 VALIDATION_ERROR', () => {
     expect(w.body).toMatchObject({ success: false });
   });
 
-  it('thứ tự kiểm tra: 401 → 403 → 400 → 404', async () => {
+  it('kiểm tra Bearer trước body, body trước quyền và quyền trước sở hữu đơn', async () => {
     const order = await placeOnlineOrder(A);
-    expect((await cancel(order.id, {}, null)).status).toBe(401); // body sai nhưng chưa đăng nhập
-    expect((await cancel(order.id, {}, STAFF)).status).toBe(403); // body sai nhưng sai vai trò
-    expect((await cancel(order.id, {}, B)).status).toBe(400); // body sai trước khi tra đơn
+    expect((await cancel(order.id, {}, null)).status).toBe(401);
+    expect((await cancel(order.id, {}, STAFF)).status).toBe(400);
+    expect((await cancel(order.id, cancelBody(order), 'u-admin')).status).toBe(403);
+    expect((await cancel(order.id, {}, B)).status).toBe(400);
     expect((await cancel(order.id, cancelBody(order), B)).status).toBe(404);
   });
 });
@@ -436,12 +449,12 @@ describe('Không vỡ luồng khác', () => {
     await expect(pay(dbOrder(o1.id))).rejects.toMatchObject({ status: 409, code: 'ORDER_NOT_PAYABLE' });
   });
 
-  it('legacy PATCH /orders-svc/orders/:id/status của nhân viên vẫn chạy và giữ mã INVALID_TRANSITION', async () => {
+  it('PATCH v1 cho phép nhân viên đổi trạng thái và trả INVALID_STATE_TRANSITION khi sai chuyển tiếp', async () => {
     const order = await placeOnlineOrder(A, null);
     as(STAFF);
     const next = await orderApi.changeOrderStatus(order.id, { to: 'Confirmed', version: order.version });
     expect(next).toMatchObject({ status: 'Confirmed', version: 2 });
-    await expect(orderApi.changeOrderStatus(order.id, { to: 'Ready', version: 2 })).rejects.toMatchObject({ status: 409, code: 'INVALID_TRANSITION' });
+    await expect(orderApi.changeOrderStatus(order.id, { to: 'Ready', version: 2 })).rejects.toMatchObject({ status: 409, code: 'INVALID_STATE_TRANSITION' });
   });
 
   it('đơn Online đã hủy vẫn nằm trong hàng đợi nhân viên (legacy listOrders)', async () => {

@@ -10,6 +10,7 @@ interface WireUser extends Omit<User, 'roleName'> {
   role_name?: string;
   role?: string | { id?: number; name?: string } | null;
   branchId?: number | null;
+  branch_id?: number | null;
 }
 
 interface WireSession {
@@ -20,6 +21,7 @@ interface WireSession {
   role_name?: string;
   role?: string | { id?: number; name?: string } | null;
   branchId?: number | null;
+  branch_id?: number | null;
 }
 
 const roleOf = (r: unknown): RoleName | undefined => {
@@ -44,16 +46,38 @@ export const roleFromUser = (user: User | WireUser): RoleName | undefined => {
   return roleOf(wire.roleName) ?? roleOf(wire.role_name) ?? roleOf(wire.role);
 };
 
-function roleFromAccessToken(token: string): RoleName | undefined {
+function branchIdFrom(...values: unknown[]): number | null | undefined {
+  const value = values.find((candidate) => candidate !== undefined);
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const branchId = typeof value === 'number' ? value : Number(value);
+  if (!Number.isSafeInteger(branchId) || branchId <= 0) {
+    throw new Error('API Identity trả về branch_id không hợp lệ');
+  }
+  return branchId;
+}
+
+function accessTokenPayload(token: string): Record<string, unknown> | undefined {
   try {
     const part = token.split('.')[1];
     if (!part) return undefined;
-    const payload = JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/'))) as Record<string, unknown>;
-    return roleOf(payload.role) ?? roleOf(payload.roleName) ?? roleOf(payload.role_name)
-      ?? roleOf(payload.authorities) ?? roleOf(payload.roles);
+    return JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/'))) as Record<string, unknown>;
   } catch {
     return undefined;
   }
+}
+
+function roleFromAccessToken(token: string): RoleName | undefined {
+  const payload = accessTokenPayload(token);
+  return payload
+    ? roleOf(payload.role) ?? roleOf(payload.roleName) ?? roleOf(payload.role_name)
+      ?? roleOf(payload.authorities) ?? roleOf(payload.roles)
+    : undefined;
+}
+
+function branchIdFromAccessToken(token: string): number | null | undefined {
+  const payload = accessTokenPayload(token);
+  return payload ? branchIdFrom(payload.branchId, payload.branch_id) : undefined;
 }
 
 /** Chuẩn hoá UserResponse của backend để mọi consumer dùng cùng roleName camelCase. */
@@ -62,6 +86,9 @@ export function toUser(wire: WireUser): User {
   const user = { ...wire } as User;
   delete (user as User & { role_name?: string }).role_name;
   delete (user as User & { role?: string | { id?: number; name?: string } | null }).role;
+  delete (user as User & { branch_id?: number | null }).branch_id;
+  const branchId = branchIdFrom(wire.branchId, wire.branch_id);
+  if (branchId !== undefined) user.branchId = branchId;
   if (roleName) user.roleName = roleName;
   else delete user.roleName;
   return user;
@@ -73,12 +100,13 @@ export function toAuthSession(w: WireSession): AuthSession {
   const roleName = roleFromUser(user) ?? roleOf(w.roleName) ?? roleOf(w.role_name) ?? roleOf(w.role) ?? roleFromAccessToken(w.accessToken);
   if (!roleName) throw new Error('API đăng nhập không trả về vai trò hợp lệ trong user.role_name');
   user.roleName = roleName;
+  const responseBranchId = branchIdFrom(w.branchId, w.branch_id, w.user.branchId, w.user.branch_id);
   return {
     accessToken: w.accessToken,
     refreshToken: w.refreshToken ?? null,
     user,
     roleName,
-    branchId: w.branchId ?? w.user.branchId ?? null,
+    branchId: responseBranchId !== undefined ? responseBranchId : branchIdFromAccessToken(w.accessToken) ?? null,
   };
 }
 

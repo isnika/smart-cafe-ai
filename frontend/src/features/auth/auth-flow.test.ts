@@ -165,6 +165,48 @@ describe('phiên: me, refresh xoay token, logout', () => {
     expect(session.user.roleName).toBe('Admin');
   });
 
+  it('lấy branch_id từ UserResponse của nhân viên và lưu vào auth scope', async () => {
+    server.use(http.post(url('/auth/login'), () => HttpResponse.json({
+      success: true,
+      data: {
+        access_token: 'staff-token',
+        refresh_token: 'staff-refresh',
+        user: {
+          id: 'api-staff', full_name: 'Nhân viên', email: 'staff@smartcafe.vn',
+          role_id: 2, role_name: 'STAFF', branch_id: 7, status: 'Active',
+          created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+        },
+      },
+    })));
+
+    const session = await identityApi.login({ identifier: 'staff@smartcafe.vn', password: '123456' });
+    expect(session.branchId).toBe(7);
+    expect(session.user.branchId).toBe(7);
+    useAuthStore.getState().applySession(session);
+    expect(useAuthStore.getState().branchId).toBe(7);
+  });
+
+  it('lấy branch_id từ access token khi AuthResponse không có branch_id', async () => {
+    const payload = btoa(JSON.stringify({ sub: 'api-manager', role: 'ROLE_MANAGER', branch_id: 8 })).replace(/=/g, '');
+    server.use(http.post(url('/auth/login'), () => HttpResponse.json({
+      success: true,
+      data: {
+        access_token: `header.${payload}.signature`,
+        refresh_token: 'manager-refresh',
+        user: {
+          id: 'api-manager', full_name: 'Quản lý', email: 'manager@smartcafe.vn',
+          role_id: 3, role_name: 'MANAGER', status: 'Active',
+          created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+        },
+      },
+    })));
+
+    const session = await identityApi.login({ identifier: 'manager@smartcafe.vn', password: '123456' });
+    expect(session.branchId).toBe(8);
+    useAuthStore.getState().applySession(session);
+    expect(useAuthStore.getState().branchId).toBe(8);
+  });
+
   it('map đúng tên role theo seed database: ROLE_ADMIN', async () => {
     server.use(http.post(url('/auth/login'), () => HttpResponse.json({
       success: true,
@@ -202,6 +244,23 @@ describe('phiên: me, refresh xoay token, logout', () => {
     expect(useAuthStore.getState().user?.roleName).toBe('Admin');
   });
 
+  it('hydrate đồng bộ branch_id mới từ /users/me vào auth scope', async () => {
+    const session = await identityApi.login({ identifier: 'manager@smartcafe.vn', password: '123456' });
+    useAuthStore.getState().applySession({ ...session, branchId: 1 });
+    server.use(http.get(url('/users/me'), () => HttpResponse.json({
+      success: true,
+      data: {
+        id: session.user.id, full_name: session.user.fullName, email: session.user.email,
+        role_id: 3, role_name: 'MANAGER', branch_id: 9, status: 'Active',
+        created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+      },
+    })));
+
+    await useAuthStore.getState().hydrate();
+
+    expect(useAuthStore.getState().branchId).toBe(9);
+    expect(useAuthStore.getState().user?.branchId).toBe(9);
+  });
 
   it('login → /users/me; 401 do token thu hồi → refresh thất bại → clear()', async () => {
     useAuthStore.getState().applySession(await identityApi.login({ identifier: 'customer@smartcafe.vn', password: '123456' }));

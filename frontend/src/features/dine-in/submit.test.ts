@@ -188,6 +188,7 @@ describe('Dine-in → hàng đợi nhân viên (cùng nguồn dữ liệu MSW)',
     await fillCart();
     const order = await placeDineInOrder();
 
+    loginAs('Staff', { id: 'u-staff', branchId: 1 });
     const queue = await orderApi.listOrders({ status: ['Pending', 'Confirmed', 'Preparing', 'Ready'], fulfillmentType: 'Dine_In', pageSize: 100 });
     const found = queue.items.find((o) => o.id === order.id);
     expect(found).toMatchObject({ orderCode: order.orderCode, tableNumber: '01', status: 'Pending', orderSource: 'QR' });
@@ -198,6 +199,7 @@ describe('Dine-in → hàng đợi nhân viên (cùng nguồn dữ liệu MSW)',
   it('nhân viên đổi trạng thái đơn khách vừa đặt', async () => {
     await fillCart();
     const order = await placeDineInOrder();
+    loginAs('Staff', { id: 'u-staff', branchId: 1 });
     const confirmed = await orderApi.changeOrderStatus(order.id, { to: 'Confirmed', version: order.version });
     expect(confirmed.status).toBe('Confirmed');
   });

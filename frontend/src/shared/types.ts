@@ -43,6 +43,8 @@ export interface User {
   roleId: number;
   /** Tên vai trò theo UserResponse.role_name từ Identity API. */
   roleName?: RoleName;
+  /** Chi nhánh được gán cho tài khoản nhân viên/quản lý. */
+  branchId?: number | null;
   status: UserStatus;
   emailVerifiedAt?: IsoDateTime | null;
   phoneVerifiedAt?: IsoDateTime | null;
@@ -80,7 +82,7 @@ export interface AuthSession {
   refreshToken?: string | null;
   user: User;
   roleName: RoleName;
-  /** Branch scope của nhân viên – nằm trong token claims (Store Service sở hữu) */
+  /** Chi nhánh được Identity trả về trong user.branch_id của tài khoản nhân viên. */
   branchId?: number | null;
 }
 
