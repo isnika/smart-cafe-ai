@@ -1,4 +1,6 @@
+// @vitest-environment jsdom
 import { setupServer } from 'msw/node';
+import { http, HttpResponse } from 'msw';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { configureHttp, intelligenceApi, isApiError } from '@/shared/api';
 import type { AIForecast } from '@/shared/types';
@@ -111,5 +113,53 @@ describe('intelligenceApi.listForecasts', () => {
     token = undefined;
     const err = await intelligenceApi.listForecasts({ branchId: BRANCH_ID, forecastType: 'Revenue' }).catch((e: unknown) => e);
     expect(isApiError(err) && err.status === 401).toBe(true);
+  });
+});
+
+describe('intelligenceApi.getRecommendations', () => {
+  it('uses the AI Gateway response and normalizes its snake_case fields', async () => {
+    token = await login('customer@smartcafe.vn');
+    const response = await intelligenceApi.getRecommendations(
+      { mode: 'personalized', topK: 6 },
+      BRANCH_ID,
+    );
+    expect(response.modelVersion).toBe('mock-ai-recommendation');
+    expect(response.recommendations[0]).toMatchObject({
+      productId: 5,
+      priceVnd: expect.any(Number),
+      score: 0.92,
+    });
+  });
+
+  it('fallbacks to the direct AI Service recommendation route on gateway 404', async () => {
+    token = await login('customer@smartcafe.vn');
+    server.use(
+      http.post(url('/ai/recommendation'), () => HttpResponse.json({ message: 'Not Found' }, { status: 404 }), { once: true }),
+      http.post(/\/ai-service\/api\/recommendation$/, () => HttpResponse.json({
+        user_id: 'u-customer',
+        branch_id: BRANCH_ID,
+        strategy: 'personalized',
+        model_version: 'direct-ai-v1',
+        recommendations: [{ product_id: 5, name: 'Trà đào cam sả', price_vnd: 45000, score: 0.9 }],
+      })),
+    );
+
+    const response = await intelligenceApi.getRecommendations({ mode: 'personalized', topK: 6 }, BRANCH_ID);
+    expect(response.modelVersion).toBe('direct-ai-v1');
+    expect(response.recommendations[0]?.productId).toBe(5);
+  });
+
+  describe('intelligenceApi.forecastInventory', () => {
+    it('uses the target-date gateway contract without inventing a model version', async () => {
+      const targetDate = day(0);
+      const response = await intelligenceApi.forecastInventory({ branchId: BRANCH_ID, targetDate });
+      expect(response.targetDate).toBe(targetDate);
+      expect(response.branchId).toBe(BRANCH_ID);
+      expect(response.ingredients[0]).toMatchObject({
+        ingredientId: expect.any(Number),
+        status: 'ok',
+      });
+      expect(response).not.toHaveProperty('modelVersion');
+    });
   });
 });

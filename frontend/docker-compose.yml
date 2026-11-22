@@ -10,4 +10,5 @@ services:
       - .env
     environment:
       API_PROXY_TARGET: ${API_PROXY_TARGET:-http://host.docker.internal:8080}
+      AI_PROXY_TARGET: ${AI_PROXY_TARGET:-http://host.docker.internal:8000}
     restart: unless-stopped

@@ -10,7 +10,7 @@ import { QuantityStepper } from "./QuantityStepper";
 
 interface Props {
   /** null = đóng */
-  product: MenuProduct | null;
+  product: Pick<MenuProduct, "id" | "name"> | null;
   onClose: () => void;
   onAdd: (line: NewCartLine, quantity: number) => void;
   initialLine?: DineInCartLine | null;

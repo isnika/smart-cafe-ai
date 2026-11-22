@@ -1324,7 +1324,7 @@ export interface AIForecast {
   upperBound?: number | null;
   /** Back-fill sau để đo độ chính xác */
   actualValue?: number | null;
-  modelVersion: string;
+  modelVersion?: string;
   runId: string;
   rawData?: unknown;
   isLatest: boolean;
