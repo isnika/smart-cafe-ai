@@ -76,10 +76,8 @@ services:
 
   discovery-server:
     build:
-      context: .
+      context: ./discovery-server
       dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: discovery-server
     image: smartcafe/discovery-server:latest
     container_name: smartcafe-discovery-server
     restart: unless-stopped
@@ -106,10 +104,8 @@ services:
 
   api-gateway:
     build:
-      context: .
+      context: ./api-gateway
       dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: api-gateway
     image: smartcafe/api-gateway:latest
     container_name: smartcafe-api-gateway
     restart: unless-stopped
@@ -141,10 +137,8 @@ services:
 
   identity-service:
     build:
-      context: .
+      context: ./identity-service
       dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: identity-service
     image: smartcafe/identity-service:latest
     container_name: smartcafe-identity-service
     restart: unless-stopped
@@ -191,10 +185,8 @@ services:
 
   catalog-service:
     build:
-      context: .
+      context: ./catalog-service
       dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: catalog-service
     image: smartcafe/catalog-service:latest
     container_name: smartcafe-catalog-service
     restart: unless-stopped
@@ -235,10 +227,8 @@ services:
 
   store-service:
     build:
-      context: .
+      context: ./store-service
       dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: store-service
     image: smartcafe/store-service:latest
     container_name: smartcafe-store-service
     restart: unless-stopped
@@ -273,10 +263,8 @@ services:
 
   order-service:
     build:
-      context: .
+      context: ./order-service
       dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: order-service
     image: smartcafe/order-service:latest
     container_name: smartcafe-order-service
     restart: unless-stopped
@@ -326,10 +314,8 @@ services:
 
   payment-service:
     build:
-      context: .
+      context: ./payment-service
       dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: payment-service
     image: smartcafe/payment-service:latest
     container_name: smartcafe-payment-service
     restart: unless-stopped
@@ -381,10 +367,8 @@ services:
 
   inventory-service:
     build:
-      context: .
+      context: ./inventory-service
       dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: inventory-service
     image: smartcafe/inventory-service:latest
     container_name: smartcafe-inventory-service
     restart: unless-stopped
@@ -424,10 +408,8 @@ services:
 
   engagement-service:
     build:
-      context: .
+      context: ./engagement-service
       dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: engagement-service
     image: smartcafe/engagement-service:latest
     container_name: smartcafe-engagement-service
     restart: unless-stopped
@@ -477,10 +459,8 @@ services:
 
   intelligence-service:
     build:
-      context: .
+      context: ./intelligence-service
       dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: intelligence-service
     image: smartcafe/intelligence-service:latest
     container_name: smartcafe-intelligence-service
     restart: unless-stopped
