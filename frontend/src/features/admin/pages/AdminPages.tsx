@@ -29,6 +29,7 @@ import { Badge, Button, Card, Input, Modal } from "@/shared/ui";
 import * as api from "@/shared/api/admin";
 import * as catalogApi from "@/shared/api/catalog";
 import { isApiError } from "@/shared/api/http";
+import { AdminRevenueSection } from "../components/AdminRevenueSection";
 
 const keys = {
   branches: ["admin", "branches"] as const,
@@ -104,7 +105,7 @@ function FormError({ message }: { message?: string }) {
     </div>
   );
 }
-const PageHeading = ({
+export const PageHeading = ({
   eyebrow = "QUẢN TRỊ",
   title,
   description,
@@ -360,6 +361,9 @@ export function AdminDashboardPage() {
             ))}
           </div>
         </Card>
+      </div>
+      <div className="mt-8 border-t border-gray-100 pt-6">
+        <AdminRevenueSection />
       </div>
     </div>
   );

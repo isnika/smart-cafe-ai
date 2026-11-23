@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
+  BarChart3,
   ClipboardList,
   Coffee,
   Building2,
@@ -45,6 +46,7 @@ const navByRole: Record<Exclude<RoleName, "Customer">, NavItem[]> = {
   ],
   Admin: [
     { to: "/admin", label: "Tổng quan", icon: LayoutDashboard, end: true },
+    { to: "/admin/revenue", label: "Doanh thu", icon: BarChart3 },
     { to: "/admin/branches", label: "Chi nhánh", icon: Building2 },
     { to: "/admin/tables", label: "Bàn & QR", icon: QrCode },
     { to: "/admin/products", label: "Sản phẩm", icon: Coffee },

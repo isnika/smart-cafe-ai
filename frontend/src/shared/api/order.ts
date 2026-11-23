@@ -353,3 +353,72 @@ export const createOnlineOrder = async (
       },
     ),
   );
+
+// ── Báo cáo Doanh thu Admin / Chi nhánh ──────────────────────────────
+export interface RevenueSummary {
+  totalRevenue: number;
+  subTotal: number;
+  itemDiscountAmount: number;
+  voucherDiscountAmount: number;
+  deliveryFee: number;
+  vatAmount: number;
+  totalOrders: number;
+  completedOrders: number;
+  cancelledOrders: number;
+  averageOrderValue: number;
+}
+
+export interface BranchRevenueItem {
+  branchId: number;
+  ordersCount: number;
+  subTotal?: number;
+  itemDiscountAmount?: number;
+  voucherDiscountAmount?: number;
+  deliveryFee?: number;
+  vatAmount?: number;
+  finalAmount?: number;
+  revenue?: number;
+  averageOrderValue?: number;
+  percentage?: number;
+  revenuePercentage?: number;
+}
+
+export interface RevenueTimelinePoint {
+  period: string;
+  ordersCount: number;
+  revenue: number;
+}
+
+export interface RevenueOverviewResponse {
+  from: string;
+  to: string;
+  branchId: number | null;
+  summary: RevenueSummary;
+  byBranch: BranchRevenueItem[];
+  timeline: RevenueTimelinePoint[];
+}
+
+export interface RevenueByBranchesResponse {
+  from: string;
+  to: string;
+  branchId: number | null;
+  totalOrders: number;
+  totalRevenue: number;
+  branches: BranchRevenueItem[];
+}
+
+export interface RevenueReportParams {
+  branchId?: number;
+  from?: string; // YYYY-MM-DD
+  to?: string;   // YYYY-MM-DD
+  groupBy?: 'day' | 'week' | 'month';
+  orderSource?: 'Online' | 'QR' | 'POS';
+  fulfillmentType?: 'Delivery' | 'Pickup' | 'Dine_In';
+}
+
+export const getRevenueOverview = (params?: RevenueReportParams) =>
+  http.get<RevenueOverviewResponse>('/orders/reports/revenue', { query: params, snake: true });
+
+export const getRevenueByBranches = (params?: RevenueReportParams) =>
+  http.get<RevenueByBranchesResponse>('/orders/reports/revenue/branches', { query: params, snake: true });
+

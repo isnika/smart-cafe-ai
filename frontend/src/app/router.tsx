@@ -34,6 +34,7 @@ import StaffDashboardPage from "@/features/staff-dashboard/pages/StaffDashboardP
 import StaffCheckinPage from "@/features/staff-checkin/pages/StaffCheckinPage";
 import StaffTablesPage from "@/features/staff-tables/pages/StaffTablesPage";
 import { AdminDashboardPage, AdminBranchesPage, AdminTablesPage, AdminUsersPage, AdminProductsPage, AdminCategoriesPage, AdminBranchMenusPage } from "@/features/admin/pages/AdminPages";
+import { AdminRevenuePage } from "@/features/admin/pages/AdminRevenuePage";
 import { StaffLeavePage, ManagerLeavePage } from "@/features/workforce/LeavePages";
 
 // Tải lười để trang này không đi vào bundle production
@@ -157,6 +158,7 @@ export const routes: RouteObject[] = [
         element: <StaffShellLayout />,
         children: [
           { path: PATHS.admin, element: <AdminDashboardPage /> },
+          { path: PATHS.adminRevenue, element: <AdminRevenuePage /> },
           { path: PATHS.adminBranches, element: <AdminBranchesPage /> },
           { path: PATHS.adminTables, element: <AdminTablesPage /> },
           { path: PATHS.adminUsers, element: <AdminUsersPage /> },
