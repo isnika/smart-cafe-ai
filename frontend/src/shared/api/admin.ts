@@ -31,6 +31,11 @@ export interface AdminProduct {
   sortOrder: number; status: 'Active' | 'Inactive'; price?: number | null; maxPrice?: number | null;
   variantCount: number; activeVariantCount: number;
 }
+export interface AdminProductDetail extends AdminProduct {
+  variants: { id: number; variantName: string; price: number; status: 'Active' | 'Inactive' }[];
+  optionGroups: { id: number; name: string; selectionType: string; isRequired: boolean; minSelect: number; maxSelect: number;
+    options: { id: number; optionName: string; extraPrice: number; isDefault: boolean; status: 'Active' | 'Inactive' }[] }[];
+}
 export interface AdminCategory {
   id: number; name: string; status: string; image?: string | null; sortOrder?: number;
   totalProductCount?: number; activeProductCount?: number; productCount?: number;
@@ -121,6 +126,8 @@ export async function listAdminProducts(params: { page?: number; size?: number; 
   const meta = result.meta;
   return { items, meta: { page: meta?.page ?? params.page ?? 1, size: meta?.size ?? params.size ?? 20, totalItems: Number(meta?.totalItems ?? items.length), totalPages: meta?.totalPages ?? 1 } };
 }
+export const getAdminProduct = (id: number, signal?: AbortSignal) =>
+  http.get<AdminProductDetail>(`/catalog/admin/products/${id}`, { signal });
 export async function listAdminCategories(signal?: AbortSignal): Promise<AdminCategory[]> {
   return unwrapList(await http.get<unknown>('/catalog/admin/categories', { query: { page: 1, size: 100 }, signal }));
 }

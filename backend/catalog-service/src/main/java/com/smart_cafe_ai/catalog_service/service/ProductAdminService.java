@@ -52,6 +52,24 @@ public class ProductAdminService {
                 page.getTotalElements(), page.getTotalPages()), message);
     }
 
+    public ApiResponse<ProductAdminResponse.Detail> detail(Integer id) {
+        Product product = products.findById(id)
+                .orElseThrow(() -> new ApiException(NOT_FOUND, "NOT_FOUND", "Sản phẩm không tồn tại."));
+        var variantRows = variants.findByProductIdOrderBySortOrderAscIdAsc(id).stream()
+                .map(v -> new ProductAdminResponse.Variant(v.getId(), v.getVariantName(), v.getPrice(), v.getSortOrder(), v.getStatus()))
+                .toList();
+        var groupRows = groups.findByProductIdOrderBySortOrderAscIdAsc(id);
+        var groupIds = groupRows.stream().map(ProductOptionGroup::getId).toList();
+        var optionRows = groupIds.isEmpty() ? List.<ProductOption>of()
+                : options.findByGroupIdInOrderBySortOrderAscIdAsc(groupIds);
+        var optionsByGroup = optionRows.stream().collect(Collectors.groupingBy(ProductOption::getGroupId));
+        var groupResponses = groupRows.stream().map(g -> new ProductAdminResponse.Group(g.getId(), g.getName(),
+                g.getSelectionType(), g.isRequired(), g.getMinSelect(), g.getMaxSelect(), g.getSortOrder(),
+                optionsByGroup.getOrDefault(g.getId(), List.of()).stream().map(o -> new ProductAdminResponse.Option(
+                        o.getId(), o.getOptionName(), o.getExtraPrice(), o.isDefaultOption(), o.getSortOrder(), o.getStatus())).toList())).toList();
+        return ApiResponse.success(new ProductAdminResponse.Detail(responses(List.of(product)).get(0), variantRows, groupResponses));
+    }
+
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public ApiResponse<ProductAdminResponse.Detail> create(ProductCreateRequest request, CatalogActor actor) {
         var fields = ProductValidation.fields(request);

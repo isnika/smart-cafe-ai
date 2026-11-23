@@ -30,6 +30,7 @@ import * as api from "@/shared/api/admin";
 import * as catalogApi from "@/shared/api/catalog";
 import { isApiError } from "@/shared/api/http";
 import { AdminRevenueSection } from "../components/AdminRevenueSection";
+import { AdminProductDetail } from "../components/AdminProductDetail";
 
 const keys = {
   branches: ["admin", "branches"] as const,
@@ -914,6 +915,7 @@ function useAdminProducts(params: {
 }
 
 export function AdminProductsPage() {
+  const [detailId, setDetailId] = useState<number | null>(null);
   const [term, setTerm] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [status, setStatus] = useState("");
@@ -1078,6 +1080,9 @@ export function AdminProductsPage() {
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => setDetailId(p.id)} aria-label={`Xem chi tiết ${p.name}`}>
+                          Chi tiết
+                        </Button>
                         <Button
                           size="sm"
                           variant="outline"
@@ -1104,6 +1109,9 @@ export function AdminProductsPage() {
           </div>
         )}
       </Card>
+      <Modal open={detailId !== null} onClose={() => setDetailId(null)} title="Chi tiết sản phẩm" size="lg">
+        {detailId !== null && <AdminProductDetail id={detailId} />}
+      </Modal>
       <Modal
         open={form !== undefined}
         onClose={() => setForm(undefined)}

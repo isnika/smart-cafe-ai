@@ -33,6 +33,11 @@ public class ProductAdminController {
         return service.list(new ProductAdminFilter(q, categoryId, status, sort, page, size));
     }
 
+    @GetMapping("/admin/products/{id}")
+    public ApiResponse<ProductAdminResponse.Detail> detail(@PathVariable @Positive Integer id) {
+        return service.detail(id);
+    }
+
     @PostMapping("/products")
     public ResponseEntity<ApiResponse<ProductAdminResponse.Detail>> create(@RequestBody ProductCreateRequest request,
             @RequestAttribute(CatalogActor.ATTRIBUTE) CatalogActor actor) {
