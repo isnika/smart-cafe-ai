@@ -48,7 +48,9 @@ export interface AdminProductInput {
   caffeineLevel: string; flavorTags: string[]; sortOrder: number; status: 'Active' | 'Inactive';
 }
 export interface AdminProductCreateInput extends AdminProductInput {
-  variants: { variantName: string; price: number; sortOrder: number; status: 'Active' }[];
+  variants: { variantName: string; price: number; sortOrder: number; status: 'Active' | 'Inactive' }[];
+  optionGroups: { name: string; selectionType: 'Single' | 'Multiple'; isRequired: boolean; minSelect: number; maxSelect: number; sortOrder: number;
+    options: { optionName: string; extraPrice: number; isDefault: boolean; sortOrder: number; status: 'Active' | 'Inactive' }[] }[];
 }
 
 const unwrapList = <T>(value: unknown): T[] => {

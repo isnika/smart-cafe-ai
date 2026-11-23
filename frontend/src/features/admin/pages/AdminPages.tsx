@@ -31,6 +31,7 @@ import * as catalogApi from "@/shared/api/catalog";
 import { isApiError } from "@/shared/api/http";
 import { AdminRevenueSection } from "../components/AdminRevenueSection";
 import { AdminProductDetail } from "../components/AdminProductDetail";
+import { ProductConfigurationFields, newVariant, validateConfiguration, type GroupDraft } from "../components/ProductConfigurationFields";
 
 const keys = {
   branches: ["admin", "branches"] as const,
@@ -1676,9 +1677,9 @@ function AdminProductForm({
   const [temperature, setTemperature] = useState(initial?.temperature ?? "");
   const [caffeine, setCaffeine] = useState(initial?.caffeineLevel ?? "None");
   const [tags, setTags] = useState((initial?.flavorTags ?? []).join(", "));
-  const [price, setPrice] = useState(
-    initial?.price == null ? "" : String(initial.price),
-  );
+  const [productStatus, setProductStatus] = useState<"Active" | "Inactive">(initial?.status ?? "Active");
+  const [variants, setVariants] = useState(() => [newVariant()]);
+  const [groups, setGroups] = useState<GroupDraft[]>([]);
   const mutation = useMutation({
     mutationFn: () => {
       const input: api.AdminProductInput = {
@@ -1693,20 +1694,15 @@ function AdminProductForm({
           .map((tag) => tag.trim().toLowerCase())
           .filter(Boolean),
         sortOrder: initial?.sortOrder ?? 0,
-        status: initial?.status ?? "Active",
+        status: productStatus,
       };
       return initial
         ? api.updateAdminProduct(initial.id, input)
         : api.createAdminProduct({
             ...input,
-            variants: [
-              {
-                variantName: "Mặc định",
-                price: Number(price),
-                sortOrder: 0,
-                status: "Active",
-              },
-            ],
+            variants: variants.map((variant, index) => ({ variantName: variant.name.trim(), price: Number(variant.price), sortOrder: index, status: variant.status })),
+            optionGroups: groups.map((group, index) => ({ name: group.name.trim(), selectionType: group.type, isRequired: group.required, minSelect: Number(group.min), maxSelect: Number(group.max), sortOrder: index,
+              options: group.options.map((option, optionIndex) => ({ optionName: option.name.trim(), extraPrice: Number(option.price), isDefault: option.isDefault, status: option.status, sortOrder: optionIndex })) })),
           });
     },
     onSuccess: () => {
@@ -1724,6 +1720,10 @@ function AdminProductForm({
       onSubmit={(e) => {
         e.preventDefault();
         setFailure({ fields: {} });
+        if (!initial) {
+          const problem = validateConfiguration(variants, groups, productStatus);
+          if (problem) { setFailure({ global: problem, fields: {} }); return; }
+        }
         mutation.mutate();
       }}
     >
@@ -1779,7 +1779,7 @@ function AdminProductForm({
       </label>
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block text-sm font-medium">
-          Nhiệt độ
+          Cách dùng
           <select
             className={field}
             value={temperature}
@@ -1816,18 +1816,14 @@ function AdminProductForm({
         />
       </label>
       {!initial && (
-        <label className="block text-sm font-medium">
-          Giá khởi điểm (₫)
-          <input
-            className={field}
-            type="number"
-            min="0"
-            step="1000"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            required
-          />
-        </label>
+        <>
+          <label className="block text-sm font-medium">Trạng thái sản phẩm
+            <select className={field} value={productStatus} onChange={(e) => setProductStatus(e.target.value as "Active" | "Inactive")}>
+              <option value="Active">Đang bán</option><option value="Inactive">Ngừng bán</option>
+            </select>
+          </label>
+          <ProductConfigurationFields variants={variants} setVariants={setVariants} groups={groups} setGroups={setGroups} />
+        </>
       )}
       <div className="flex justify-end gap-2 border-t border-gray-100 pt-4">
         <Button type="button" variant="outline" onClick={onClose}>
@@ -1836,7 +1832,7 @@ function AdminProductForm({
         <Button
           type="submit"
           loading={mutation.isPending}
-          disabled={!categories.length || (!initial && !price)}
+          disabled={!categories.length}
         >
           {initial ? "Lưu thay đổi" : "Tạo sản phẩm"}
         </Button>

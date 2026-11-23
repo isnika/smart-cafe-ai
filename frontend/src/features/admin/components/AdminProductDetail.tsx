@@ -23,7 +23,6 @@ export function AdminProductDetail({ id }: { id: number }) {
       </div>
       <dl className="grid gap-4 text-sm sm:grid-cols-2">
         <div><dt className="text-gray-500">Danh mục</dt><dd className="mt-1 font-medium">{p.categoryName || "—"}</dd></div>
-        <div><dt className="text-gray-500">Thứ tự hiển thị</dt><dd className="mt-1 font-medium">{p.sortOrder}</dd></div>
         <div><dt className="text-gray-500">Cách dùng</dt><dd className="mt-1 font-medium">{p.temperature ? temperatureLabels[p.temperature] ?? p.temperature : "—"}</dd></div>
         <div><dt className="text-gray-500">Caffeine</dt><dd className="mt-1 font-medium">{p.caffeineLevel ? caffeineLabels[p.caffeineLevel] ?? p.caffeineLevel : "—"}</dd></div>
         <div className="sm:col-span-2"><dt className="text-gray-500">Hương vị</dt><dd className="mt-1">{p.flavorTags?.length ? p.flavorTags.join(", ") : "Chưa có"}</dd></div>
