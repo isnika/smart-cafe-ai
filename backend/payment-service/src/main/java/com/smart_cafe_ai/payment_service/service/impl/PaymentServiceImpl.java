@@ -27,6 +27,8 @@ import com.smart_cafe_ai.payment_service.util.MomoUtil;
 import com.smart_cafe_ai.payment_service.util.VnPayUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -56,6 +58,9 @@ public class PaymentServiceImpl implements PaymentService {
     private final StoreClient storeClient;
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     @Value("${payment.vnpay.url:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}")
     private String vnpayUrl;
@@ -652,10 +657,66 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
 
+    private void syncOrderPaymentStatus(Payment payment) {
+        if (entityManager == null || payment == null) {
+            return;
+        }
+        List<PaymentOrderAllocation> allocations = (payment.getAllocations() != null && !payment.getAllocations().isEmpty())
+                ? payment.getAllocations()
+                : allocationRepository.findByPaymentId(payment.getId());
+
+        if (allocations == null || allocations.isEmpty()) {
+            return;
+        }
+
+        for (PaymentOrderAllocation alloc : allocations) {
+            if (alloc.getOrderId() != null) {
+                try {
+                    entityManager.createNativeQuery(
+                            "UPDATE smart_cafe_order_db.Orders " +
+                            "SET payment_status = 'Paid', " +
+                            "    status = CASE WHEN status = 'Pending_Payment' THEN 'Pending' ELSE status END, " +
+                            "    updated_at = NOW() " +
+                            "WHERE id = :orderId"
+                    ).setParameter("orderId", alloc.getOrderId())
+                     .executeUpdate();
+
+                    BigDecimal allocAmount = alloc.getAllocatedAmount() != null ? alloc.getAllocatedAmount() : payment.getAmount();
+                    String entryKey = "payment:" + payment.getId() + ":" + alloc.getOrderId();
+                    entityManager.createNativeQuery(
+                            "INSERT INTO smart_cafe_order_db.Order_Payment_Entries (entry_key, order_id, entry_type, amount) " +
+                            "VALUES (:entryKey, :orderId, 'Payment', :amount) " +
+                            "ON DUPLICATE KEY UPDATE amount = VALUES(amount)"
+                    ).setParameter("entryKey", entryKey)
+                     .setParameter("orderId", alloc.getOrderId())
+                     .setParameter("amount", allocAmount)
+                     .executeUpdate();
+
+                    log.info("Directly synchronized order #{} payment_status to 'Paid'", alloc.getOrderId());
+                } catch (Exception e) {
+                    log.warn("Failed to directly sync order #{} payment_status: {}", alloc.getOrderId(), e.getMessage());
+                }
+            }
+        }
+    }
+
     private void publishPaymentSuccessEvent(Payment payment) {
-        List<Long> orderIds = payment.getAllocations().stream()
-                .map(PaymentOrderAllocation::getOrderId)
-                .collect(Collectors.toList());
+        syncOrderPaymentStatus(payment);
+
+        List<PaymentOrderAllocation> allocations = (payment.getAllocations() != null && !payment.getAllocations().isEmpty())
+                ? payment.getAllocations()
+                : allocationRepository.findByPaymentId(payment.getId());
+
+        List<Long> orderIds = allocations != null
+                ? allocations.stream().map(PaymentOrderAllocation::getOrderId).collect(Collectors.toList())
+                : Collections.emptyList();
+
+        List<PaymentSucceededEvent.AllocationDto> eventAllocations = allocations != null
+                ? allocations.stream().map(a -> PaymentSucceededEvent.AllocationDto.builder()
+                        .orderId(a.getOrderId())
+                        .allocatedAmount(a.getAllocatedAmount() != null ? a.getAllocatedAmount() : payment.getAmount())
+                        .build()).collect(Collectors.toList())
+                : Collections.emptyList();
 
         PaymentSucceededEvent event = PaymentSucceededEvent.builder()
                 .eventId(UUID.randomUUID().toString())
@@ -665,6 +726,7 @@ public class PaymentServiceImpl implements PaymentService {
                 .amount(payment.getAmount())
                 .transactionId(payment.getTransactionId())
                 .orderIds(orderIds)
+                .allocations(eventAllocations)
                 .paidAt(payment.getPaidAt())
                 .build();
 

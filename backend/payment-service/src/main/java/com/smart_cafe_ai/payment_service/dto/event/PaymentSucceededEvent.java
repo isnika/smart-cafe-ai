@@ -21,6 +21,16 @@ public class PaymentSucceededEvent {
     private BigDecimal amount;
     private String transactionId;
     private List<Long> orderIds;
+    private List<AllocationDto> allocations;
     private Long tableSessionId;
     private LocalDateTime paidAt;
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class AllocationDto {
+        private Long orderId;
+        private BigDecimal allocatedAmount;
+    }
 }
