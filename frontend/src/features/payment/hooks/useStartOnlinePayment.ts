@@ -18,8 +18,11 @@ export function describePaymentError(err: unknown): string {
   return 'Đã có lỗi xảy ra. Vui lòng thử lại.';
 }
 
-/** Đường dẫn trang cổng thanh toán của một giao dịch (nội bộ: mock không chuyển hướng ra cổng ngoài). */
+/** Đường dẫn trang cổng thanh toán của một giao dịch (nội bộ hoặc URL ngoài từ cổng thanh toán). */
 export function gatewayPath(orderId: number, paymentId: number, redirectUrl?: string | null): string {
+  if (redirectUrl && (redirectUrl.startsWith('http://') || redirectUrl.startsWith('https://'))) {
+    return redirectUrl;
+  }
   return redirectUrl?.startsWith('/') ? redirectUrl : `${to.payment(String(orderId))}?paymentId=${paymentId}`;
 }
 

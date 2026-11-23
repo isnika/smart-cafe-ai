@@ -13,10 +13,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
-@RequestMapping({"/inventory/logs", "/logs"})
+@RequestMapping({"/api/v1/inventory/logs", "/inventory/logs", "/logs"})
 @RequiredArgsConstructor
 public class LogController {
 
@@ -24,26 +26,36 @@ public class LogController {
 
     @GetMapping
     @PreAuthorize("hasAnyRole('MANAGER','ADMIN')")
-    public ResponseEntity<ApiResponse<List<InventoryLogResponse>>> getLogs(
+    public ResponseEntity<ApiResponse<Object>> getLogs(
             @RequestParam(name = "branch_id", required = false) Integer branchIdParam,
             @RequestParam(name = "branchId", required = false) Integer branchId,
             @RequestParam(name = "ingredient_id", required = false) Integer ingredientIdParam,
             @RequestParam(name = "ingredientId", required = false) Integer ingredientId,
             @RequestParam(name = "transaction_type", required = false) TransactionType transactionTypeParam,
             @RequestParam(name = "type", required = false) TransactionType type,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(name = "page", defaultValue = "1") int pageParam,
+            @RequestParam(name = "pageSize", required = false) Integer pageSize,
+            @RequestParam(name = "size", defaultValue = "20") int sizeParam) {
 
         Integer targetBranchId = branchIdParam != null ? branchIdParam : branchId;
         Integer targetIngredientId = ingredientIdParam != null ? ingredientIdParam : ingredientId;
         TransactionType targetType = transactionTypeParam != null ? transactionTypeParam : type;
 
-        Pageable pageable = PageRequest.of(page, size);
+        int pageIndex = pageParam > 0 ? pageParam - 1 : 0;
+        int size = (pageSize != null && pageSize > 0) ? pageSize : (sizeParam > 0 ? sizeParam : 20);
+
+        Pageable pageable = PageRequest.of(pageIndex, size);
         Page<InventoryLogResponse> result = inventoryService.getLogs(targetBranchId, targetIngredientId, targetType, pageable);
 
-        return ResponseEntity.ok(ApiResponse.success(result.getContent(),
+        Map<String, Object> pageData = new HashMap<>();
+        pageData.put("items", result.getContent());
+        pageData.put("total", result.getTotalElements());
+        pageData.put("page", pageParam > 0 ? pageParam : 1);
+        pageData.put("pageSize", size);
+
+        return ResponseEntity.ok(ApiResponse.success(pageData,
                 PageMeta.builder()
-                        .page(page)
+                        .page(pageParam > 0 ? pageParam : 1)
                         .size(size)
                         .totalElements(result.getTotalElements())
                         .totalPages(result.getTotalPages())

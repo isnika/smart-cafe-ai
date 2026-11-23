@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping({"/inventory/ingredients", "/ingredients"})
+@RequestMapping({"/api/v1/inventory/ingredients", "/inventory/ingredients", "/ingredients"})
 @RequiredArgsConstructor
 public class IngredientController {
 

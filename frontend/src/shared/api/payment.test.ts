@@ -55,6 +55,7 @@ describe('createPayment (POST /payments)', () => {
     expect(s.headers.get('Idempotency-Key')).toBe('idem-1');
     expect(s.headers.get('Authorization')).toBe('Bearer tok-1');
     expect(s.body).toEqual({
+      order_id: 42,
       branch_id: 1,
       payment_method: 'VNPay',
       allocations: [{ order_id: 42, allocated_amount: 85000 }],

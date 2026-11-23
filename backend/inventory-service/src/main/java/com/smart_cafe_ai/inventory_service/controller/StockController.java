@@ -13,13 +13,16 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping({"/inventory/stocks", "/stocks"})
 @RequiredArgsConstructor
 public class StockController {
 
     private final InventoryService inventoryService;
 
-    @GetMapping
+    @GetMapping({
+        "/api/v1/inventory/stocks", "/api/v1/inventory/stock",
+        "/inventory/stocks", "/inventory/stock",
+        "/stocks", "/stock"
+    })
     @PreAuthorize("hasAnyRole('STAFF','MANAGER','ADMIN')")
     public ResponseEntity<ApiResponse<List<StockResponse>>> getStocks(
             @RequestParam(name = "branch_id", required = false) Integer branchIdParam,
@@ -31,7 +34,12 @@ public class StockController {
         return ResponseEntity.ok(ApiResponse.success(inventoryService.getStocks(targetBranchId, targetIngredientId)));
     }
 
-    @PostMapping("/adjustments")
+    @PostMapping({
+        "/api/v1/inventory/adjustments", "/inventory/adjustments",
+        "/api/v1/inventory/stocks/adjustments", "/api/v1/inventory/stock/adjustments",
+        "/inventory/stocks/adjustments", "/inventory/stock/adjustments",
+        "/stocks/adjustments"
+    })
     @PreAuthorize("hasAnyRole('MANAGER','ADMIN')")
     public ResponseEntity<ApiResponse<StockResponse>> adjustStock(
             @Valid @RequestBody StockAdjustmentRequest request) {

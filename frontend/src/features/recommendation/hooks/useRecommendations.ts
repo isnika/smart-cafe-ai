@@ -1,12 +1,14 @@
 import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useAuthStore } from '@/features/auth/store';
+import { DINE_IN_BRANCH_ID } from '@/features/dine-in/config';
+import { useDineInCartStore } from '@/features/dine-in/store';
+import { useOnlineCartStore } from '@/features/online-order/store';
+import { intelligenceApi } from '@/shared/api';
 import { RECOMMENDATION_LIMIT, selectRecommendations } from '../model';
 
 export const RECOMMENDATIONS_KEY = ['intelligence', 'recommendations'] as const;
 
-/**
- * disabled: không có gợi ý cho người này (khách vãng lai / không phải khách hàng) → không gọi API.
- * empty   : đã đăng nhập nhưng AI chưa có gợi ý ("AI đang học dữ liệu").
- */
 export type RecommendationState = 'disabled' | 'loading' | 'error' | 'empty' | 'ready';
 
 interface Options {
@@ -14,17 +16,58 @@ interface Options {
   limit?: number;
 }
 
-/**
- * Chưa bật gợi ý cá nhân hóa vì backend hiện chưa cung cấp endpoint tương ứng.
- */
+/** Gợi ý cá nhân hóa hoặc món tương tự từ AI Gateway; khách vãng lai không gửi request. */
 export function useRecommendations({ excludeProductId, limit = RECOMMENDATION_LIMIT }: Options = {}) {
-  // API Gateway / Intelligence Service hiện chưa có /recommendations/me hoặc tracking route.
-  // Không bắn request đã biết trả 404 liên tục; bật lại khi backend cung cấp contract này.
-  const items = useMemo(() => selectRecommendations([], { excludeProductId, limit }), [excludeProductId, limit]);
-  return { state: 'disabled' as const, items, error: null, refetch: () => undefined };
-}
+  const user = useAuthStore((state) => state.user);
+  const roleName = useAuthStore((state) => state.roleName);
+  const userId = user?.id;
+  const enabled = !!userId && roleName === 'Customer';
+  const dineInBranchId = useDineInCartStore((state) => state.branchId);
+  const onlineBranchId = useOnlineCartStore((state) => state.branchId);
+  const authBranchId = useAuthStore((state) => state.branchId);
+  const branchId = dineInBranchId ?? onlineBranchId ?? authBranchId ?? DINE_IN_BRANCH_ID;
+  const mode = excludeProductId === undefined ? 'personalized' : 'similar';
+  const recommendations = useQuery({
+    queryKey: [...RECOMMENDATIONS_KEY, userId, branchId, mode, excludeProductId, limit],
+    enabled,
+    queryFn: () => intelligenceApi.getRecommendations({
+      mode,
+      ...(excludeProductId === undefined ? {} : { productId: excludeProductId }),
+      topK: limit,
+    }, branchId),
+  });
 
-/** Ghi nhận click kiểu fire-and-forget: không chờ, không chặn điều hướng; lỗi chỉ log, không ảnh hưởng UX. */
-export function trackClick(recommendationId: number): void {
-  void recommendationId;
+  const items = useMemo(() => selectRecommendations(
+    (recommendations.data?.recommendations ?? []).map((item) => ({
+      id: item.productId,
+      productId: item.productId,
+      confidenceScore: item.score ?? 0,
+      reason: item.reason,
+      product: {
+        id: item.productId,
+        name: item.name,
+        image: item.image ?? null,
+        price: item.priceVnd ?? null,
+        maxPrice: item.priceVnd ?? null,
+      },
+    })),
+    { excludeProductId, limit },
+  ), [recommendations.data, excludeProductId, limit]);
+
+  const state: RecommendationState = !enabled
+    ? 'disabled'
+    : recommendations.isPending
+      ? 'loading'
+      : recommendations.isError
+        ? 'error'
+        : items.length > 0
+          ? 'ready'
+          : 'empty';
+
+  return {
+    state,
+    items,
+    error: recommendations.error,
+    refetch: () => void recommendations.refetch(),
+  };
 }

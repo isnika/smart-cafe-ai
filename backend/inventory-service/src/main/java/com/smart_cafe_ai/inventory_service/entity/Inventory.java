@@ -42,4 +42,7 @@ public class Inventory {
     @Version
     @Column(name = "version")
     private Long version;
+
+    @Column(name = "updated_at")
+    private java.time.LocalDateTime updatedAt;
 }

@@ -84,12 +84,13 @@ services:
       - "${FRONTEND_PORT:-5173}:80"
 
     env_file:
-      - ./frontend/.env
+      - path: ./frontend/.env
+        required: false
 
     environment:
-      # Trình duyệt gọi backend qua cổng public trên máy.
-      # Đổi tên biến theo tên frontend đang sử dụng.
-      VITE_API_BASE_URL: http://localhost:${BACKEND_PORT:-8080}
+      API_PROXY_TARGET: http://backend:8080
+      AI_PROXY_TARGET: http://ai-service:8000
+      VITE_API_BASE_URL: /api/v1
 
     depends_on:
       backend:

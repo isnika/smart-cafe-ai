@@ -74,9 +74,10 @@ public class InventoryServiceImpl implements InventoryService {
     @Transactional
     public StockResponse adjustStock(StockAdjustmentRequest request) {
         if (request.getTransactionType() != TransactionType.Adjustment
-                && request.getTransactionType() != TransactionType.Waste) {
+                && request.getTransactionType() != TransactionType.Waste
+                && request.getTransactionType() != TransactionType.Stocktake) {
             throw new BusinessException("INVALID_TRANSACTION_TYPE",
-                    "Chỉ chấp nhận loại giao dịch Adjustment hoặc Waste");
+                    "Chỉ chấp nhận loại giao dịch Adjustment, Waste hoặc Stocktake");
         }
 
         Ingredient ingredient = ingredientRepository.findById(request.getIngredientId())
@@ -143,8 +144,11 @@ public class InventoryServiceImpl implements InventoryService {
                     .ingredientName(ingredient != null ? ingredient.getName() : "Unknown")
                     .transactionType(logEntry.getTransactionType())
                     .quantityChanged(logEntry.getQuantityChanged())
+                    .balanceAfter(logEntry.getBalanceAfter())
                     .referenceType(logEntry.getReferenceType())
                     .referenceId(logEntry.getReferenceId())
+                    .reason(logEntry.getReason())
+                    .createdBy(logEntry.getCreatedBy())
                     .createdAt(logEntry.getCreatedAt())
                     .build();
         });
@@ -457,14 +461,27 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     private StockResponse toStockResponse(Inventory inventory, Ingredient ingredient) {
+        BigDecimal reserved = inventory.getReservedQuantity() != null ? inventory.getReservedQuantity() : BigDecimal.ZERO;
+        BigDecimal inStock = inventory.getQuantityInStock() != null ? inventory.getQuantityInStock() : BigDecimal.ZERO;
+        BigDecimal available = inStock.subtract(reserved);
+        BigDecimal reorder = inventory.getReorderLevel() != null ? inventory.getReorderLevel() : BigDecimal.ZERO;
+        boolean isLow = available.compareTo(reorder) <= 0;
+
         return StockResponse.builder()
                 .id(inventory.getId())
                 .branchId(inventory.getBranchId())
                 .ingredientId(inventory.getIngredientId())
                 .ingredientName(ingredient != null ? ingredient.getName() : "Unknown")
                 .unit(ingredient != null ? ingredient.getUnit() : "")
-                .quantityInStock(inventory.getQuantityInStock())
-                .averageCost(ingredient != null ? ingredient.getAverageCost() : null)
+                .quantityInStock(inStock)
+                .reservedQuantity(reserved)
+                .availableQuantity(available)
+                .available(available)
+                .isLow(isLow)
+                .reorderLevel(reorder)
+                .averageCost(ingredient != null ? ingredient.getAverageCost() : (inventory.getAverageCost() != null ? inventory.getAverageCost() : BigDecimal.ZERO))
+                .version(inventory.getVersion() != null ? inventory.getVersion() : 0L)
+                .updatedAt(inventory.getUpdatedAt() != null ? inventory.getUpdatedAt() : java.time.LocalDateTime.now())
                 .build();
     }
 }

@@ -34,15 +34,17 @@ export function ForecastLineChart({ points }: { points: RevenuePoint[] }) {
   const step = Math.max(1, Math.ceil(n / MAX_LABELS));
 
   const forecastDays = points.filter((p) => p.isForecast);
+  const hasActual = points.some((p) => p.actual !== null);
+  const hasBand = !!bandPath;
   const total = forecastDays.reduce((s, p) => s + p.predicted, 0);
   const summary = `Biểu đồ doanh thu: ${n} ngày, gồm lịch sử thực tế và dự báo ${forecastDays.length} ngày tới, tổng dự báo ${formatVnd(total)}.`;
 
   return (
     <figure className="space-y-2">
       <ul className="flex flex-wrap gap-x-4 gap-y-1 text-caption text-gray-600" aria-label="Chú giải">
-        <li className="flex items-center gap-1.5"><span aria-hidden className="h-0.5 w-4 rounded bg-gray-400" />Lịch sử thực tế</li>
+        {hasActual && <li className="flex items-center gap-1.5"><span aria-hidden className="h-0.5 w-4 rounded bg-gray-400" />Lịch sử thực tế</li>}
         <li className="flex items-center gap-1.5"><span aria-hidden className="h-0.5 w-4 rounded bg-primary-600" />Dự báo AI</li>
-        <li className="flex items-center gap-1.5"><span aria-hidden className="h-3 w-4 rounded-sm bg-primary-600/15" />Khoảng dự báo (thấp nhất – cao nhất)</li>
+        {hasBand && <li className="flex items-center gap-1.5"><span aria-hidden className="h-3 w-4 rounded-sm bg-primary-600/15" />Khoảng dự báo (thấp nhất – cao nhất)</li>}
       </ul>
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={summary} className="h-auto w-full">
         {ticks.map((tick) => (
@@ -78,7 +80,9 @@ export function ForecastLineChart({ points }: { points: RevenuePoint[] }) {
           );
         })}
       </svg>
-      <figcaption className="text-caption text-gray-500">Đơn vị: VND/ngày · đường nâu là dự báo, đường xám là doanh thu thực tế đã ghi nhận.</figcaption>
+      <figcaption className="text-caption text-gray-500">
+        {hasActual ? 'Đơn vị: VND/ngày · đường nâu là dự báo, đường xám là doanh thu thực tế đã ghi nhận.' : 'Đơn vị: VND/ngày · dữ liệu doanh thu dự báo trực tiếp từ AI API.'}
+      </figcaption>
     </figure>
   );
 }

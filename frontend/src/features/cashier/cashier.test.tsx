@@ -28,7 +28,7 @@ afterEach(() => {
 beforeEach(async () => {
   resetWorld();
   seedDemoOrders();
-  loginAs('Staff');
+  loginAs('Staff', { id: 'u-staff', branchId: 1 });
   configureHttp({ getToken: () => mockAccessToken('u-staff') });
   await cashierShiftApi.openCashierShift({ branchId: 1, openingCash: 300_000 });
 });
@@ -50,7 +50,10 @@ describe('/staff — Dashboard', () => {
   });
 
   it('lỗi tải thống kê → có thông báo và Thử lại', async () => {
-    server.use(http.get(url('/orders-svc/orders'), () => HttpResponse.json({ message: 'Máy chủ lỗi' }, { status: 500 })));
+    server.use(http.get(url('/orders'), () => HttpResponse.json({
+      success: false,
+      error: { code: 'INTERNAL_ERROR', message: 'Máy chủ lỗi' },
+    }, { status: 500 })));
     renderApp('/staff');
     expect((await screen.findByRole('alert')).textContent).toContain('Máy chủ lỗi');
     server.resetHandlers();
@@ -144,7 +147,7 @@ describe('Tab Thu ngân', () => {
   });
 
   it('lỗi tải → thông báo + Thử lại; tải lại thành công', async () => {
-    server.use(http.get(url('/orders-svc/orders'), () => HttpResponse.json({ message: 'Máy chủ lỗi' }, { status: 500 })));
+    server.use(http.get(url('/orders'), () => HttpResponse.json({ message: 'Máy chủ lỗi' }, { status: 500 })));
     renderApp('/staff?tab=cashier');
     expect((await screen.findByRole('alert')).textContent).toContain('Máy chủ lỗi');
     server.resetHandlers();

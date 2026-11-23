@@ -40,6 +40,20 @@ function sellableCatalog(branchId: number): ChatCatalogItem[] {
 }
 
 export const chatHandlers = [
+  // POST /chat → AI Service response used by the customer chatbot.
+  http.post(
+    url('/chat'),
+    guarded(async ({ request }) => {
+      const body = await readJson<{ message?: string }>(request);
+      const message = typeof body.message === 'string' ? body.message.trim() : '';
+      if (!message) fail(422, 'VALIDATION_ERROR', 'Tin nhắn không được để trống');
+      if (message.length > 2000) fail(422, 'VALIDATION_ERROR', 'Tin nhắn tối đa 2000 ký tự');
+      await delay(randomDelay());
+      const reply = buildAiReply(message, sellableCatalog(BRANCH_ID));
+      return HttpResponse.json({ answer: reply.content, sources: [] });
+    }),
+  ),
+
   // POST /chat/sessions   body: { userId? | guestKey?, branchId? }
   // Idempotent theo chủ phiên: còn phiên chưa đóng của cùng userId/guestKey thì trả lại phiên đó (200) để mở lại panel vẫn thấy lịch sử.
   http.post(

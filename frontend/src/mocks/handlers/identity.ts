@@ -18,6 +18,7 @@ export interface MockAccount {
   phone: string | null;
   password: string;
   fullName: string;
+  avatar?: string | null;
   roleName: RoleName;
   status: UserStatus;
   branchId: number | null;
@@ -145,7 +146,7 @@ function toUser(a: MockAccount): User {
     email: a.email,
     phone: a.phone,
     fullName: a.fullName,
-    avatar: null,
+    avatar: a.avatar ?? null,
     roleId: ROLE_IDS[a.roleName],
     roleName: a.roleName,
     status: a.status,
@@ -154,6 +155,7 @@ function toUser(a: MockAccount): User {
     lastLoginAt: a.lastLoginAt,
     createdAt: a.createdAt,
     updatedAt: a.createdAt,
+    branchId: identityMockConfig.omitBranchId && (a.roleName === 'Staff' || a.roleName === 'Manager') ? null : a.branchId,
   };
 }
 
@@ -235,6 +237,27 @@ export const identityHandlers = [
 
   // GET /users/me  (luôn cần token hợp lệ, không phụ thuộc mockConfig.enforceAuth)
   http.get(url('/users/me'), guardedV1(({ request }) => ok(toUser(requireAccount(request))))),
+  // PUT /users/me
+  http.put(url('/users/me'), guardedV1(async ({ request }) => {
+    const account = requireAccount(request);
+    const body = await readJson<{ fullName?: string }>(request);
+    if (typeof body.fullName !== 'string' || !body.fullName.trim()) {
+      fail(400, 'VALIDATION_ERROR', 'Họ tên không được để trống');
+    }
+    account.fullName = body.fullName.trim();
+    return ok(toUser(account));
+  })),
+  // POST /users/me/avatar
+  http.post(url('/users/me/avatar'), guardedV1(async ({ request }) => {
+    const account = requireAccount(request);
+    const form = await request.formData();
+    const file = form.get('file');
+    if (!(file instanceof File) || file.size === 0) {
+      fail(400, 'VALIDATION_ERROR', 'Vui lòng chọn một ảnh đại diện');
+    }
+    account.avatar = URL.createObjectURL(file);
+    return ok({ avatar: account.avatar });
+  })),
 
   // ── Đường dẫn cũ /identity/... (payload trần camelCase) — giữ để test/handler hiện có không vỡ ──
   http.post(

@@ -2,18 +2,16 @@ import { Coffee, Plus, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { to } from '@/app/routes';
 import { priceLabel } from '@/features/dine-in/cart';
-import type { MenuProduct, RecommendationView } from '@/shared/types';
+import type { RecommendationCardItem } from '../model';
 
 interface Props {
-  item: RecommendationView;
-  /** Bấm vào thẻ (trước khi điều hướng) – dùng để ghi nhận lượt click. */
-  onOpen: (item: RecommendationView) => void;
+  item: RecommendationCardItem;
   /** Có → hiện nút thêm vào giỏ (chỉ khi khách đã chọn Giao hàng / Mang đi). */
-  onAdd?: (product: MenuProduct) => void;
+  onAdd?: () => void;
 }
 
 /** Thẻ gợi ý: cả thẻ bấm được (liên kết nằm trên tên món, phủ kín thẻ); nút thêm giỏ bấm riêng. */
-export function RecommendationCard({ item, onOpen, onAdd }: Props) {
+export function RecommendationCard({ item, onAdd }: Props) {
   const { product, reason } = item;
   return (
     <article className="relative flex h-full flex-col overflow-hidden rounded-xl border border-primary-100 bg-white shadow-card focus-within:ring-2 focus-within:ring-ai-from">
@@ -30,7 +28,6 @@ export function RecommendationCard({ item, onOpen, onAdd }: Props) {
         <h3 className="line-clamp-2 min-h-10 text-body font-semibold text-gray-900">
           <Link
             to={to.product(String(product.id))}
-            onClick={() => onOpen(item)}
             className="after:absolute after:inset-0 after:content-[''] focus-visible:outline-none"
           >
             {product.name}
@@ -47,7 +44,7 @@ export function RecommendationCard({ item, onOpen, onAdd }: Props) {
           {onAdd && (
             <button
               type="button"
-              onClick={() => onAdd(product)}
+              onClick={onAdd}
               aria-label={`Thêm ${product.name} vào giỏ`}
               className="relative z-10 grid size-8 shrink-0 place-items-center rounded-full bg-primary-600 text-white hover:bg-primary-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ai-from"
             >

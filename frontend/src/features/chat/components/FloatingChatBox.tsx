@@ -1,10 +1,10 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
-import { AlertCircle, Bot, Headset, Loader2, RefreshCw, Send, User, X } from 'lucide-react';
+import { AlertCircle, Bot, Loader2, RefreshCw, Send, User, X } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 import { Button } from '@/shared/ui';
 import type { ChatMessage } from '@/shared/types';
 import { useChat } from '../hooks/useChat';
-import { HANDLER_NOTICE, MAX_MESSAGE_LENGTH, SUGGESTED_PROMPTS, isPendingMessage, productCardsOf } from '../model';
+import { MAX_MESSAGE_LENGTH, SUGGESTED_PROMPTS, isPendingMessage, productCardsOf } from '../model';
 import { ChatProductCard } from './ChatProductCard';
 
 const MAX_INPUT_HEIGHT = 112;
@@ -18,9 +18,7 @@ export function FloatingChatBox() {
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const closed = chat.handler === 'closed';
-  const inputLocked = !chat.ready || chat.sending || closed;
-  const canHandOff = chat.ready && chat.handler === 'ai' && !chat.handingOff;
+  const inputLocked = !chat.ready || chat.sending;
 
   // Tự cuộn xuống cuối khi có tin mới / đang gõ / đổi trạng thái.
   useEffect(() => {
@@ -68,21 +66,8 @@ export function FloatingChatBox() {
             <Bot className="size-5 shrink-0" aria-hidden />
             <div className="min-w-0 flex-1">
               <h2 className="truncate text-body font-semibold">Trợ lý AI</h2>
-              <p className="truncate text-caption opacity-90">
-                {chat.handler === 'ai' ? 'Gợi ý món theo khẩu vị của bạn' : chat.handler === 'closed' ? 'Đã kết thúc' : 'Đang chờ nhân viên'}
-              </p>
+              <p className="truncate text-caption opacity-90">Gợi ý món theo khẩu vị của bạn</p>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={chat.handOff}
-              disabled={!canHandOff}
-              loading={chat.handingOff}
-              leftIcon={<Headset className="size-4" aria-hidden />}
-              className="shrink-0 bg-white/15 text-white hover:bg-white/25 active:bg-white/30 disabled:opacity-60"
-            >
-              Chuyển nhân viên
-            </Button>
           </header>
 
           <div
@@ -118,21 +103,19 @@ export function FloatingChatBox() {
                     Xin chào! Mình là trợ lý AI của quán. Bạn muốn uống gì hôm nay? Hỏi mình để được gợi ý món nhé.
                   </p>
                 </div>
-                {!closed && (
-                  <div className="flex flex-wrap gap-2 pl-9" aria-label="Câu hỏi gợi ý">
-                    {SUGGESTED_PROMPTS.map((prompt) => (
-                      <button
-                        key={prompt}
-                        type="button"
-                        onClick={() => submit(prompt)}
-                        disabled={inputLocked}
-                        className="rounded-full border border-ai-from/30 bg-white px-3 py-1.5 text-caption text-ai-from hover:bg-ai-glow/20 disabled:cursor-not-allowed disabled:border-gray-300 disabled:bg-gray-100 disabled:text-gray-600"
-                      >
-                        {prompt}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                <div className="flex flex-wrap gap-2 pl-9" aria-label="Câu hỏi gợi ý">
+                  {SUGGESTED_PROMPTS.map((prompt) => (
+                    <button
+                      key={prompt}
+                      type="button"
+                      onClick={() => submit(prompt)}
+                      disabled={inputLocked}
+                      className="rounded-full border border-ai-from/30 bg-white px-3 py-1.5 text-caption text-ai-from hover:bg-ai-glow/20 disabled:cursor-not-allowed disabled:border-gray-300 disabled:bg-gray-100 disabled:text-gray-600"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -154,12 +137,6 @@ export function FloatingChatBox() {
               </div>
             )}
 
-            {chat.handler !== 'ai' && (
-              <p role="status" className="self-center rounded-full bg-white px-3 py-1.5 text-center text-caption text-gray-600 shadow-card">
-                {HANDLER_NOTICE[chat.handler]}
-              </p>
-            )}
-
             {chat.sendError && (
               <div role="alert" className="flex items-center justify-between gap-2 rounded-md bg-error-soft p-2.5 text-body text-error-strong">
                 <span className="flex items-center gap-1.5">
@@ -171,16 +148,6 @@ export function FloatingChatBox() {
               </div>
             )}
 
-            {chat.handOffError && (
-              <div role="alert" className="flex items-center justify-between gap-2 rounded-md bg-error-soft p-2.5 text-body text-error-strong">
-                <span className="flex items-center gap-1.5">
-                  <AlertCircle className="size-4 shrink-0" aria-hidden /> Chưa chuyển được cho nhân viên.
-                </span>
-                <Button size="sm" variant="outline" onClick={chat.handOff} disabled={!canHandOff}>
-                  Thử lại
-                </Button>
-              </div>
-            )}
           </div>
 
           <form
@@ -197,7 +164,7 @@ export function FloatingChatBox() {
               maxLength={MAX_MESSAGE_LENGTH}
               disabled={inputLocked}
               aria-label="Nhập tin nhắn"
-              placeholder={closed ? 'Cuộc trò chuyện đã kết thúc' : chat.handler === 'ai' ? 'Nhắn cho trợ lý AI…' : 'Nhắn cho nhân viên…'}
+              placeholder="Nhắn cho trợ lý AI…"
               onChange={(e) => {
                 setDraft(e.target.value);
                 resizeInput(e.target);

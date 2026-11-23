@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
+  BarChart3,
   ClipboardList,
   Coffee,
   Building2,
@@ -12,6 +13,7 @@ import {
   Sparkles,
   Users,
   CalendarDays,
+  Tags,
 } from "lucide-react";
 import type { ComponentType } from "react";
 import { useAuthStore } from "@/features/auth/store";
@@ -44,9 +46,11 @@ const navByRole: Record<Exclude<RoleName, "Customer">, NavItem[]> = {
   ],
   Admin: [
     { to: "/admin", label: "Tổng quan", icon: LayoutDashboard, end: true },
+    { to: "/admin/revenue", label: "Doanh thu", icon: BarChart3 },
     { to: "/admin/branches", label: "Chi nhánh", icon: Building2 },
     { to: "/admin/tables", label: "Bàn & QR", icon: QrCode },
     { to: "/admin/products", label: "Sản phẩm", icon: Coffee },
+    { to: "/admin/categories", label: "Danh mục", icon: Tags },
     { to: "/admin/menus", label: "Thực đơn chi nhánh", icon: ClipboardList },
     { to: "/admin/users", label: "Tài khoản & Quyền", icon: Users },
   ],

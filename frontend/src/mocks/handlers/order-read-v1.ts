@@ -17,7 +17,7 @@ import { accountFromRequest, type MockAccount } from './identity';
  *  - Đơn của người khác và đơn không tồn tại đều trả 404 ORDER_NOT_FOUND (không lộ việc đơn có thật).
  *  - `status` (vòng đời đơn) và `payment_status` (read-model thanh toán) là hai trường riêng, không lẫn nhau.
  *  - Timestamp giữ đúng dạng DB (UTC, không hậu tố Z) để http.ts → normalizeTimestamps chạy thật.
- *  - Không đụng handler legacy /orders-svc/* (staff queue, cashier, dashboard vẫn dùng chúng trên cùng db.orders).
+ *  - Danh sách staff/manager dùng contract v1 /orders; các handler alias legacy chỉ giữ cho kiểm thử tương thích.
  */
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -176,9 +176,15 @@ export const orderReadV1Handlers = [
     const requestedBranch = sp.has('branch_id') ? intParam(sp, 'branch_id', 1, 1) : viewer.branchId;
     if (requestedBranch === null) fail(400, 'VALIDATION_ERROR', 'branch_id là bắt buộc');
     if (viewer.roleName !== 'Admin' && requestedBranch !== viewer.branchId) fail(403, 'FORBIDDEN', 'Không có quyền xem đơn của chi nhánh này');
+    const status = enumParam(sp, 'status', ORDER_STATUS_VALUES);
     const page = intParam(sp, 'page', 1, 1);
     const size = intParam(sp, 'size', DEFAULT_PAGE_SIZE, 1, MAX_PAGE_SIZE);
-    const rows = db.orders.filter((o) => o.branchId === requestedBranch).sort((a, b) => utcMs(b.createdAt) - utcMs(a.createdAt));
+    const sort = sortParam(sp);
+    const key = SORT_FIELDS[sort.field];
+    const rows = db.orders
+      .filter((o) => o.branchId === requestedBranch)
+      .filter((o) => status === undefined || o.status === status)
+      .sort((a, b) => sort.dir * (key(a) - key(b)) || sort.dir * (a.id - b.id));
     const start = (page - 1) * size;
     return ok(rows.slice(start, start + size), { page, size, total: rows.length, totalPages: Math.ceil(rows.length / size) });
   })),
@@ -210,6 +216,17 @@ export const orderReadV1Handlers = [
     return ok(rows.slice(start, start + size).map(summaryView), { page, size, total: rows.length });
   })),
 
+  // GET /orders/{id} — Staff/Manager in the order's branch.
+  http.get(url('/orders/:id'), guardedV1(({ request, params }) => {
+    const viewer = staffOf(request);
+    const id = parseId(params.id);
+    const order = db.orders.find((candidate) =>
+      candidate.id === id && (viewer.roleName === 'Admin' || candidate.branchId === viewer.branchId),
+    );
+    if (!order) return notFound(id);
+    return ok(detailView(order, viewer));
+  })),
+
   // GET /orders/me/:id
   http.get(url('/orders/me/:id'), guardedV1(({ request, params }) => {
     const me = customerOf(request);
@@ -234,5 +251,117 @@ export const orderReadV1Handlers = [
         : viewer.branchId === null || viewer.branchId === order.branchId); // nhân viên chỉ xem đơn chi nhánh mình
     if (!order || !allowed) return notFound(id);
     return ok(sortedHistory(order).map((h) => historyView(h, viewer)));
+  })),
+
+  // GET /orders/reports/revenue — Doanh thu tổng quan & 3 chi nhánh
+  http.get(url('/orders/reports/revenue'), guardedV1(({ request }) => {
+    staffOf(request);
+    const sp = new URL(request.url).searchParams;
+    const branchParam = sp.get('branch_id');
+    const branchId = branchParam ? Number(branchParam) : null;
+    const from = sp.get('from') || '2026-11-01';
+    const to = sp.get('to') || '2026-11-23';
+
+    const branchOrders = db.orders.filter((o) => branchId === null || o.branchId === branchId);
+    const completed = branchOrders.filter((o) => o.status === 'Completed' || o.paymentStatus === 'Paid');
+    const totalRev = completed.reduce((sum, o) => sum + (o.finalAmount || 0), 0) || 297000;
+    const completedCount = completed.length || 5;
+
+    const b1Rev = Math.round(totalRev * 0.46);
+    const b2Rev = Math.round(totalRev * 0.37);
+    const b3Rev = totalRev - b1Rev - b2Rev;
+
+    return ok({
+      from,
+      to,
+      branch_id: branchId,
+      summary: {
+        total_revenue: totalRev,
+        sub_total: Math.round(totalRev * 0.85),
+        item_discount_amount: 0,
+        voucher_discount_amount: 0,
+        delivery_fee: Math.round(totalRev * 0.15),
+        vat_amount: 0,
+        total_orders: branchOrders.length || 8,
+        completed_orders: completedCount,
+        cancelled_orders: 0,
+        average_order_value: Math.round(totalRev / Math.max(1, completedCount)),
+      },
+      by_branch: [
+        { branch_id: 1, orders_count: Math.round(completedCount * 0.45) || 2, revenue: b1Rev, percentage: 46.13 },
+        { branch_id: 2, orders_count: Math.round(completedCount * 0.35) || 2, revenue: b2Rev, percentage: 37.04 },
+        { branch_id: 3, orders_count: Math.round(completedCount * 0.20) || 1, revenue: b3Rev, percentage: 16.84 },
+      ].filter((b) => branchId === null || b.branch_id === branchId),
+      timeline: [
+        { period: '2026-11-18', orders_count: 1, revenue: Math.round(totalRev * 0.22) },
+        { period: '2026-11-19', orders_count: 1, revenue: Math.round(totalRev * 0.18) },
+        { period: '2026-11-20', orders_count: 1, revenue: Math.round(totalRev * 0.25) },
+        { period: '2026-11-21', orders_count: 1, revenue: Math.round(totalRev * 0.15) },
+        { period: '2026-11-22', orders_count: 1, revenue: Math.round(totalRev * 0.20) },
+      ],
+    });
+  })),
+
+  // GET /orders/reports/revenue/branches — Phân bổ doanh thu 3 chi nhánh
+  http.get(url('/orders/reports/revenue/branches'), guardedV1(({ request }) => {
+    staffOf(request);
+    const sp = new URL(request.url).searchParams;
+    const branchParam = sp.get('branch_id');
+    const branchId = branchParam ? Number(branchParam) : null;
+    const from = sp.get('from') || '2026-11-01';
+    const to = sp.get('to') || '2026-11-23';
+
+    const totalRev = 297000;
+    const b1Rev = 137000;
+    const b2Rev = 110000;
+    const b3Rev = 50000;
+
+    const branches = [
+      {
+        branch_id: 1,
+        orders_count: 2,
+        sub_total: 107000,
+        item_discount_amount: 0,
+        voucher_discount_amount: 0,
+        delivery_fee: 30000,
+        vat_amount: 0,
+        final_amount: b1Rev,
+        average_order_value: 68500,
+        revenue_percentage: 46.13,
+      },
+      {
+        branch_id: 2,
+        orders_count: 2,
+        sub_total: 80000,
+        item_discount_amount: 0,
+        voucher_discount_amount: 0,
+        delivery_fee: 30000,
+        vat_amount: 0,
+        final_amount: b2Rev,
+        average_order_value: 55000,
+        revenue_percentage: 37.04,
+      },
+      {
+        branch_id: 3,
+        orders_count: 1,
+        sub_total: 35000,
+        item_discount_amount: 0,
+        voucher_discount_amount: 0,
+        delivery_fee: 15000,
+        vat_amount: 0,
+        final_amount: b3Rev,
+        average_order_value: 50000,
+        revenue_percentage: 16.84,
+      },
+    ].filter((b) => branchId === null || b.branch_id === branchId);
+
+    return ok({
+      from,
+      to,
+      branch_id: branchId,
+      total_orders: 5,
+      total_revenue: totalRev,
+      branches,
+    });
   })),
 ];

@@ -20,6 +20,8 @@ public class StockResponse {
     private BigDecimal quantityInStock;
     private BigDecimal reservedQuantity;
     private BigDecimal availableQuantity;
+    private BigDecimal available;
+    private Boolean isLow;
     private BigDecimal reorderLevel;
     private BigDecimal averageCost;
     private Long version;

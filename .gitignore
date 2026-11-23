@@ -38,3 +38,4 @@ backend/tools/
 !backend/push-docker.ps1
 !backend/push-docker.sh
 !frontend/publish-docker.ps1
+!frontend/docker-entrypoint.sh

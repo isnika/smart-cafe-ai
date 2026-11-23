@@ -2,7 +2,7 @@ import type { ChangeOrderStatusInput, CreateOrderInput, ListOrdersParams, OrderD
 import { http } from './http';
 import { guestHeaders, HEADER_IDEMPOTENCY_KEY } from './guest';
 
-const P = '/orders-svc';
+const P = '/orders';
 
 /** Branch with the most completed orders; public aggregate only. */
 export const getBestSellingBranchId = () => http.get<number | null>('/orders/public/best-selling-branch', { auth: false });
@@ -175,11 +175,52 @@ export const removeCartItem = (ctx: CartCtx, itemId: number) => http.delete(`/ca
 export const clearCart = (ctx: CartCtx) => http.delete('/carts/current', cartOpts(ctx));
 
 // Order
-/** @deprecated Legacy (mock /orders-svc, body `lines`) – Online/POS. Dine-in QR dùng createQrOrder. */
-export const createOrder = (input: CreateOrderInput) => http.post<OrderDetail>(`${P}/orders`, input);
-/** Page<OrderDetail>: Kanban cần items/tableNumber để vẽ card mà không phải gọi N lần. */
-export const listOrders = (params: ListOrdersParams = {}, signal?: AbortSignal) =>
-  http.get<Page<OrderDetail>>(`${P}/orders`, { query: params, signal });
+/** @deprecated Legacy body `lines`; Online/POS use the dedicated checkout flows. */
+export const createOrder = (input: CreateOrderInput) => http.post<OrderDetail>(P, input);
+
+async function listOrderPage(params: ListOrdersParams, signal?: AbortSignal): Promise<Page<OrderDetail>> {
+  const page = params.page ?? 1;
+  const pageSize = params.pageSize ?? 20;
+  const { data, meta } = await http.getWithMeta<OrderDetail[] | Page<OrderDetail>>(P, {
+    query: {
+      branch_id: params.branchId,
+      status: params.status,
+      payment_status: params.paymentStatus,
+      order_source: params.orderSource,
+      fulfillment_type: params.fulfillmentType,
+      from: params.from,
+      to: params.to,
+      page,
+      size: pageSize,
+      sort: params.cashier === 'feed' ? 'created_at,asc' : 'created_at,desc',
+    },
+    signal,
+  });
+  const items = (Array.isArray(data) ? data : data.items ?? []).map(toOrderDetail);
+  return {
+    items,
+    total: Number(meta?.total ?? (Array.isArray(data) ? items.length : data.total)),
+    page: meta?.page ?? (Array.isArray(data) ? page : data.page),
+    pageSize: meta?.size ?? (Array.isArray(data) ? pageSize : data.pageSize),
+  };
+}
+
+/** Page<OrderDetail>: Kanban cần items/tableNumber mà không phải gọi N lần. */
+export async function listOrders(params: ListOrdersParams = {}, signal?: AbortSignal): Promise<Page<OrderDetail>> {
+  const statuses = Array.isArray(params.status) ? [...new Set(params.status)] : [params.status];
+  if (statuses.length <= 1) return listOrderPage(params, signal);
+
+  const pages = await Promise.all(statuses.map((status) => listOrderPage({ ...params, status }, signal)));
+  const items = [...new Map(pages.flatMap((page) => page.items).map((order) => [order.id, order])).values()];
+  const direction = params.cashier === 'feed' ? 1 : -1;
+  items.sort((a, b) => direction * (Date.parse(a.createdAt) - Date.parse(b.createdAt)) || a.id - b.id);
+  return {
+    items,
+    total: pages.reduce((total, page) => total + page.total, 0),
+    page: params.page ?? 1,
+    pageSize: params.pageSize ?? pages[0]?.pageSize ?? 20,
+  };
+}
 
 /** Dashboard Manager: backend v1 contract, branch scoped. */
 export async function listManagerOrders(branchId: number, size = 100, signal?: AbortSignal): Promise<Page<OrderDetail>> {
@@ -190,11 +231,21 @@ export async function listManagerOrders(branchId: number, size = 100, signal?: A
   const items = Array.isArray(data) ? data : wrapped?.items ?? [];
   return { items, total: Number(meta?.total ?? wrapped?.total ?? items.length), page: meta?.page ?? wrapped?.page ?? 1, pageSize: meta?.size ?? wrapped?.size ?? wrapped?.pageSize ?? size };
 }
-export const getOrder = (id: number) => http.get<OrderDetail>(`${P}/orders/${id}`);
+export const getOrder = async (id: number) => toOrderDetail(await http.get<unknown>(`${P}/${id}`));
 
 /** Lệch version → ApiError 409 VERSION_CONFLICT; sai transition → INVALID_TRANSITION. */
-export const changeOrderStatus = (id: number, input: ChangeOrderStatusInput) =>
-  http.patch<OrderDetail>(`${P}/orders/${id}/status`, input);
+export const changeOrderStatus = async (id: number, input: ChangeOrderStatusInput) => {
+  const isCancellation = input.to === 'Cancelled' || input.to === 'Rejected';
+  return toOrderDetail(await http.patch<unknown>(
+    `${P}/${id}/status`,
+    {
+      status: input.to,
+      version: input.version,
+      ...(isCancellation ? { cancelReason: input.note } : { note: input.note }),
+    },
+    { snake: true },
+  ));
+};
 
 // ── Đặt hàng QR (spec: POST /orders) ──────────────────────────────────
 const MONEY_KEYS = new Set([
@@ -302,3 +353,72 @@ export const createOnlineOrder = async (
       },
     ),
   );
+
+// ── Báo cáo Doanh thu Admin / Chi nhánh ──────────────────────────────
+export interface RevenueSummary {
+  totalRevenue: number;
+  subTotal: number;
+  itemDiscountAmount: number;
+  voucherDiscountAmount: number;
+  deliveryFee: number;
+  vatAmount: number;
+  totalOrders: number;
+  completedOrders: number;
+  cancelledOrders: number;
+  averageOrderValue: number;
+}
+
+export interface BranchRevenueItem {
+  branchId: number;
+  ordersCount: number;
+  subTotal?: number;
+  itemDiscountAmount?: number;
+  voucherDiscountAmount?: number;
+  deliveryFee?: number;
+  vatAmount?: number;
+  finalAmount?: number;
+  revenue?: number;
+  averageOrderValue?: number;
+  percentage?: number;
+  revenuePercentage?: number;
+}
+
+export interface RevenueTimelinePoint {
+  period: string;
+  ordersCount: number;
+  revenue: number;
+}
+
+export interface RevenueOverviewResponse {
+  from: string;
+  to: string;
+  branchId: number | null;
+  summary: RevenueSummary;
+  byBranch: BranchRevenueItem[];
+  timeline: RevenueTimelinePoint[];
+}
+
+export interface RevenueByBranchesResponse {
+  from: string;
+  to: string;
+  branchId: number | null;
+  totalOrders: number;
+  totalRevenue: number;
+  branches: BranchRevenueItem[];
+}
+
+export interface RevenueReportParams {
+  branchId?: number;
+  from?: string; // YYYY-MM-DD
+  to?: string;   // YYYY-MM-DD
+  groupBy?: 'day' | 'week' | 'month';
+  orderSource?: 'Online' | 'QR' | 'POS';
+  fulfillmentType?: 'Delivery' | 'Pickup' | 'Dine_In';
+}
+
+export const getRevenueOverview = (params?: RevenueReportParams) =>
+  http.get<RevenueOverviewResponse>('/orders/reports/revenue', { query: params, snake: true });
+
+export const getRevenueByBranches = (params?: RevenueReportParams) =>
+  http.get<RevenueByBranchesResponse>('/orders/reports/revenue/branches', { query: params, snake: true });
+

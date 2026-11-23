@@ -91,7 +91,14 @@ export default function PaymentGatewayPage({ pollMs = PAYMENT_POLL_MS }: { pollM
   const simulate = useMutation({
     mutationFn: (result: SimulatedPaymentResult) => paymentApi.simulatePayment(paymentId!, { result }, { sessionCode }),
     onMutate: () => setActionError(null),
-    onSuccess: (res) => qc.setQueryData(key, res),
+    onSuccess: (res) => {
+      qc.setQueryData(key, res);
+      const returnUrl = search.get("returnUrl");
+      if (returnUrl) {
+        if (returnUrl.startsWith("/")) navigate(returnUrl, { replace: true });
+        else window.location.assign(returnUrl);
+      }
+    },
     onError: (e) => {
       setActionError(describePaymentError(e));
       void payment.refetch(); // trạng thái thật có thể đã khác (đã chốt ở nơi khác)

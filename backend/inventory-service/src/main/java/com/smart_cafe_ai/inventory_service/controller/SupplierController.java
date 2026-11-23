@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping({"/inventory/suppliers", "/suppliers"})
+@RequestMapping({"/api/v1/inventory/suppliers", "/inventory/suppliers", "/suppliers"})
 @RequiredArgsConstructor
 public class SupplierController {
 
