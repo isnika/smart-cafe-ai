@@ -8,6 +8,12 @@ import { BRANCH_ID } from '../fixtures';
 export const workforceConfig = { enforceWindow: false };
 const WINDOW_MS = 30 * 60_000;
 
+function requireManager(request: Request) {
+  requireAuth(request);
+  const account = accountFromRequest(request);
+  if (!account || (account.roleName !== 'Manager' && account.roleName !== 'Admin')) fail(403, 'FORBIDDEN', 'Chỉ quản lý được thực hiện thao tác này');
+}
+
 function staffOf(request: Request): StaffProfile {
   requireAuth(request);
   const account = accountFromRequest(request);
@@ -68,6 +74,72 @@ function assertInWindow(shift: Shift, workDate: string): void {
 }
 
 export const workforceHandlers = [
+  http.get(url('/staff-profiles'), guarded(({ request }) => {
+    requireManager(request);
+    const branch = new URL(request.url).searchParams.get('branch_id');
+    return HttpResponse.json(db.staffProfiles.filter((s) => !branch || s.branchId === Number(branch)).map((s) => ({ ...s, userInfo: { fullName: MOCK_ACCOUNTS.find((a) => a.id === s.userId)?.fullName } })));
+  })),
+  http.get(url('/shifts'), guarded(({ request }) => {
+    requireManager(request);
+    const branch = new URL(request.url).searchParams.get('branch_id');
+    return HttpResponse.json(db.shifts.filter((s) => !branch || s.branchId === Number(branch)));
+  })),
+  http.post(url('/shifts'), guarded(async ({ request }) => {
+    requireManager(request);
+    const body = await readJson<{ branch_id: number; name: string; start_time: string; end_time: string; is_active: boolean }>(request);
+    if (!body.name?.trim() || !body.branch_id || !body.start_time || !body.end_time || body.start_time === body.end_time) fail(400, 'VALIDATION_ERROR', 'Thông tin ca không hợp lệ');
+    if (db.shifts.some((s) => s.branchId === body.branch_id && s.name.toLowerCase() === body.name.toLowerCase())) fail(409, 'SHIFT_NAME_EXISTS', 'Tên ca đã tồn tại');
+    const shift: Shift = { id: Math.max(0, ...db.shifts.map((s) => s.id)) + 1, branchId: body.branch_id, name: body.name, startTime: body.start_time, endTime: body.end_time, isOvernight: body.end_time < body.start_time, isActive: body.is_active };
+    db.shifts.push(shift); return HttpResponse.json(shift, { status: 201 });
+  })),
+  http.put(url('/shifts/:id'), guarded(async ({ request, params }) => {
+    requireManager(request); const shift = db.shifts.find((s) => s.id === Number(params.id));
+    if (!shift) fail(404, 'NOT_FOUND', 'Không tìm thấy ca');
+    const body = await readJson<{ name: string; start_time: string; end_time: string; is_active: boolean }>(request);
+    if (!body.name?.trim() || !body.start_time || !body.end_time || body.start_time === body.end_time) fail(400, 'VALIDATION_ERROR', 'Thông tin ca không hợp lệ');
+    if (db.shifts.some((s) => s.id !== shift.id && s.branchId === shift.branchId && s.name.toLowerCase() === body.name.toLowerCase())) fail(409, 'SHIFT_NAME_EXISTS', 'Tên ca đã tồn tại');
+    Object.assign(shift, { name: body.name, startTime: body.start_time, endTime: body.end_time, isOvernight: body.end_time < body.start_time, isActive: body.is_active });
+    return HttpResponse.json(shift);
+  })),
+  http.patch(url('/shifts/:id/active'), guarded(async ({ request, params }) => {
+    requireManager(request); const shift = db.shifts.find((s) => s.id === Number(params.id));
+    if (!shift) fail(404, 'NOT_FOUND', 'Không tìm thấy ca');
+    const body = await readJson<{ is_active: boolean }>(request); shift.isActive = body.is_active; return HttpResponse.json(shift);
+  })),
+  http.get(url('/schedules'), guarded(({ request }) => {
+    requireManager(request); const q = new URL(request.url).searchParams;
+    return HttpResponse.json(db.schedules.filter((s) => (!q.get('branch_id') || s.branchId === Number(q.get('branch_id'))) && (!q.get('from') || s.workDate >= q.get('from')!) && (!q.get('to') || s.workDate <= q.get('to')!)).map(toView));
+  })),
+  http.post(url('/schedules'), guarded(async ({ request }) => {
+    requireManager(request); const body = await readJson<{ staff_id: number; shift_id: number; work_date: string }>(request);
+    const staff = db.staffProfiles.find((s) => s.id === body.staff_id); const shift = db.shifts.find((s) => s.id === body.shift_id);
+    if (!staff || !shift || !body.work_date) fail(400, 'VALIDATION_ERROR', 'Thông tin lịch không hợp lệ');
+    if (staff.branchId !== shift.branchId) fail(409, 'BRANCH_MISMATCH', 'Nhân viên và ca không cùng chi nhánh');
+    if (db.schedules.some((s) => s.staffId === staff.id && s.workDate === body.work_date)) fail(409, 'SCHEDULE_EXISTS', 'Nhân viên đã có lịch trong ngày');
+    const schedule: Schedule = { id: Math.max(0, ...db.schedules.map((s) => s.id)) + 1, branchId: staff.branchId, staffId: staff.id, shiftId: shift.id, workDate: body.work_date, status: 'Scheduled' };
+    db.schedules.push(schedule); return HttpResponse.json(toView(schedule), { status: 201 });
+  })),
+  http.put(url('/schedules/:id'), guarded(async ({ request, params }) => {
+    requireManager(request); const schedule = db.schedules.find((s) => s.id === Number(params.id));
+    if (!schedule) fail(404, 'NOT_FOUND', 'Không tìm thấy lịch');
+    const body = await readJson<{ shift_id: number; work_date: string }>(request); const shift = db.shifts.find((s) => s.id === body.shift_id);
+    if (!shift || !body.work_date || shift.branchId !== schedule.branchId) fail(400, 'VALIDATION_ERROR', 'Ca hoặc ngày không hợp lệ');
+    if (db.schedules.some((s) => s.id !== schedule.id && s.staffId === schedule.staffId && s.workDate === body.work_date)) fail(409, 'SCHEDULE_EXISTS', 'Nhân viên đã có lịch trong ngày');
+    schedule.shiftId = shift.id; schedule.workDate = body.work_date; return HttpResponse.json(toView(schedule));
+  })),
+  http.patch(url('/schedules/:id/status'), guarded(async ({ request, params }) => {
+    requireManager(request); const schedule = db.schedules.find((s) => s.id === Number(params.id));
+    if (!schedule) fail(404, 'NOT_FOUND', 'Không tìm thấy lịch');
+    const body = await readJson<{ status: Schedule['status'] }>(request);
+    if (!['Scheduled', 'Completed', 'Absent', 'Leave'].includes(body.status)) fail(400, 'VALIDATION_ERROR', 'Trạng thái không hợp lệ');
+    schedule.status = body.status; return HttpResponse.json(toView(schedule));
+  })),
+  http.delete(url('/schedules/:id'), guarded(({ request, params }) => {
+    requireManager(request); const index = db.schedules.findIndex((s) => s.id === Number(params.id));
+    if (index < 0) fail(404, 'NOT_FOUND', 'Không tìm thấy lịch');
+    if (db.timekeepings.some((t) => t.scheduleId === db.schedules[index]!.id)) fail(409, 'SCHEDULE_HAS_TIMEKEEPING', 'Lịch đã có chấm công');
+    db.schedules.splice(index, 1); return new HttpResponse(null, { status: 204 });
+  })),
   http.get(url('/leave-requests/me'), guarded(({ request }) => {
     const { staff } = currentStaff(request);
     const status = new URL(request.url).searchParams.get('status');

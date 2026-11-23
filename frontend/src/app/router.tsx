@@ -36,6 +36,7 @@ import StaffTablesPage from "@/features/staff-tables/pages/StaffTablesPage";
 import { AdminDashboardPage, AdminBranchesPage, AdminTablesPage, AdminUsersPage, AdminProductsPage, AdminCategoriesPage, AdminBranchMenusPage } from "@/features/admin/pages/AdminPages";
 import { AdminRevenuePage } from "@/features/admin/pages/AdminRevenuePage";
 import { StaffLeavePage, ManagerLeavePage } from "@/features/workforce/LeavePages";
+import { ScheduleManagementPage } from "@/features/workforce/ScheduleManagementPage";
 
 // Tải lười để trang này không đi vào bundle production
 const DesignSystemPage = lazy(() => import("@/pages/DesignSystemPage"));
@@ -147,6 +148,7 @@ export const routes: RouteObject[] = [
           { path: PATHS.managerInventory, element: <InventoryPage /> },
           { path: PATHS.managerForecast, element: <ManagerForecastPage /> },
           { path: PATHS.managerLeave, element: <ManagerLeavePage /> },
+          { path: PATHS.managerSchedules, element: <ScheduleManagementPage /> },
         ],
       },
     ],
@@ -165,6 +167,7 @@ export const routes: RouteObject[] = [
           { path: PATHS.adminProducts, element: <AdminProductsPage /> },
           { path: PATHS.adminCategories, element: <AdminCategoriesPage /> },
           { path: PATHS.adminMenus, element: <AdminBranchMenusPage /> },
+          { path: PATHS.adminSchedules, element: <ScheduleManagementPage /> },
         ],
       },
     ],

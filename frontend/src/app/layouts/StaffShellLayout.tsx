@@ -43,6 +43,7 @@ const navByRole: Record<Exclude<RoleName, "Customer">, NavItem[]> = {
     { to: "/manager/inventory", label: "Kho", icon: Package },
     { to: "/manager/forecast", label: "Dự báo AI", icon: Sparkles },
     { to: "/manager/leave-requests", label: "Duyệt nghỉ phép", icon: CalendarDays },
+    { to: "/manager/schedules", label: "Ca làm việc", icon: CalendarDays },
   ],
   Admin: [
     { to: "/admin", label: "Tổng quan", icon: LayoutDashboard, end: true },
@@ -53,6 +54,7 @@ const navByRole: Record<Exclude<RoleName, "Customer">, NavItem[]> = {
     { to: "/admin/categories", label: "Danh mục", icon: Tags },
     { to: "/admin/menus", label: "Thực đơn chi nhánh", icon: ClipboardList },
     { to: "/admin/users", label: "Tài khoản & Quyền", icon: Users },
+    { to: "/admin/schedules", label: "Ca làm việc", icon: CalendarDays },
   ],
 };
 

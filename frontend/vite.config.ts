@@ -82,6 +82,16 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/staff-profiles/, '/api/v1/staff-profiles'),
       },
+      '/shifts': {
+        target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8080',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/shifts/, '/api/v1/shifts'),
+      },
+      '/schedules': {
+        target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8080',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/schedules/, '/api/v1/schedules'),
+      },
       '/api': {
         target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8080',
         changeOrigin: true,
