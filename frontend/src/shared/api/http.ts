@@ -125,6 +125,8 @@ export interface RequestOptions {
   body?: unknown;
   signal?: AbortSignal;
   headers?: HeadersInit;
+  /** base URL override; '' calls paths from the frontend origin instead of API Gateway. */
+  baseUrl?: string;
   /** false = không gắn token / không refresh / không kích hoạt onUnauthorized (login, endpoint public). */
   auth?: boolean;
   /** true = đổi key body camelCase → snake_case (endpoint theo spec v1). Mặc định giữ nguyên. */
@@ -152,12 +154,14 @@ async function readErrorBody(res: Response): Promise<ApiErrorInit> {
 }
 
 async function execute<T>(method: HttpMethod, path: string, opts: RequestOptions, isRetry: boolean, accountId = config.getAccountId() ?? null): Promise<ApiResult<T>> {
-  const url = `${BASE_URL}${path.startsWith('/') ? path : `/${path}`}${buildQuery(opts.query)}`;
+  const baseUrl = opts.baseUrl ?? BASE_URL;
+  const url = `${baseUrl}${path.startsWith('/') ? path : `/${path}`}${buildQuery(opts.query)}`;
 
   const headers = new Headers(opts.headers);
   headers.set('Accept', 'application/json');
   const hasBody = opts.body !== undefined;
-  if (hasBody) headers.set('Content-Type', 'application/json');
+  const isFormData = typeof FormData !== 'undefined' && opts.body instanceof FormData;
+  if (hasBody && !isFormData) headers.set('Content-Type', 'application/json');
 
   const useAuth = opts.auth !== false;
   const assertAccount = (includeAnonymous = false) => {
@@ -180,7 +184,7 @@ async function execute<T>(method: HttpMethod, path: string, opts: RequestOptions
     res = await fetch(url, {
       method,
       headers,
-      body: hasBody ? JSON.stringify(opts.snake ? toSnakeKeys(opts.body) : opts.body) : undefined,
+      body: hasBody ? (isFormData ? opts.body as FormData : JSON.stringify(opts.snake ? toSnakeKeys(opts.body) : opts.body)) : undefined,
       signal: opts.signal,
     });
   } catch (e) {

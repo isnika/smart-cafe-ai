@@ -40,8 +40,7 @@ beforeEach(() => {
 async function loginAs(identifier = 'customer@smartcafe.vn') {
   useAuthStore.getState().applySession(await identityApi.login({ identifier, password: MOCK_PASSWORD }));
 }
-const listRequests = () => requests.filter((r) => r.startsWith('GET') && r.endsWith('/ai/recommendations/me'));
-const clickRequests = () => requests.filter((r) => r.startsWith('POST') && /\/intelligence\/recommendations\/\d+\/click$/.test(r));
+const listRequests = () => requests.filter((r) => r.startsWith('POST') && r.endsWith('/ai/recommendation'));
 const server500 = (method: 'get' | 'post', path: string, once = false) =>
   http[method](url(path), () => HttpResponse.json({ message: 'Máy chủ lỗi' }, { status: 500 }), { once });
 
@@ -91,7 +90,7 @@ describe('useRecommendations', () => {
   });
 
   it('error khi server 500, refetch thành công thì sang ready', async () => {
-    server.use(server500('get', '/ai/recommendations/me', true));
+    server.use(server500('post', '/ai/recommendation', true));
     await loginAs();
     const { result } = renderHook(() => useRecommendations(), { wrapper: hookWrapper() });
     await waitFor(() => expect(result.current.state).toBe('error'));
@@ -99,7 +98,7 @@ describe('useRecommendations', () => {
     await waitFor(() => expect(result.current.state).toBe('ready'));
   });
 
-  it('đổi món đang xem chỉ lọc lại ở client: không có request mới, kết quả không bị lẫn món cũ', async () => {
+  it('đổi món đang xem tải gợi ý tương tự cho món mới', async () => {
     await loginAs();
     const { result, rerender } = renderHook(({ id }: { id?: number }) => useRecommendations({ excludeProductId: id }), {
       wrapper: hookWrapper(), initialProps: { id: 5 },
@@ -108,9 +107,10 @@ describe('useRecommendations', () => {
     expect(result.current.items.map((r) => r.productId)).not.toContain(5);
 
     rerender({ id: 2 });
+    await waitFor(() => expect(result.current.state).toBe('ready'));
     expect(result.current.items.map((r) => r.productId)).not.toContain(2);
     expect(result.current.items.map((r) => r.productId)).toContain(5);
-    expect(listRequests()).toHaveLength(1);
+    expect(listRequests()).toHaveLength(2);
   });
 
   it('chỉ còn đúng món đang xem → empty', async () => {
@@ -134,8 +134,9 @@ describe('RecommendationSection – Home', () => {
     expect(within(region).getByText('AI')).toBeTruthy();
     expect(screen.queryByRole('status', { name: 'Đang tải gợi ý' })).toBeNull();
 
-    expect(within(region).getByText('Từ 45.000đ')).toBeTruthy(); // Trà đào cam sả: nhiều size → "Từ" giá thấp nhất
-    expect(within(region).getByText('35.000đ')).toBeTruthy(); // Bánh croissant: một giá
+    expect(within(region).getByText('45.000đ')).toBeTruthy(); // Gateway chỉ trả một mức giá cho mỗi món
+    const croissant = within(region).getByRole('link', { name: 'Bánh croissant' }).closest('article')!;
+    expect(within(croissant).getByText('35.000đ')).toBeTruthy();
     expect(within(region).getByText('Hợp khẩu vị thích đồ uống trái cây thanh mát')).toBeTruthy();
     // Ảnh có alt là tên món; món không có ảnh dùng icon trang trí (không render <img> hỏng)
     const images = within(region).getAllByRole('img');
@@ -171,7 +172,7 @@ describe('RecommendationSection – Home', () => {
   });
 
   it('lỗi: thông báo nhẹ + nút Thử lại; bấm thử lại thì hiện gợi ý; phần còn lại của trang không vỡ', async () => {
-    server.use(server500('get', '/ai/recommendations/me', true));
+    server.use(server500('post', '/ai/recommendation', true));
     await loginAs();
     renderApp('/home');
     const alert = await screen.findByRole('alert');
@@ -185,50 +186,35 @@ describe('RecommendationSection – Home', () => {
 });
 
 describe('RecommendationSection – click & thêm giỏ', () => {
-  it('bấm thẻ: gọi track đúng id, ghi clickedAt và điều hướng tới chi tiết món', async () => {
+  it('bấm thẻ điều hướng tới chi tiết món', async () => {
     await loginAs();
     const { router } = renderApp('/home');
     await waitFor(() => expect(cardNames()).toEqual(CUSTOMER_ORDER));
 
     fireEvent.click(within(section()).getByRole('link', { name: 'Trà đào cam sả' }));
     expect(router.state.location.pathname).toBe('/menu/5');
-    await waitFor(() => expect(clickRequests()).toHaveLength(1));
-    expect(clickRequests()[0]).toMatch(/\/intelligence\/recommendations\/1\/click$/); // gợi ý id 1 = Trà đào cam sả
-    await waitFor(() => expect(db.recommendations.find((r) => r.id === 1)?.clickedAt).toBeTruthy());
     expect(await screen.findByRole('heading', { level: 2, name: 'Trà đào cam sả' })).toBeTruthy();
   });
 
-  it('track lỗi 500 không chặn điều hướng, chỉ log cảnh báo', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    server.use(server500('post', '/ai/recommendations/:id/click'));
-    await loginAs();
-    const { router } = renderApp('/home');
-    await waitFor(() => expect(cardNames()).toEqual(CUSTOMER_ORDER));
-
-    fireEvent.click(within(section()).getByRole('link', { name: 'Bánh croissant' }));
-    expect(router.state.location.pathname).toBe('/menu/7');
-    await waitFor(() => expect(warn).toHaveBeenCalled());
-    expect(await screen.findByRole('heading', { level: 2, name: 'Bánh croissant' })).toBeTruthy();
-  });
-
   it('đã chọn Giao hàng/Mang đi: có nút thêm giỏ → chọn tuỳ chọn → món vào giỏ Online, không ghi click', async () => {
-    useOnlineCartStore.setState({ fulfillmentType: 'Pickup' });
     await loginAs();
     renderApp('/home');
     await waitFor(() => expect(cardNames()).toEqual(CUSTOMER_ORDER));
+    useOnlineCartStore.setState({ fulfillmentType: 'Pickup' });
 
-    fireEvent.click(within(section()).getByRole('button', { name: 'Thêm Trà đào cam sả vào giỏ' }));
+    fireEvent.click(await within(section()).findByRole('button', { name: 'Thêm Trà đào cam sả vào giỏ' }));
     const add = await screen.findByRole('button', { name: /^Thêm vào giỏ •/ });
     fireEvent.click(add);
 
     const lines = useOnlineCartStore.getState().lines;
     expect(lines).toHaveLength(1);
     expect(lines[0].productId).toBe(5);
-    expect(clickRequests()).toHaveLength(0);
   });
 });
 
 describe('RecommendationSection – ProductDetail', () => {
+  beforeEach(() => useOnlineCartStore.getState().setBranch(1));
+
   it('loại chính món đang xem; bấm sang món khác thì danh sách đổi theo (không lẫn món cũ)', async () => {
     await loginAs();
     renderApp('/menu/5');
@@ -238,17 +224,15 @@ describe('RecommendationSection – ProductDetail', () => {
     fireEvent.click(within(section()).getByRole('link', { name: 'Bạc xỉu' }));
     expect(await screen.findByRole('heading', { level: 2, name: 'Bạc xỉu' })).toBeTruthy();
     await waitFor(() => expect(cardNames()).toEqual(['Trà đào cam sả', 'Bánh croissant', 'Cacao đá xay', 'Americano']));
-    await waitFor(() => expect(clickRequests()).toHaveLength(1));
+    await waitFor(() => expect(listRequests()).toHaveLength(2));
   });
 
-  it('nằm dưới phần tuỳ chọn và trên phần đánh giá', async () => {
+  it('nằm dưới phần tuỳ chọn của món', async () => {
     await loginAs();
     renderApp('/menu/5');
     const reco = await screen.findByRole('region', { name: /Gợi ý cho bạn/ });
     const options = screen.getByRole('group', { name: /Đường/ });
     expect(options.compareDocumentPosition(reco) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    const reviews = await screen.findByRole('heading', { name: /Đánh giá/ });
-    expect(reco.compareDocumentPosition(reviews) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('rỗng hoặc lỗi thì ẩn hẳn khối (không chen vào thanh thêm giỏ)', async () => {
@@ -261,7 +245,7 @@ describe('RecommendationSection – ProductDetail', () => {
     expect(screen.queryByRole('heading', { name: /Gợi ý cho bạn/ })).toBeNull();
     first.unmount();
 
-    server.use(server500('get', '/ai/recommendations/me'));
+    server.use(server500('post', '/ai/recommendation'));
     renderApp('/menu/5');
     expect(await screen.findByRole('heading', { level: 2, name: 'Trà đào cam sả' })).toBeTruthy();
     await waitFor(() => expect(listRequests()).toHaveLength(2));

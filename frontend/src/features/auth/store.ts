@@ -99,13 +99,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   applySession: (session) => {
+    const branchId = session.branchId ?? session.user.branchId ?? null;
     changeOnlineCartOwner(session.roleName === 'Customer' ? session.user.id : null);
     if (session.roleName === 'Customer') useOnlineCartStore.setState({ syncStatus: 'loading' });
     save({
       accessToken: session.accessToken,
       refreshToken: session.refreshToken ?? null,
       roleName: session.roleName,
-      branchId: session.branchId ?? null,
+      branchId,
     });
     set({
       status: 'authenticated',
@@ -113,7 +114,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       refreshToken: session.refreshToken ?? null,
       user: session.user,
       roleName: session.roleName,
-      branchId: session.branchId ?? null,
+      branchId,
     });
     if (session.roleName === 'Customer') void import('@/features/online-order/cart-session').then(m => m.loadOnlineCartSession(session.user.id));
   },
@@ -159,11 +160,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (get().accessToken !== token) return;
       const roleName = identityApi.roleFromUser(user) ?? get().roleName;
       if (!roleName) throw new Error('API /users/me không trả về vai trò hợp lệ');
-      const branchId = get().branchId;
+      const branchId = user.branchId !== undefined ? user.branchId : get().branchId;
       changeOnlineCartOwner(roleName === 'Customer' ? user.id : null);
       if (roleName === 'Customer') useOnlineCartStore.setState({ syncStatus: 'loading' });
       save({ accessToken: token, refreshToken: get().refreshToken, roleName, branchId });
-      set({ user, roleName, status: 'authenticated' });
+      set({ user, roleName, branchId, status: 'authenticated' });
       if (roleName === 'Customer') void import('@/features/online-order/cart-session').then(m => m.loadOnlineCartSession(user.id));
     } catch {
       // HTTP client đã thử refresh một lần khi /me trả 401. Nếu refresh thất bại,

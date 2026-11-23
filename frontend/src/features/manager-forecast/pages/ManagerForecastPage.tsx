@@ -1,21 +1,18 @@
 import { useMemo, useState } from 'react';
-import { AlertTriangle, BrainCircuit, Sparkles, TrendingUp } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { AlertTriangle, Sparkles, TrendingUp } from 'lucide-react';
 import { useAuthBranchId } from '@/features/auth/branch-context';
 import { SectionEmpty, SectionError, StaleNote } from '@/features/manager-dashboard/components/SectionState';
-import { formatPercent } from '@/features/manager-dashboard/model';
 import { useInventoryStock } from '@/features/manager-inventory/hooks/useInventory';
-import { PATHS } from '@/app/routes';
 import { isApiError } from '@/shared/api';
 import { cn } from '@/shared/lib/cn';
 import { parseUtc } from '@/shared/lib';
-import { Badge, Button, Card, Skeleton } from '@/shared/ui';
+import { Badge, Card, Skeleton } from '@/shared/ui';
 import { IngredientForecastCard } from '../components/IngredientForecastCard';
 import { ForecastLineChart } from '../components/ForecastLineChart';
 import { RestockCard } from '../components/RestockCard';
 import { useIngredientForecast, useRevenueForecast } from '../hooks/useForecasts';
 import {
-  DEFAULT_HORIZON, HORIZONS, MIN_HISTORY_DAYS, backfilledAccuracy, groupByTarget, ingredientBars, restockInsight, restockSuggestions,
+  DEFAULT_HORIZON, HORIZONS, groupByTarget, ingredientBars, restockInsight, restockSuggestions,
   revenueInsight, revenueSeries, revenueTrend, toIsoDate, type Horizon, type IngredientOption,
 } from '../model';
 
@@ -34,7 +31,6 @@ export default function ManagerForecastPage() {
 
   const points = useMemo(() => revenueSeries(revenue.data ?? [], today, horizon), [revenue.data, today, horizon]);
   const trend = useMemo(() => revenueTrend(points), [points]);
-  const accuracy = useMemo(() => backfilledAccuracy(revenue.data ?? [], today), [revenue.data, today]);
   const byIngredient = useMemo(() => groupByTarget(usage.data ?? []), [usage.data]);
   const suggestions = useMemo(() => restockSuggestions(byIngredient, stock.data ?? [], today), [byIngredient, stock.data, today]);
 
@@ -54,7 +50,6 @@ export default function ManagerForecastPage() {
   }, [revenue.data]);
 
   const hasForecast = points.some((p) => p.isForecast);
-  const learning = !!revenue.data && hasForecast && accuracy.accuracy === null;
   const insights = [trend ? revenueInsight(trend, horizon) : null, !stock.isPending && stock.data && byIngredient.size > 0 ? restockInsight(suggestions) : null].filter(
     (t): t is string => t !== null,
   );
@@ -90,37 +85,16 @@ export default function ManagerForecastPage() {
                 </button>
               ))}
             </div>
-            {revenue.data &&
-              (accuracy.accuracy !== null ? (
-                <Badge tone="success" title={`1 − sai số trung bình giữa dự báo và thực tế trên ${accuracy.days} ngày đã qua`}>
-                  Độ chính xác gần đây: {formatPercent(accuracy.accuracy)}
-                </Badge>
-              ) : (
-                <Badge tone="neutral">Độ chính xác: chưa xác định</Badge>
-              ))}
+            {revenue.data && <Badge tone="neutral">API chưa cung cấp dữ liệu đối chiếu độ chính xác</Badge>}
             {generatedAt && (
               <span className="text-caption text-gray-500">
                 Cập nhật {generatedAt.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
-                {revenue.data?.[0] ? ` · mô hình ${revenue.data[0].modelVersion}` : ''}
+                {revenue.data?.[0]?.modelVersion ? ` · mô hình ${revenue.data[0].modelVersion}` : ''}
               </span>
             )}
           </div>
 
           {revenue.isError && revenue.data && <StaleNote onRetry={() => void revenue.refetch()}>Không cập nhật được dự báo, đang hiển thị dữ liệu lần tải trước.</StaleNote>}
-
-          {learning && (
-            <Card padding="md" accent="warning" className="space-y-2" role="status">
-              <h2 className="flex items-center gap-2 text-h4 text-gray-900">
-                <BrainCircuit aria-hidden className="size-5 text-warning" /> AI đang học dữ liệu
-              </h2>
-              <p className="text-body text-gray-700">
-                Chưa đủ lịch sử (cần tối thiểu {MIN_HISTORY_DAYS} ngày có số liệu thực tế, hiện có {accuracy.days}). Độ chính xác chưa xác định nên gợi ý nhập tự động bị vô hiệu hoá.
-              </p>
-              <Link to={PATHS.managerInventory}>
-                <Button variant="outline" size="sm">Tạo đơn nhập thủ công (đến trang Kho)</Button>
-              </Link>
-            </Card>
-          )}
 
           <div className="grid gap-4 lg:grid-cols-3">
             <div className="space-y-4 lg:col-span-2">
@@ -181,7 +155,7 @@ export default function ManagerForecastPage() {
               ) : (
                 <>
                   <IngredientForecastCard options={options} selectedId={selectedId} onSelect={setPickedIngredient} bars={bars} unit={selected?.unit ?? ''} />
-                  <RestockCard suggestions={suggestions} disabledReason={learning ? 'Chưa đủ lịch sử để gợi ý nhập đáng tin cậy.' : undefined} />
+                  <RestockCard suggestions={suggestions} />
                 </>
               )}
             </div>

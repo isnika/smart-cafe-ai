@@ -1,93 +1,101 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/features/auth/store';
 import { DINE_IN_BRANCH_ID } from '@/features/dine-in/config';
+import { useDineInCartStore } from '@/features/dine-in/store';
+import { useOnlineCartStore } from '@/features/online-order/store';
 import { intelligenceApi } from '@/shared/api';
-import type { ChatMessage, ChatSession } from '@/shared/types';
-import { getGuestKey } from '../guest-key';
-import { handlerOf } from '../model';
+import type { ChatMessage } from '@/shared/types';
 
-const sessionKey = (owner: string) => ['chat', 'session', owner] as const;
-const messagesKey = (sessionId: number | undefined) => ['chat', 'messages', sessionId] as const;
+const messagesKey = (owner: string) => ['chat', 'messages', owner] as const;
 
-/**
- * Phiên chat của người đang xem: đã đăng nhập → theo `userId`, chưa → theo `guestKey` (không cần token).
- * Chỉ gọi API khi panel mở lần đầu; đóng/mở lại dùng cache nên không mất lịch sử, F5 thì tạo lại phiên
- * (server trả lại phiên đang mở của cùng chủ nên vẫn thấy lịch sử).
- */
+/** Chat AI dùng API stateless; lịch sử được giữ trong cache của tab để gửi làm context. */
 export function useChat(open: boolean) {
   const qc = useQueryClient();
-  const userId = useAuthStore((s) => s.user?.id);
-  // Có token nhưng chưa biết ai (đang /me): chờ, tránh tạo phiên khách rồi đổi sang phiên user.
+  const user = useAuthStore((s) => s.user);
   const resolvingUser = useAuthStore((s) => s.accessToken !== null && s.user === null && s.status === 'booting');
-  const owner = userId ?? 'guest';
-
-  const session = useQuery({
-    queryKey: sessionKey(owner),
-    enabled: open && !resolvingUser,
-    staleTime: Infinity,
-    gcTime: Infinity,
-    queryFn: () =>
-      intelligenceApi.createChatSession(userId ? { userId, branchId: DINE_IN_BRANCH_ID } : { guestKey: getGuestKey(), branchId: DINE_IN_BRANCH_ID }),
-  });
-  const sessionId = session.data?.id;
+  const dineInBranchId = useDineInCartStore((s) => s.branchId);
+  const onlineBranchId = useOnlineCartStore((s) => s.branchId);
+  const branchId = dineInBranchId ?? onlineBranchId ?? DINE_IN_BRANCH_ID;
+  const owner = user?.id ?? 'guest';
+  const key = [...messagesKey(owner), branchId] as const;
 
   const messages = useQuery({
-    queryKey: messagesKey(sessionId),
-    enabled: sessionId !== undefined,
-    // Staff có thể nhận và trả lời ở một máy khác; đồng bộ lịch sử định kỳ khi panel mở.
-    refetchInterval: open && sessionId !== undefined ? 2500 : false,
-    staleTime: 0,
+    queryKey: key,
+    enabled: open && !resolvingUser,
+    queryFn: async () => [] as ChatMessage[],
+    staleTime: Infinity,
     gcTime: Infinity,
-    queryFn: () => intelligenceApi.listChatMessages(sessionId!),
   });
 
   const send = useMutation({
-    mutationFn: (content: string) => intelligenceApi.sendChatMessage(sessionId!, { content }),
-    onMutate: async (content) => {
-      await qc.cancelQueries({ queryKey: messagesKey(sessionId) });
+    mutationFn: ({ content, history }: {
+      content: string;
+      history: Array<{ role: 'user' | 'assistant'; content: string }>;
+    }) => intelligenceApi.completeChat({ message: content, history }, branchId),
+    onMutate: async ({ content }) => {
+      await qc.cancelQueries({ queryKey: key });
       const pending: ChatMessage = {
-        id: -Date.now(), sessionId: sessionId!, senderRole: 'Customer', content, createdAt: new Date().toISOString(),
+        id: -Date.now(),
+        sessionId: 0,
+        senderRole: 'Customer',
+        content,
+        createdAt: new Date().toISOString(),
       };
-      qc.setQueryData<ChatMessage[]>(messagesKey(sessionId), (old = []) => [...old, pending]);
+      qc.setQueryData<ChatMessage[]>(key, (old = []) => [...old, pending]);
       return { pendingId: pending.id };
     },
-    onSuccess: (reply, _content, ctx) => {
-      qc.setQueryData<ChatMessage[]>(messagesKey(sessionId), (old = []) => [...old.filter((m) => m.id !== ctx.pendingId), ...reply.messages]);
-      qc.setQueryData<ChatSession>(sessionKey(owner), reply.session);
+    onSuccess: (reply, variables, context) => {
+      const messageId = Date.now();
+      const customerMessage: ChatMessage = {
+        id: messageId,
+        sessionId: 0,
+        senderRole: 'Customer',
+        content: variables.content,
+        createdAt: new Date().toISOString(),
+      };
+      const answer: ChatMessage = {
+        id: messageId + 1,
+        sessionId: 0,
+        senderRole: 'AI',
+        content: reply.answer,
+        metadata: { sources: reply.sources },
+        createdAt: new Date().toISOString(),
+      };
+      qc.setQueryData<ChatMessage[]>(key, (old = []) => [
+        ...old.filter((message) => message.id !== context.pendingId),
+        customerMessage,
+        answer,
+      ]);
     },
-    onError: (_err, _content, ctx) => {
-      qc.setQueryData<ChatMessage[]>(messagesKey(sessionId), (old = []) => old.filter((m) => m.id !== ctx?.pendingId));
+    onError: (_error, _variables, context) => {
+      qc.setQueryData<ChatMessage[]>(key, (old = []) =>
+        old.filter((message) => message.id !== context?.pendingId),
+      );
     },
   });
 
-  const handOff = useMutation({
-    mutationFn: () => intelligenceApi.handOffChat(sessionId!),
-    onSuccess: (next) => qc.setQueryData<ChatSession>(sessionKey(owner), next),
-  });
-
-  const handler = handlerOf(session.data?.status);
-  const ready = session.data !== undefined && messages.data !== undefined;
+  const sendMessage = (content: string) => {
+    const history = (qc.getQueryData<ChatMessage[]>(key) ?? [])
+      .filter((message) => message.id > 0 && (message.senderRole === 'Customer' || message.senderRole === 'AI'))
+      .slice(-30)
+      .map((message) => ({
+        role: message.senderRole === 'Customer' ? 'user' as const : 'assistant' as const,
+        content: message.content,
+      }));
+    send.mutate({ content, history });
+  };
 
   return {
-    session: session.data,
     messages: messages.data ?? [],
-    handler,
-    ready,
-    loading: open && !ready && !session.isError && !messages.isError,
-    loadError: session.isError || messages.isError,
-    reload: () => {
-      if (session.isError) void session.refetch();
-      else void messages.refetch();
-    },
-    send: (content: string) => send.mutate(content),
+    handler: 'ai' as const,
+    ready: messages.data !== undefined && !resolvingUser,
+    loading: open && !messages.data && !messages.isError,
+    loadError: messages.isError,
+    reload: () => void messages.refetch(),
+    send: sendMessage,
     sending: send.isPending,
-    /** "AI đang trả lời…": chỉ khi phiên còn do AI xử lý. */
-    typing: send.isPending && handler === 'ai',
+    typing: send.isPending,
     sendError: send.isError,
     retrySend: () => send.variables !== undefined && send.mutate(send.variables),
-    handOff: () => handOff.mutate(),
-    handingOff: handOff.isPending,
-    handOffError: handOff.isError,
-    refreshMessages: () => void messages.refetch(),
   };
 }

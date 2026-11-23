@@ -1,7 +1,15 @@
-import type { RecommendationView } from '@/shared/types';
+import type { MenuProduct } from '@/shared/types';
 
 /** Số thẻ tối đa hiển thị trong một khối gợi ý. */
 export const RECOMMENDATION_LIMIT = 6;
+
+export interface RecommendationCardItem {
+  id: number;
+  productId: number;
+  confidenceScore: number;
+  reason?: string | null;
+  product: Pick<MenuProduct, 'id' | 'name' | 'image' | 'price' | 'maxPrice'>;
+}
 
 interface SelectOptions {
   /** Món đang xem (ProductDetail): không gợi ý lại chính nó. */
@@ -13,8 +21,8 @@ interface SelectOptions {
  * Chuẩn hoá danh sách server trả về cho UI: bỏ món đang xem, mỗi món chỉ một thẻ (giữ điểm cao nhất),
  * điểm giảm dần rồi cắt theo `limit`. Lọc ở client nên đổi món ở ProductDetail không phải gọi lại API.
  */
-export function selectRecommendations(rows: readonly RecommendationView[], { excludeProductId, limit = RECOMMENDATION_LIMIT }: SelectOptions = {}): RecommendationView[] {
-  const best = new Map<number, RecommendationView>();
+export function selectRecommendations(rows: readonly RecommendationCardItem[], { excludeProductId, limit = RECOMMENDATION_LIMIT }: SelectOptions = {}): RecommendationCardItem[] {
+  const best = new Map<number, RecommendationCardItem>();
   for (const row of rows) {
     if (row.productId === excludeProductId) continue;
     const current = best.get(row.productId);

@@ -8,6 +8,7 @@ import { formatVnd } from '@/shared/lib';
 export const HORIZONS = [7, 30, 90] as const;
 export type Horizon = (typeof HORIZONS)[number];
 export const DEFAULT_HORIZON: Horizon = 7;
+export const FORECAST_DAYS = 90;
 
 /** Số ngày lịch sử (đã qua) hiển thị cạnh dự báo trên biểu đồ doanh thu. */
 export const HISTORY_DAYS = 7;

@@ -5,7 +5,7 @@ import { ProductOptionsModal } from '@/features/dine-in/components/ProductOption
 import { useOnlineCartStore } from '@/features/online-order/store';
 import type { MenuProduct } from '@/shared/types';
 import { Badge, Button, Skeleton } from '@/shared/ui';
-import { trackClick, useRecommendations } from '../hooks/useRecommendations';
+import { useRecommendations } from '../hooks/useRecommendations';
 import { RecommendationCard } from './RecommendationCard';
 
 interface Props {
@@ -24,7 +24,7 @@ export function RecommendationSection({ variant, excludeProductId }: Props) {
   const { state, items, refetch } = useRecommendations({ excludeProductId });
   const fulfillment = useOnlineCartStore((s) => s.fulfillmentType);
   const addLine = useOnlineCartStore((s) => s.addLine);
-  const [picking, setPicking] = useState<MenuProduct | null>(null);
+  const [picking, setPicking] = useState<Pick<MenuProduct, 'id' | 'name'> | null>(null);
 
   if (state === 'disabled') return null;
   if (variant === 'detail' && (state === 'empty' || state === 'error')) return null;
@@ -68,7 +68,7 @@ export function RecommendationSection({ variant, excludeProductId }: Props) {
         <ul className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2">
           {items.map((item) => (
             <li key={item.id} className="w-40 shrink-0 snap-start">
-              <RecommendationCard item={item} onOpen={(it) => trackClick(it.id)} onAdd={fulfillment ? setPicking : undefined} />
+              <RecommendationCard item={item} onAdd={fulfillment ? () => setPicking(item.product) : undefined} />
             </li>
           ))}
         </ul>

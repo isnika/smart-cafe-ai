@@ -5,14 +5,13 @@ import { fail, guardedV1, ok, readJson, url } from '../utils';
 import { accountFromRequest, type MockAccount } from './identity';
 
 /**
- * MSW cho `PATCH /orders/{id}/status` (SmartAPI v1, sheet "4. Order" #14) — phạm vi: KHÁCH HỦY ĐƠN CỦA CHÍNH MÌNH.
+ * MSW cho `PATCH /orders/{id}/status` (SmartAPI v1, sheet "4. Order" #14).
  *
  * Nguồn luật: sheet "Enum & Trạng thái" (bảng "Luồng trạng thái đơn hàng") + "Chuẩn chung" (mã lỗi, optimistic locking).
  * Handler KHÔNG dùng `ORDER_TRANSITIONS` của FE (shared/lib/order-transitions.ts): bảng đó có cạnh `Preparing → Cancelled`
  * mà Excel không có. Bảng bên dưới chép đúng từng dòng của Excel.
  *
- * Không làm: refund, sửa payment/payment_status, giải phóng reservation, phát event. Staff/Manager chuyển trạng thái
- * vẫn đi đường legacy `/orders-svc/orders/:id/status` (chưa chuyển sang v1 ở bước này).
+ * Không làm: refund, sửa payment/payment_status, giải phóng reservation, phát event.
  */
 
 export type TransitionActor = 'Customer' | 'Staff' | 'Manager' | 'System';
@@ -45,6 +44,7 @@ const ORDER_STATUSES: readonly OrderStatus[] = [
 ];
 const PAID_STATUSES: readonly string[] = ['Paid', 'Partially_Refunded', 'Refunded'];
 const MAX_TEXT = 255;
+const notFound = (id: number): never => fail(404, 'ORDER_NOT_FOUND', `Không tìm thấy đơn ${id}`);
 
 /** Cạnh `from → to` có trong Excel không (không xét người làm). */
 export const isExcelTransition = (from: OrderStatus, to: OrderStatus): boolean =>
@@ -59,15 +59,6 @@ interface PatchBody {
   note?: unknown;
   cancel_reason?: unknown;
   version?: unknown;
-}
-
-function callerOf(request: Request): MockAccount {
-  const account = accountFromRequest(request);
-  if (!account) fail(401, 'UNAUTHORIZED', 'Thiếu hoặc sai access token');
-  if (account.roleName !== 'Customer') {
-    fail(403, 'FORBIDDEN', 'Chỉ khách hàng (chủ đơn) được hủy đơn qua endpoint này');
-  }
-  return account;
 }
 
 function orderIdOf(raw: unknown): number {
@@ -108,46 +99,78 @@ function ownedOrder(id: number, caller: MockAccount): OrderDetail {
   return order;
 }
 
+function transitionOrder(
+  order: OrderDetail,
+  caller: MockAccount,
+  status: OrderStatus,
+  cancelReason: string | null,
+  note: string | null,
+): void {
+  const now = nowNaive();
+  const from = order.status;
+  order.status = status;
+  if (status === 'Cancelled' || status === 'Rejected') {
+    order.cancelReason = cancelReason;
+    order.cancelledBy = caller.id;
+    order.cancelledAt = now;
+  }
+  if (status === 'Completed') order.completedAt = now;
+  order.version += 1;
+  order.updatedAt = now;
+  order.statusHistory.push({
+    id: ++db.seq.history, orderId: order.id, fromStatus: from, status,
+    changedBy: caller.id, note: note ?? cancelReason, createdAt: now,
+  });
+}
+
 export const orderCancelV1Handlers = [
-  // PATCH /orders/:id/status  { status, cancel_reason, version, note? }  (Customer, chủ đơn)
+  // PATCH /orders/:id/status { status, cancel_reason, version, note? }
   http.patch(url('/orders/:id/status'), guardedV1(async ({ request, params }) => {
-    const caller = callerOf(request);
+    const caller = accountFromRequest(request);
+    if (!caller) fail(401, 'UNAUTHORIZED', 'Thiếu hoặc sai access token');
     const id = orderIdOf(params.id);
     const input = parseBody(await readJson<PatchBody>(request));
-    const order = ownedOrder(id, caller);
+    if (caller.roleName === 'Customer') {
+      const order = ownedOrder(id, caller);
 
-    // Spec: "Customer chỉ được chuyển sang Cancelled". Đã biết là chủ đơn nên 403 không lộ gì thêm.
-    if (input.status !== 'Cancelled') fail(403, 'FORBIDDEN', 'Khách hàng chỉ được chuyển đơn sang Cancelled');
+      if (input.status !== 'Cancelled') fail(403, 'FORBIDDEN', 'Khách hàng chỉ được chuyển đơn sang Cancelled');
 
-    // Thứ tự: version → transition → quy tắc nghiệp vụ (đơn đã trả). Bản cũ thì "hủy được không" chưa có nghĩa.
+      if (input.version !== order.version) {
+        fail(409, 'VERSION_CONFLICT', `Đơn đã được cập nhật (version hiện tại ${order.version}, bạn gửi ${input.version})`);
+      }
+      if (!canActorTransition('Customer', order.status, 'Cancelled')) {
+        fail(409, 'INVALID_STATE_TRANSITION', `Khách không thể hủy đơn đang ở trạng thái ${order.status}`);
+      }
+      if (PAID_STATUSES.includes(order.paymentStatus)) {
+        fail(422, 'BUSINESS_RULE_VIOLATION', `Đơn ${order.orderCode} đã thanh toán (${order.paymentStatus}), không thể hủy qua endpoint này`);
+      }
+
+      transitionOrder(order, caller, input.status, input.cancelReason, input.note);
+
+      return ok({
+        id: order.id, orderCode: order.orderCode, status: order.status, paymentStatus: order.paymentStatus,
+        cancelReason: order.cancelReason, cancelledBy: order.cancelledBy, cancelledAt: order.cancelledAt,
+        completedAt: order.completedAt ?? null, version: order.version, updatedAt: order.updatedAt,
+      });
+    }
+
+    if (caller.roleName !== 'Staff' && caller.roleName !== 'Manager') {
+      fail(403, 'FORBIDDEN', 'Không đủ quyền cập nhật đơn hàng');
+    }
+    const order = db.orders.find((candidate) =>
+      candidate.id === id && candidate.branchId === caller.branchId,
+    );
+    if (!order) return notFound(id);
     if (input.version !== order.version) {
       fail(409, 'VERSION_CONFLICT', `Đơn đã được cập nhật (version hiện tại ${order.version}, bạn gửi ${input.version})`);
     }
-    if (!canActorTransition('Customer', order.status, 'Cancelled')) {
-      fail(409, 'INVALID_STATE_TRANSITION', `Khách không thể hủy đơn đang ở trạng thái ${order.status}`);
+    if (!canActorTransition(caller.roleName, order.status, input.status)) {
+      fail(409, 'INVALID_STATE_TRANSITION', `Không thể chuyển đơn từ ${order.status} sang ${input.status}`);
     }
-    if (PAID_STATUSES.includes(order.paymentStatus)) {
-      fail(422, 'BUSINESS_RULE_VIOLATION', `Đơn ${order.orderCode} đã thanh toán (${order.paymentStatus}), không thể hủy qua endpoint này`);
+    if (input.status === 'Completed' && order.paymentStatus !== 'Paid') {
+      fail(422, 'BUSINESS_RULE_VIOLATION', 'Chỉ hoàn tất đơn đã thanh toán');
     }
-
-    const now = nowNaive();
-    const from = order.status;
-    order.status = 'Cancelled';
-    order.cancelReason = input.cancelReason;
-    order.cancelledBy = caller.id;
-    order.cancelledAt = now;
-    order.version += 1;
-    order.updatedAt = now;
-    order.statusHistory.push({
-      id: ++db.seq.history, orderId: order.id, fromStatus: from, status: 'Cancelled',
-      changedBy: caller.id, note: input.note ?? input.cancelReason, createdAt: now,
-    });
-
-    // Bản rút gọn đúng spec; KHÔNG sinh refund, KHÔNG đổi payment_status.
-    return ok({
-      id: order.id, orderCode: order.orderCode, status: order.status, paymentStatus: order.paymentStatus,
-      cancelReason: order.cancelReason, cancelledBy: order.cancelledBy, cancelledAt: order.cancelledAt,
-      completedAt: order.completedAt ?? null, version: order.version, updatedAt: order.updatedAt,
-    });
+    transitionOrder(order, caller, input.status, input.cancelReason, input.note);
+    return ok(order);
   })),
 ];

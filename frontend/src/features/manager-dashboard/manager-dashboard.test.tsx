@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -17,18 +17,24 @@ import { polyfillDialog, renderApp } from '@/test/renderApp';
 import { averageOrderValue, cancelRate, formatPercent } from './model';
 
 const server = setupServer(...handlers);
+const initialRuntimeConfig = window.__SMART_CAFE_CONFIG__;
 beforeAll(() => {
+  window.__SMART_CAFE_CONFIG__ = { ...window.__SMART_CAFE_CONFIG__, useMock: true };
   server.listen();
   polyfillDialog();
   configureHttp({ getToken: () => useAuthStore.getState().accessToken });
 });
-afterAll(() => server.close());
+afterAll(() => {
+  server.close();
+  window.__SMART_CAFE_CONFIG__ = initialRuntimeConfig;
+});
 afterEach(() => {
   cleanup();
   server.resetHandlers();
   vi.useRealTimers();
 });
 beforeEach(async () => {
+  window.__SMART_CAFE_CONFIG__ = { ...window.__SMART_CAFE_CONFIG__, useMock: true };
   // Chỉ đóng băng Date (không đụng timer) ở 12:00 trưa: đơn seed (tạo 3–200 phút trước) luôn rơi vào cùng một ngày,
   // nên test không phụ thuộc giờ chạy (vd. ngay sau nửa đêm).
   vi.useFakeTimers({ toFake: ['Date'] });
@@ -139,7 +145,8 @@ describe('/manager', () => {
     expect(await within(stockCard()).findByText('Trân châu đen')).toBeTruthy();
   });
 
-  it('branchId null: card kho báo chưa gán chi nhánh, không gọi API kho, phần đơn vẫn chạy', async () => {
+  it('branchId null không dùng mock fallback: báo chưa gán chi nhánh và không tải dữ liệu đơn/kho', async () => {
+    window.__SMART_CAFE_CONFIG__ = { ...window.__SMART_CAFE_CONFIG__, useMock: false };
     useAuthStore.setState({ branchId: null });
     let stockCalls = 0;
     server.use(
@@ -151,9 +158,8 @@ describe('/manager', () => {
     renderApp('/manager');
 
     expect(await within(stockCard()).findByText('Tài khoản chưa được gán chi nhánh')).toBeTruthy();
-    expect(await screen.findByRole('img', { name: /Doanh thu đã thu theo giờ hôm nay/ })).toBeTruthy();
+    expect(screen.queryByRole('img', { name: /Doanh thu đã thu theo giờ hôm nay/ })).toBeNull();
     expect(within(kpi('Nguyên liệu cần nhập')).getByText('—')).toBeTruthy();
-    await waitFor(() => expect(within(kpi('Số đơn hôm nay')).getByText(String(computeDayStats(db.orders, Date.now()).total))).toBeTruthy());
     expect(stockCalls).toBe(0);
   });
 
