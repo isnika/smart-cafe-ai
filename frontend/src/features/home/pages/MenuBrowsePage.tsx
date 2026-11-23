@@ -12,9 +12,11 @@ import type { MenuProduct } from "@/shared/types";
 import { formatVnd } from "@/shared/lib";
 import { Button } from "@/shared/ui";
 import { CategoryChips } from "../components/CategoryChips";
+import { MenuSearch } from "../components/MenuSearch";
 import { MenuEmpty, MenuError, MenuSkeleton } from "../components/MenuStates";
 import { useCategories, usePublicMenu } from "../hooks/useMenu";
 import { useDefaultBranch } from "../hooks/useDefaultBranch";
+import { filterMenu } from "../menuFilter";
 
 /**
  * Thực đơn công khai; khách có thể thêm món vào giỏ trước khi chọn cách nhận hàng.
@@ -33,7 +35,14 @@ export default function MenuBrowsePage() {
 
   const raw = Number(params.get("category"));
   const categoryId = Number.isInteger(raw) && raw > 0 ? raw : null;
-  const products = (menu.data ?? []).filter((p) => categoryId === null || p.categoryId === categoryId);
+  const keyword = params.get("q") ?? "";
+  const products = filterMenu(menu.data ?? [], categoryId, keyword);
+  const updateFilter = (key: string, value: string | null) => {
+    const next = new URLSearchParams(params);
+    if (value) next.set(key, value);
+    else next.delete(key);
+    setParams(next, { replace: true });
+  };
 
   return (
     <div className="min-h-screen bg-primary-50">
@@ -44,17 +53,18 @@ export default function MenuBrowsePage() {
           {branches.isError ? <p role="alert" className="text-caption text-error-strong">Không tải được danh sách chi nhánh. <button type="button" className="underline" onClick={() => void branches.refetch()}>Thử lại</button></p> : <select id="online-branch" aria-label="Chi nhánh đặt hàng" value={branchId ?? ''} disabled={branches.isPending} onChange={(event) => setBranch(event.target.value ? Number(event.target.value) : null)} className="h-11 w-full rounded-md border border-gray-300 bg-white px-3 text-body"><option value="">Chọn chi nhánh</option>{branches.data?.filter((branch) => branch.status === 'Active' && branch.acceptsOnlineOrders).map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select>}
         </section>
         {branchId === null && <p className="rounded-xl bg-primary-100 p-4 text-body text-primary-900">Vui lòng chọn chi nhánh để xem thực đơn và thêm món vào giỏ.</p>}
+        <MenuSearch value={keyword} onChange={(value) => updateFilter("q", value)} />
         {categories.data && categories.data.length > 0 && (
           <CategoryChips
             categories={categories.data}
             activeId={categoryId}
-            onChange={(id) => setParams(id === null ? {} : { category: String(id) }, { replace: true })}
+            onChange={(id) => updateFilter("category", id === null ? null : String(id))}
           />
         )}
 
         {branchId !== null && menu.isPending && <MenuSkeleton />}
         {menu.isError && <MenuError error={menu.error} onRetry={() => void menu.refetch()} />}
-        {menu.isSuccess && products.length === 0 && <MenuEmpty>Chưa có món nào trong danh mục này.</MenuEmpty>}
+        {menu.isSuccess && products.length === 0 && <MenuEmpty>{keyword.trim() ? "Không tìm thấy món phù hợp. Hãy thử từ khóa hoặc danh mục khác." : "Chưa có món nào trong danh mục này."}</MenuEmpty>}
         {products.length > 0 && (
           <div className="grid grid-cols-2 gap-3">
             {products.map((p) =>
