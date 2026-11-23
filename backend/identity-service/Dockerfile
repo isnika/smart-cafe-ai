@@ -6,7 +6,7 @@
 # Stage 1: Extract layers using Spring Boot layertools
 FROM eclipse-temurin:17-jre-alpine AS builder
 WORKDIR /builder
-ARG JAR_FILE=target/*.jar
+ARG JAR_FILE=target/identity-service-*.jar
 COPY ${JAR_FILE} app.jar
 RUN java -Djarmode=layertools -jar app.jar extract
 
