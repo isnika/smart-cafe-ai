@@ -133,6 +133,29 @@ export const getAdminProduct = (id: number, signal?: AbortSignal) =>
 export async function listAdminCategories(signal?: AbortSignal): Promise<AdminCategory[]> {
   return unwrapList(await http.get<unknown>('/catalog/admin/categories', { query: { page: 1, size: 100 }, signal }));
 }
+export async function listAdminCategoriesPaged(
+  params: { page?: number; size?: number; q?: string; status?: string } = {},
+  signal?: AbortSignal,
+): Promise<AdminPage<AdminCategory>> {
+  const page = params.page ?? 1;
+  const size = params.size ?? 10;
+  const result = await http.getWithMeta<unknown>('/catalog/admin/categories', {
+    query: { ...params, page, size },
+    signal,
+  });
+  const items = unwrapList<AdminCategory>(result.data);
+  const meta = result.meta;
+  const totalItems = Number(meta?.totalItems ?? (meta as { totalElements?: number })?.totalElements ?? items.length);
+  return {
+    items,
+    meta: {
+      page: meta?.page ?? page,
+      size: meta?.size ?? size,
+      totalItems,
+      totalPages: meta?.totalPages ?? Math.max(1, Math.ceil(totalItems / size)),
+    },
+  };
+}
 export const createAdminCategory = async (input: AdminCategoryInput) =>
   unwrapData<AdminCategory>(await http.post<unknown>('/catalog/categories', input, { snake: true }));
 export const updateAdminCategory = async (id: number, input: AdminCategoryInput) =>

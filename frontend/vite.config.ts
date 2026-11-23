@@ -65,6 +65,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/loyalty/, '/api/v1/loyalty'),
       },
+      '/inventory': {
+        target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8080',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/inventory/, '/api/v1/inventory'),
+      },
       // Admin pages call the Store service with service-relative paths.
       // Forward these through the gateway just like the versioned production API.
       '/branches': {
