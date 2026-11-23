@@ -7,7 +7,8 @@ services:
     ports:
       - '${FRONTEND_PORT:-5173}:80'
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       API_PROXY_TARGET: ${API_PROXY_TARGET:-http://host.docker.internal:8080}
       AI_PROXY_TARGET: ${AI_PROXY_TARGET:-http://host.docker.internal:8000}
