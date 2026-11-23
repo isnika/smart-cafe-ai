@@ -24,7 +24,8 @@ export function useRecommendations({ excludeProductId, limit = RECOMMENDATION_LI
   const enabled = !!userId && roleName === 'Customer';
   const dineInBranchId = useDineInCartStore((state) => state.branchId);
   const onlineBranchId = useOnlineCartStore((state) => state.branchId);
-  const branchId = dineInBranchId ?? onlineBranchId ?? DINE_IN_BRANCH_ID;
+  const authBranchId = useAuthStore((state) => state.branchId);
+  const branchId = dineInBranchId ?? onlineBranchId ?? authBranchId ?? DINE_IN_BRANCH_ID;
   const mode = excludeProductId === undefined ? 'personalized' : 'similar';
   const recommendations = useQuery({
     queryKey: [...RECOMMENDATIONS_KEY, userId, branchId, mode, excludeProductId, limit],

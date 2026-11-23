@@ -155,6 +155,7 @@ function toUser(a: MockAccount): User {
     lastLoginAt: a.lastLoginAt,
     createdAt: a.createdAt,
     updatedAt: a.createdAt,
+    branchId: identityMockConfig.omitBranchId && (a.roleName === 'Staff' || a.roleName === 'Manager') ? null : a.branchId,
   };
 }
 

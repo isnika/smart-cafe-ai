@@ -15,7 +15,8 @@ export function useChat(open: boolean) {
   const resolvingUser = useAuthStore((s) => s.accessToken !== null && s.user === null && s.status === 'booting');
   const dineInBranchId = useDineInCartStore((s) => s.branchId);
   const onlineBranchId = useOnlineCartStore((s) => s.branchId);
-  const branchId = dineInBranchId ?? onlineBranchId ?? DINE_IN_BRANCH_ID;
+  const authBranchId = useAuthStore((s) => s.branchId);
+  const branchId = dineInBranchId ?? onlineBranchId ?? authBranchId ?? DINE_IN_BRANCH_ID;
   const owner = user?.id ?? 'guest';
   const key = [...messagesKey(owner), branchId] as const;
 

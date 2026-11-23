@@ -63,14 +63,20 @@ const tablesLoaded = () => screen.findByRole('list', { name: 'Danh sách bàn' }
 
 describe('Trang Bàn & phiên bàn (Staff)', () => {
   it('mock đăng nhập Staff thiếu branchId vẫn tải bàn từ branch mặc định', async () => {
-    identityMockConfig.omitBranchId = true;
-    useAuthStore.getState().clear();
-    const session = await identityApi.login({ identifier: 'staff@smartcafe.vn', password: MOCK_PASSWORD });
-    useAuthStore.getState().applySession(session);
-    expect(useAuthStore.getState().branchId).toBeNull();
-    renderApp('/staff/tables');
-    expect(await screen.findByRole('heading', { name: 'Bàn & phiên bàn' })).toBeTruthy();
-    expect(await screen.findByText('01')).toBeTruthy();
+    const prevConfig = window.__SMART_CAFE_CONFIG__;
+    window.__SMART_CAFE_CONFIG__ = { ...window.__SMART_CAFE_CONFIG__, useMock: true };
+    try {
+      identityMockConfig.omitBranchId = true;
+      useAuthStore.getState().clear();
+      const session = await identityApi.login({ identifier: 'staff@smartcafe.vn', password: MOCK_PASSWORD });
+      useAuthStore.getState().applySession(session);
+      expect(useAuthStore.getState().branchId).toBeNull();
+      renderApp('/staff/tables');
+      expect(await screen.findByRole('heading', { name: 'Bàn & phiên bàn' })).toBeTruthy();
+      expect(await screen.findByText(/01/)).toBeTruthy();
+    } finally {
+      window.__SMART_CAFE_CONFIG__ = prevConfig;
+    }
   });
 
   it('hiển thị trạng thái bàn đúng như server trả, không suy từ phiên', async () => {

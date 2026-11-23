@@ -41,7 +41,8 @@ declare global {
   }
 }
 
-const GOOGLE_CLIENT_ID = (window.__SMART_CAFE_CONFIG__?.googleClientId ?? import.meta.env.VITE_GOOGLE_CLIENT_ID)?.trim();
+const getRuntimeConfig = () => (typeof window !== 'undefined' ? window.__SMART_CAFE_CONFIG__ : undefined);
+const GOOGLE_CLIENT_ID = (getRuntimeConfig()?.googleClientId ?? import.meta.env.VITE_GOOGLE_CLIENT_ID)?.trim();
 
 export default function LoginPage() {
   const status = useAuthStore((s) => s.status);

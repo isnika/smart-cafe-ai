@@ -3,7 +3,8 @@ import type { ApiErrorBody } from '@/shared/types';
 import { toSnakeKeys } from '@/shared/lib';
 
 /** Phải khớp BASE_URL trong shared/api/http.ts. */
-const API = (window.__SMART_CAFE_CONFIG__?.apiBaseUrl ?? import.meta.env.VITE_API_BASE_URL ?? '/api').replace(/\/+$/, '');
+const getRuntimeConfig = () => (typeof window !== 'undefined' ? window.__SMART_CAFE_CONFIG__ : undefined);
+const API = (getRuntimeConfig()?.apiBaseUrl ?? import.meta.env.VITE_API_BASE_URL ?? '/api').replace(/\/+$/, '');
 export const url = (path: string) => `${API}${path}`;
 
 /** Chỉnh lúc runtime qua `window.__mock.config` (xem browser.ts). */
