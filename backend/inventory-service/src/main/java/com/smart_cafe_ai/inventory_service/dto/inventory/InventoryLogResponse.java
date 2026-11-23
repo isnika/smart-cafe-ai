@@ -20,7 +20,10 @@ public class InventoryLogResponse {
     private String ingredientName;
     private TransactionType transactionType;
     private BigDecimal quantityChanged;
+    private BigDecimal balanceAfter;
     private String referenceType;
     private String referenceId;
+    private String reason;
+    private String createdBy;
     private LocalDateTime createdAt;
 }

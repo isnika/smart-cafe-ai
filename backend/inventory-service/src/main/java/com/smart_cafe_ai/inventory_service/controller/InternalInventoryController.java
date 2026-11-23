@@ -10,7 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping({"/inventory/internal/inventory", "/inventory/internal", "/internal/inventory", "/internal"})
+@RequestMapping({"/api/v1/inventory/internal/inventory", "/api/v1/internal/inventory", "/api/v1/inventory/internal", "/api/v1/internal", "/inventory/internal/inventory", "/inventory/internal", "/internal/inventory", "/internal"})
 @RequiredArgsConstructor
 public class InternalInventoryController {
 

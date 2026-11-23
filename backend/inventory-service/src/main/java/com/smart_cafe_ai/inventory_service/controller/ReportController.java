@@ -14,7 +14,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 @RestController
-@RequestMapping({"/inventory/reports", "/reports"})
+@RequestMapping({"/api/v1/inventory/reports", "/inventory/reports", "/reports"})
 @RequiredArgsConstructor
 public class ReportController {
 
