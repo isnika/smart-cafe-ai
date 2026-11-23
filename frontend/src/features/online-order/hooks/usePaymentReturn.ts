@@ -20,6 +20,8 @@ export interface PaymentReturnOptions {
   /** Đơn trên URL; giao dịch phải có allocation thuộc đơn này (chống ghép sai orderId/paymentId). */
   orderId: number | null;
   paymentId: number | null;
+  /** Tham số callback từ cổng thanh toán (vnp_*, momo, ...) để chốt trạng thái với backend. */
+  searchParams?: URLSearchParams;
   pollMs?: number;
   timeoutMs?: number;
   /** Cho test; mặc định GET /payments/{id}. */
@@ -30,14 +32,14 @@ const TERMINAL_HTTP = new Set([401, 403, 404]);
 
 /**
  * Polling GET /payments/{id} sau khi quay về từ cổng.
+ *  - Nếu có tham số callback từ VNPay/MoMo, tự động gửi xác thực lên backend để cập nhật trạng thái ngay.
  *  - Hỏi ngay khi mở trang, rồi mỗi `pollMs` sau khi lần trước trả về (không chồng request).
  *  - Dừng khi status != Pending, khi hết `timeoutMs`, khi lỗi không thể thử lại, hoặc khi unmount.
  *  - Lỗi tạm thời (mạng, 5xx) giữ nguyên trạng thái đang chờ và hỏi lại tới hết thời gian chờ.
- *  - Trạng thái CHỈ lấy từ response của server; hook không biết gì về query của cổng (vnp_*...).
  * Mọi timer/request được dọn khi unmount hoặc khi đổi (orderId, paymentId).
  */
 export function usePaymentReturn(opts: PaymentReturnOptions): PaymentReturnState {
-  const { orderId, paymentId, pollMs = RETURN_POLL_MS, timeoutMs = RETURN_TIMEOUT_MS } = opts;
+  const { orderId, paymentId, searchParams, pollMs = RETURN_POLL_MS, timeoutMs = RETURN_TIMEOUT_MS } = opts;
   const fetchPayment = opts.fetchPayment ?? ((id, o) => paymentApi.getPaymentById(id, o));
   const valid = orderId !== null && paymentId !== null;
   const key = `${orderId}:${paymentId}`;
@@ -94,7 +96,29 @@ export function usePaymentReturn(opts: PaymentReturnOptions): PaymentReturnState
       if (!stopped) timers.poll = setTimeout(() => void poll(), pollMs);
     };
 
-    void poll();
+    const run = async () => {
+      // Chỉ trong môi trường thật (không có custom fetchPayment mock):
+      // chuyển tiếp params từ cổng thanh toán (VNPay/MoMo) về backend để backend xác thực chữ ký và cập nhật DB.
+      if (!opts.fetchPayment) {
+        if (searchParams && (searchParams.has('vnp_ResponseCode') || searchParams.has('vnp_SecureHash'))) {
+          try {
+            await paymentApi.confirmVnPayReturn(Object.fromEntries(searchParams.entries()), controller.signal);
+          } catch (e) {
+            console.warn('Failed to call vnpay/return directly, fallback to polling:', e);
+          }
+        } else if (searchParams && (searchParams.has('partnerCode') || searchParams.has('resultCode'))) {
+          try {
+            await paymentApi.confirmMomoReturn(Object.fromEntries(searchParams.entries()), controller.signal);
+          } catch (e) {
+            console.warn('Failed to call momo/return directly, fallback to polling:', e);
+          }
+        }
+      }
+
+      void poll();
+    };
+
+    void run();
     return stop;
     // fetchPayment cố ý không nằm trong deps: truyền hàm mới mỗi render không được phép khởi động lại polling.
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -96,7 +96,7 @@ export default function PaymentReturnPage(props: PageProps) {
   const [search] = useSearchParams();
   const orderId = positiveInt(rawOrderId);
   const paymentId = orderId === null ? null : resolvePaymentId(orderId, search);
-  const state = usePaymentReturn({ orderId, paymentId, ...props });
+  const state = usePaymentReturn({ orderId, paymentId, searchParams: search, ...props });
 
   if (state.phase === 'invalid' || state.phase === 'error' || orderId === null) {
     return (

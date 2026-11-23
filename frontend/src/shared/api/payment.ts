@@ -120,7 +120,15 @@ function toPayment(raw: Loose): Payment {
 export function toPayResult(raw: unknown): PayResult {
   const r: Loose = isRecord(raw) ? raw : {};
   const payment = toPayment(isRecord(r.payment) ? r.payment : r);
-  const rawAllocations = Array.isArray(r.allocations) ? r.allocations : [];
+  let rawAllocations = Array.isArray(r.allocations) ? r.allocations : [];
+  if (rawAllocations.length === 0) {
+    const singleOrderId = num(r.orderId ?? (isRecord(r.payment) ? (r.payment as Loose).orderId : null));
+    if (singleOrderId !== null) {
+      rawAllocations = [{ id: 0, paymentId: payment.id, orderId: singleOrderId, allocatedAmount: payment.amount }];
+    } else if (Array.isArray(r.allocatedOrderIds)) {
+      rawAllocations = r.allocatedOrderIds.map((oId) => ({ id: 0, paymentId: payment.id, orderId: numOr0(oId), allocatedAmount: payment.amount }));
+    }
+  }
   const inner: Loose = isRecord(r.payment) ? r.payment : {};
   return {
     payment,
@@ -185,6 +193,14 @@ export async function listPayments(input: ListPaymentsInput = {}): Promise<PayRe
 /** GET /payments/{id}: trạng thái giao dịch (dùng cho polling sau khi quay về từ cổng). */
 export const getPaymentById = async (id: number, opts?: { signal?: AbortSignal }): Promise<PayResult> =>
   toPayResult(await http.get<unknown>(`/payments/${id}`, opts?.signal ? { signal: opts.signal } : {}));
+
+/** Gửi callback params từ cổng VNPay về backend xử lý cập nhật trạng thái giao dịch. */
+export const confirmVnPayReturn = async (params: Record<string, string>, signal?: AbortSignal): Promise<PayResult> =>
+  toPayResult(await http.get<unknown>('/payments/vnpay/return', { query: params, ...(signal ? { signal } : {}) }));
+
+/** Gửi callback params từ cổng MoMo về backend xử lý cập nhật trạng thái giao dịch. */
+export const confirmMomoReturn = async (params: Record<string, string>, signal?: AbortSignal): Promise<PayResult> =>
+  toPayResult(await http.get<unknown>('/payments/momo/return', { query: params, ...(signal ? { signal } : {}) }));
 
 /** MOCK: đóng vai IPN của cổng thanh toán. Backend thật không có endpoint này. */
 export const simulatePayment = (id: number, input: SimulatePaymentInput, opts?: PaymentCallOptions) =>

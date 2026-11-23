@@ -42,7 +42,11 @@ export default function DineInCheckoutPage() {
     if (payChoice === "online") {
       const started = await online.start(order.id, sessionCode);
       if (started.path) {
-        navigate(started.path, { replace: true });
+        if (started.path.startsWith('http://') || started.path.startsWith('https://')) {
+          window.location.assign(started.path);
+        } else {
+          navigate(started.path, { replace: true });
+        }
         return;
       }
       // Đơn đã được đặt nhưng chưa tạo được giao dịch online → sang màn quầy, nơi khách thử lại online hoặc trả tại quầy.
