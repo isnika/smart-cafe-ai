@@ -391,10 +391,6 @@ export function AdminRevenueSection() {
                 />
               )}
             </div>
-
-            <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50/80 p-3 text-xs text-gray-500">
-              💡 <strong>Gợi ý:</strong> Doanh thu được tính tự động từ các đơn hàng hoàn tất thanh toán (`status = Completed`).
-            </div>
           </Card>
         </div>
       </div>

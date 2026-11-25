@@ -1,5 +1,5 @@
 import type { NewCartLine } from '@/features/dine-in/cart';
-import { formatVnd, parseUtc } from '@/shared/lib';
+import { formatVnd } from '@/shared/lib';
 import type { ProductDetail, ProductOptionGroupView, ProductVariantView } from '@/shared/types';
 
 /** groupId → các optionId đang chọn. */
@@ -78,16 +78,4 @@ export function variantPriceHint(variants: readonly ProductVariantView[], varian
   const base = Math.min(...variants.map((v) => v.price));
   const delta = variant.price - base;
   return delta > 0 ? `+ ${formatVnd(delta)}` : 'Gốc';
-}
-
-/** "4,4" – điểm trung bình theo cách viết của người Việt. */
-export const formatRating = (value: number): string =>
-  new Intl.NumberFormat('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value);
-
-/** "28/10/2026" theo giờ máy người dùng; "—" nếu timestamp không hợp lệ. */
-export function formatReviewDate(createdAt: string): string {
-  const d = parseUtc(createdAt);
-  if (!d) return '—';
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
 }

@@ -15,6 +15,7 @@ export const PATHS = {
   checkout: "/checkout", // Checkout online
   orders: "/orders",
   order: "/orders/:orderId", // Order Tracking (online)
+  orderReview: "/orders/:orderId/reviews",
   profile: "/profile",
   payment: "/payment/:orderId", // Payment Gateway (dùng chung dine-in & online)
   paymentSuccess: "/payment/:orderId/success",
@@ -37,6 +38,7 @@ export const PATHS = {
   // Manager
   manager: "/manager",
   managerOrders: "/manager/orders",
+  managerReviews: "/manager/reviews",
   managerInventory: "/manager/inventory",
   managerIngredients: "/manager/ingredients",
   managerForecast: "/manager/forecast",
@@ -47,6 +49,7 @@ export const PATHS = {
   admin: "/admin",
   adminRevenue: "/admin/revenue",
   adminOrders: "/admin/orders",
+  adminReviews: "/admin/reviews",
   adminBranches: "/admin/branches",
   adminTables: "/admin/tables",
   adminUsers: "/admin/users",
@@ -60,6 +63,7 @@ export const PATHS = {
 export const to = {
   product: (id: string) => `/menu/${id}`,
   order: (orderId: string) => `/orders/${orderId}`,
+  orderReview: (orderId: string) => `/orders/${orderId}/reviews`,
   payment: (orderId: string) => `/payment/${orderId}`,
   paymentSuccess: (orderId: string) => `/payment/${orderId}/success`,
   paymentReturn: (orderId: string) => `/payment/${orderId}/return`,

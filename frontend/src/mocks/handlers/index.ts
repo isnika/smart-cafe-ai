@@ -10,7 +10,6 @@ import { voucherHandlers } from './voucher';
 import { paymentHandlers } from './payment';
 import { paymentV1Handlers } from './payment-v1';
 import { inventoryHandlers } from './inventory';
-import { reviewHandlers } from './review';
 import { intelligenceHandlers } from './intelligence';
 import { chatHandlers } from './chat';
 import { workforceHandlers } from './workforce';
@@ -22,4 +21,4 @@ import { cashierShiftV1Handlers } from './cashier-shift-v1';
 import { staffTableV1Handlers } from './staff-table-v1';
 
 // onlineV1Handlers đứng TRƯỚC: request không phải Online được nhả xuống handler Dine-in.
-export const handlers = [...cashierShiftV1Handlers, ...staffTableV1Handlers, ...onlineV1Handlers, ...orderReadV1Handlers, ...orderCancelV1Handlers, ...dineInV1Handlers, ...cashierHandlers, ...catalogHandlers, ...storeHandlers, ...orderHandlers, ...identityHandlers, ...orderReadHandlers, ...authFlowHandlers, ...branchHandlers, ...voucherHandlers, ...paymentV1Handlers, ...paymentHandlers, ...inventoryHandlers, ...reviewHandlers, ...intelligenceHandlers, ...chatHandlers, ...workforceHandlers];
+export const handlers = [...cashierShiftV1Handlers, ...staffTableV1Handlers, ...onlineV1Handlers, ...orderReadV1Handlers, ...orderCancelV1Handlers, ...dineInV1Handlers, ...cashierHandlers, ...catalogHandlers, ...storeHandlers, ...orderHandlers, ...identityHandlers, ...orderReadHandlers, ...authFlowHandlers, ...branchHandlers, ...voucherHandlers, ...paymentV1Handlers, ...paymentHandlers, ...inventoryHandlers, ...intelligenceHandlers, ...chatHandlers, ...workforceHandlers];

@@ -44,13 +44,20 @@ The previous modular-monolith prototype under `backend/src/main/java/com/smartca
 
 ## Docker Compose
 
-Run these commands from the repository root:
+On Windows, install JDK 17 and start Docker Desktop. From the repository root,
+package all backend services (skipping tests), then build images and start the
+containers:
 
 ```powershell
 cd backend
-Copy-Item .env.example .env
+.\mvnw.cmd clean package -DskipTests
 docker compose up -d --build
 ```
+
+Configure `backend/.env` from `.env.example` if you need to override the
+Compose defaults. The first Maven build may download dependencies. Check
+container status or logs from `backend/` with `docker compose ps -a`
+and `docker compose logs --tail=100`.
 
 To run published Docker Hub images, run from `backend/`:
 

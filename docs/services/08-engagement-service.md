@@ -115,7 +115,7 @@ CREATE TABLE Product_Reviews (
 - **[BR-ENG-01] Quy tắc Tích Tem:** Khi nhận sự kiện `OrderCompleted`, Engagement Service tự động cộng số tem tương ứng với tổng số ly nước trong đơn hàng vào `current_stamps` của khách (`stamps_per_cup = 1`).
 - **[BR-ENG-02] Quy tắc Đổi Ly Miễn Phí:** Khách hàng sở hữu `current_stamps >= 10` mới có quyền sử dụng tính năng đổi 1 ly nước miễn phí (`redeem_free_cup = true` trên đơn hàng). Khi đổi, `current_stamps = current_stamps - 10` và `total_free_cups = total_free_cups + 1`.
 - **[BR-ENG-03] Đánh giá Sản phẩm hợp lệ:** Khách hàng chỉ có quyền gửi đánh giá cho sản phẩm nếu `order_item_id` thuộc về đơn hàng đã `Completed` của chính khách hàng đó. Mỗi `order_item_id` chỉ được đánh giá duy nhất 1 lần.
-- **[BR-ENG-04] Duyệt Đánh giá:** Đánh giá mới tạo mặc định ở trạng thái `Pending`. Chỉ các đánh giá có trạng thái `Approved` mới được hiển thị công khai trên ứng dụng.
+- **[BR-ENG-04] Công khai đánh giá:** Đánh giá mới hợp lệ có trạng thái `Approved` và được hiển thị ngay. Quản lý có thể ẩn đánh giá; các đánh giá `Pending` cũ vẫn cần được xử lý.
 
 ---
 
@@ -125,10 +125,10 @@ CREATE TABLE Product_Reviews (
 ```mermaid
 stateDiagram-v2
     state Product_Reviews {
-        [*] --> Pending: Khách gửi đánh giá sau khi hoàn tất đơn
-        Pending --> Approved: Quản lý/Admin duyệt hiển thị
-        Pending --> Hidden: Quản lý/Admin ẩn đánh giá (Nội dung vi phạm)
-        Approved --> Hidden: Ẩn đánh giá đã duyệt
+        [*] --> Approved: Khách gửi đánh giá hợp lệ
+        Pending --> Approved: Quản lý/Admin duyệt đánh giá cũ
+        Pending --> Hidden: Quản lý/Admin ẩn đánh giá cũ
+        Approved --> Hidden: Quản lý/Admin ẩn đánh giá
     }
 ```
 

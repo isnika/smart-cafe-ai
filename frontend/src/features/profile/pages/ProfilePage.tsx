@@ -1,10 +1,9 @@
 import { useRef, useState, type ChangeEvent, type FormEvent, type SyntheticEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Camera, Check, ChevronRight, Gift, MapPin, Pencil, Plus, Trash2, UserRound, Bell, FileText, LockKeyhole, Download, BadgeCheck, Phone } from 'lucide-react';
+import { Camera, Check, ChevronRight, Gift, MapPin, Pencil, Plus, Trash2, UserRound, FileText, LockKeyhole, Download, BadgeCheck, Phone } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { PATHS } from '@/app/routes';
 import { useAuthStore } from '@/features/auth/store';
-import { NotificationTime } from '@/features/notifications/NotificationTime';
 import { identityApi, engagementApi } from '@/shared/api';
 import type { Address } from '@/shared/types';
 import type { AddressInput } from '@/shared/api/identity';
@@ -55,7 +54,6 @@ export default function ProfilePage() {
   const selectedWard = chosenWardCode || (wardMatches.length === 1 ? wardMatches[0].code : '');
   const loyalty = useQuery({ queryKey: ['engagement', 'loyalty', user?.id], enabled: !!user?.id, queryFn: () => engagementApi.getLoyaltySummary() });
   const transactions = useQuery({ queryKey: ['engagement', 'loyalty-transactions', user?.id], enabled: !!user?.id, queryFn: () => engagementApi.getLoyaltyTransactions(1, 5) });
-  const notifications = useQuery({ queryKey: ['engagement', 'notifications', user?.id], enabled: !!user?.id, queryFn: () => engagementApi.listNotifications({ page: 1, pageSize: 5, type: 'order_status' }) });
   const invoices = useQuery({ queryKey: ['payment', 'invoices-me', user?.id], enabled: !!user?.id, queryFn: () => paymentApi.listMyInvoices(1, 5) });
   const saveAddress = useMutation({
     mutationFn: (draft: AddressInput) => editingAddressId ? identityApi.updateAddress(editingAddressId, draft) : identityApi.createAddress(draft),
@@ -213,9 +211,6 @@ export default function ProfilePage() {
           {transactions.isPending ? <p className="mt-4 text-caption text-gray-600">Đang tải lịch sử tem…</p> : transactions.isError ? <p role="alert" className="mt-4 text-caption text-error-strong">Không tải được lịch sử tích tem. <button type="button" className="underline" onClick={() => void transactions.refetch()}>Thử lại</button></p> : transactions.data?.items?.length ? <ul className="mt-4 divide-y divide-gray-100 border-t border-gray-100">{transactions.data.items.slice(0, 3).map((tx) => <li key={tx.id} className="flex items-center justify-between gap-3 py-3"><span className="min-w-0"><span className="block truncate font-medium">{tx.note || (tx.stamps > 0 ? 'Tích điểm đơn hàng' : 'Đổi quà')}</span><span className="text-caption text-gray-600">{new Date(tx.createdAt).toLocaleDateString('vi-VN')}</span></span><strong className={cn('shrink-0', tx.stamps > 0 ? 'text-gray-900' : 'text-gray-600')}>{tx.stamps > 0 ? '+' : ''}{tx.stamps} tem</strong></li>)}</ul> : <p className="mt-4 border-t border-gray-100 pt-3 text-caption text-gray-600">Chưa có lịch sử tích điểm.</p>}
         </div>
       </section>
-      <section aria-labelledby="notifications"><h2 id="notifications" className="mb-3 text-body-lg font-semibold">Thông báo đơn hàng</h2><div className="rounded-lg bg-white p-4">
-        {notifications.isPending ? <p className="text-caption text-gray-600">Đang tải thông báo…</p> : notifications.isError ? <p className="text-caption text-error-strong">Không tải được thông báo.</p> : notifications.data?.items?.length ? <ul className="divide-y divide-gray-100">{notifications.data.items.map((n) => <li key={n.id} className="flex gap-3 py-3 first:pt-0 last:pb-0"><Bell className="mt-1 size-4 shrink-0 text-primary-700"/><div><p className="font-medium">{n.title}</p><p className="text-caption text-gray-600">{n.body}</p><NotificationTime createdAt={n.createdAt} />{!n.isRead && <button type="button" onClick={() => void engagementApi.markNotificationRead(n.id).then(() => queryClient.invalidateQueries({ queryKey: ['engagement', 'notifications'] }))} className="mt-1 text-caption font-medium text-primary-700">Đánh dấu đã đọc</button>}</div></li>)}</ul> : <p className="text-caption text-gray-600">Chưa có thông báo mới.</p>}
-      </div></section>
       <section aria-labelledby="invoices"><h2 id="invoices" className="mb-3 text-body-lg font-semibold">Hóa đơn điện tử</h2><div className="rounded-lg bg-white p-4">
         {invoiceNotice && <p role="status" className="mb-2 text-caption text-primary-700">{invoiceNotice}</p>}
         {invoices.isPending ? <p className="text-caption text-gray-600">Đang tải hóa đơn…</p> : invoices.isError ? <p className="text-caption text-error-strong">Không tải được hóa đơn.</p> : invoices.data?.length ? <ul className="divide-y divide-gray-100">{invoices.data.map((inv) => <li key={inv.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"><span><span className="block font-medium">Hóa đơn #{inv.id}</span><span className="text-caption text-gray-600">{inv.status} · {new Date(inv.createdAt).toLocaleDateString('vi-VN')}</span></span><button type="button" aria-label={`Tải hóa đơn ${inv.id}`} onClick={() => void paymentApi.downloadInvoice(inv.id).then((blob) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `invoice_${inv.id}.pdf`; a.click(); URL.revokeObjectURL(a.href); }).catch((e: unknown) => setInvoiceNotice(e instanceof Error ? e.message : 'Không tải được hóa đơn.'))} className="rounded p-2 text-primary-700 hover:bg-primary-50"><Download className="size-5"/></button></li>)}</ul> : <p className="text-caption text-gray-600">Chưa có hóa đơn.</p>}

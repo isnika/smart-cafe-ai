@@ -134,6 +134,25 @@ describe('/orders — lịch sử đơn hàng (GET /orders/me)', () => {
     expect(screen.getByText('Theo dõi đơn hàng')).toBeTruthy();
   });
 
+  it('chỉ đơn hoàn tất có nút dẫn đến trang đánh giá của đơn', async () => {
+    await signIn('customer@smartcafe.vn');
+    server.use(http.get(url('/reviews/me'), () => HttpResponse.json({ success: true, data: [], meta: { page: 1, size: 100, total: 0 } })));
+    const { router } = renderApp('/orders');
+    await screen.findAllByRole('article');
+    const orders = ownOrders('u-customer');
+    const completed = orders.find((order) => order.status === 'Completed')!;
+    const card = screen.getByRole('article', { name: `Đơn #${completed.orderCode}` });
+    const link = await within(card).findByRole('link', { name: `Đánh giá đơn #${completed.orderCode}` });
+    expect(link.getAttribute('href')).toBe(`/orders/${completed.id}/reviews`);
+    for (const order of orders.filter((item) => item.status !== 'Completed')) {
+      const otherCard = screen.getByRole('article', { name: `Đơn #${order.orderCode}` });
+      expect(within(otherCard).queryByRole('link', { name: /Đánh giá đơn/ })).toBeNull();
+    }
+    fireEvent.click(link);
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/orders/${completed.id}/reviews`));
+    expect(await screen.findByRole('heading', { name: 'Đánh giá sản phẩm' })).toBeTruthy();
+  });
+
   it('không còn nút "Đặt lại" (reorder ngoài phạm vi bước này)', async () => {
     await signIn('customer@smartcafe.vn');
     renderApp('/orders');

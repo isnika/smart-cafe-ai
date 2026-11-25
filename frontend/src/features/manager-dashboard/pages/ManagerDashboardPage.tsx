@@ -1,4 +1,6 @@
 import { useMemo, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
+import { PATHS } from '@/app/routes';
 import { AlertTriangle, Boxes, LayoutDashboard, ReceiptText, TrendingUp } from 'lucide-react';
 import { useAuthBranchId } from '@/features/auth/branch-context';
 import { isApiError } from '@/shared/api';
@@ -67,6 +69,7 @@ export default function ManagerDashboardPage() {
           <LayoutDashboard aria-hidden className="size-6 text-primary-600" /> Tổng quan hôm nay
         </h1>
       </div>
+      <Link to={PATHS.managerReviews} className="inline-block rounded border border-primary-300 bg-white px-4 py-2 text-primary-700">Quản lý đánh giá</Link>
 
       {orders.isError && day && <StaleNote onRetry={retryOrders}>Không cập nhật được số liệu đơn hàng, đang hiển thị dữ liệu lần tải trước.</StaleNote>}
 

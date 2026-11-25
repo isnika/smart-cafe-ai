@@ -4,8 +4,6 @@ import type { ProductDetail, ProductOptionGroupView, ProductVariantView } from '
 import {
   buildDraft,
   firstMissingGroup,
-  formatRating,
-  formatReviewDate,
   initialPicks,
   initialVariantId,
   isSoldOut,
@@ -118,17 +116,5 @@ describe('buildDraft → giá tạm tính', () => {
 
   it('chưa có size → null', () => {
     expect(buildDraft(detail, null, [topping], {})).toBeNull();
-  });
-});
-
-describe('định dạng', () => {
-  it('điểm trung bình dùng dấu phẩy, luôn 1 chữ số thập phân', () => {
-    expect(formatRating(4.428)).toBe('4,4');
-    expect(formatRating(5)).toBe('5,0');
-  });
-
-  it('ngày review: dd/MM/yyyy; timestamp hỏng → "—"', () => {
-    expect(formatReviewDate('2026-10-28T09:15:00Z')).toMatch(/^\d{2}\/10\/2026$/);
-    expect(formatReviewDate('không phải ngày')).toBe('—');
   });
 });

@@ -27,7 +27,9 @@ import PaymentReturnPage from "@/features/online-order/pages/PaymentReturnPage";
 import OrderHistoryPage from "@/features/orders/pages/OrderHistoryPage";
 import ProfilePage from "@/features/profile/pages/ProfilePage";
 import OrderTrackingPage from "@/features/online-order/pages/OrderTrackingPage";
+import OrderReviewPage from "@/features/online-order/pages/OrderReviewPage";
 import ManagerDashboardPage from "@/features/manager-dashboard/pages/ManagerDashboardPage";
+import ReviewModerationPage from "@/features/reviews/ReviewModerationPage";
 import InventoryPage from "@/features/manager-inventory/pages/InventoryPage";
 import ManagerForecastPage from "@/features/manager-forecast/pages/ManagerForecastPage";
 import StaffDashboardPage from "@/features/staff-dashboard/pages/StaffDashboardPage";
@@ -77,6 +79,10 @@ export const routes: RouteObject[] = [
       { path: PATHS.dineInTable, element: <DineInTablePage /> },
       { path: PATHS.counterPayment, element: <CounterPaymentPage /> },
       { path: PATHS.payment, element: <PaymentGatewayPage /> },
+      {
+        element: <RequireRole allow={["Customer"]} />,
+        children: [{ path: PATHS.orderReview, element: <OrderReviewPage /> }],
+      },
       {
         element: <CustomerLayout />,
         children: [
@@ -132,6 +138,7 @@ export const routes: RouteObject[] = [
         children: [
           { path: PATHS.manager, element: <ManagerDashboardPage /> },
           { path: PATHS.managerOrders, element: <OrderManagementPage /> },
+          { path: PATHS.managerReviews, element: <ReviewModerationPage /> },
           { path: PATHS.managerInventory, element: <InventoryPage /> },
           { path: PATHS.managerIngredients, element: <IngredientsPage /> },
           { path: PATHS.managerForecast, element: <ManagerForecastPage /> },
@@ -150,6 +157,7 @@ export const routes: RouteObject[] = [
           { path: PATHS.admin, element: <AdminDashboardPage /> },
           { path: PATHS.adminRevenue, element: <AdminRevenuePage /> },
           { path: PATHS.adminOrders, element: <OrderManagementPage /> },
+          { path: PATHS.adminReviews, element: <ReviewModerationPage /> },
           { path: PATHS.adminBranches, element: <AdminBranchesPage /> },
           { path: PATHS.adminTables, element: <AdminTablesPage /> },
           { path: PATHS.adminUsers, element: <AdminUsersPage /> },

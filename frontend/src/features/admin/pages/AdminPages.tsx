@@ -346,6 +346,7 @@ export function AdminDashboardPage() {
                 icon: Users,
               },
               { to: "/admin/menus", label: "Thực đơn chi nhánh", icon: Coffee },
+              { to: "/admin/reviews", label: "Quản lý đánh giá", icon: Shield },
               { to: "/admin/tables", label: "Quản lý bàn & QR", icon: QrCode },
             ].map(({ to, label, icon: Icon }) => (
               <Link

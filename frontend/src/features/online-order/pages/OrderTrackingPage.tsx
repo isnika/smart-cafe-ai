@@ -5,6 +5,7 @@ import { formatVnd } from '@/shared/lib';
 import { Badge, Button, Skeleton } from '@/shared/ui';
 import { CancelOrderSection } from '../components/CancelOrderSection';
 import { OrderTimeline } from '../components/OrderTimeline';
+import { OrderReviews } from '../components/OrderReviews';
 import { useOrderTracking } from '../hooks/useOrderTracking';
 import {
   PAYMENT_STATUS_LABEL,
@@ -172,6 +173,7 @@ export default function OrderTrackingPage() {
             </dl>
           </section>
 
+          {order.status === 'Completed' && <OrderReviews items={order.items} />}
           {isOnlineOrder(order) && (
             <Link to={PATHS.menu} className="block text-center text-body font-semibold text-primary-600 hover:underline">
               Đặt thêm món
