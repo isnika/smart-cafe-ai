@@ -1,12 +1,38 @@
 {
   "source_mode": "demo",
   "branch_id": 1,
-  "data_version": "demo-orders.csv:4420651:1794322668715521100|order_items.csv:4987851:1794322668691470000|recipes.csv:483:1794322668717549000|inventory.csv:310:1794322668665817100",
-  "snapshot_generated_at": "2026-11-10 14:57:48.717549+00:00",
+  "data_version": "demo-orders.csv:4420651:1794813665107876700|order_items.csv:4987851:1794813665087866900|recipes.csv:483:1794813665108870900|inventory.csv:310:1794813665064625400",
+  "snapshot_generated_at": "2026-11-16 07:21:05.108871+00:00",
   "data_cutoff_date": "2026-10-18",
   "timezone": "Asia/Ho_Chi_Minh",
   "model_version": "revenue-forecast-v3",
   "selected_model": "WeekdayMean8Weeks",
+  "candidate_models": [
+    "SeasonalNaive",
+    "WeekdayMean8Weeks",
+    "RandomForestRegressor",
+    "ExtraTreesRegressor",
+    "HistGradientBoostingRegressor"
+  ],
+  "selection_metric": "mae",
+  "test_is_holdout": true,
+  "artifact_loaded": false,
+  "artifact_path": "branch-1.joblib",
+  "training_window": {
+    "start": "2024-01-01",
+    "end": "2026-10-18",
+    "observations": 1022
+  },
+  "data_summary": {
+    "orders": 81629,
+    "order_items": 105446,
+    "recipes": 12,
+    "inventory": 5,
+    "revenue_observed_days": 1022,
+    "revenue_filled_zero_days": 0,
+    "revenue_excluded_status_counts": {},
+    "revenue_excluded_payment_counts": {}
+  },
   "validation": {
     "SeasonalNaive": {
       "mae": 708750.0,
@@ -20,12 +46,12 @@
     },
     "RandomForestRegressor": {
       "mae": 554060.5426587494,
-      "rmse": 712093.9357489613,
+      "rmse": 712093.9357489612,
       "wape": 0.13228487250421858
     },
     "ExtraTreesRegressor": {
-      "mae": 571051.2871446259,
-      "rmse": 736020.4643659813,
+      "mae": 571051.287144626,
+      "rmse": 736020.4643659814,
       "wape": 0.136341502231505
     },
     "HistGradientBoostingRegressor": {
@@ -46,14 +72,14 @@
       "wape": 0.11689763578320754
     },
     "RandomForestRegressor": {
-      "mae": 610819.1611297646,
-      "rmse": 705632.2449119373,
-      "wape": 0.15388586429087361
+      "mae": 610819.161129765,
+      "rmse": 705632.2449119374,
+      "wape": 0.1538858642908737
     },
     "ExtraTreesRegressor": {
-      "mae": 595850.7336969386,
-      "rmse": 694396.0557610206,
-      "wape": 0.15011481462649298
+      "mae": 595850.7336969387,
+      "rmse": 694396.0557610207,
+      "wape": 0.150114814626493
     },
     "HistGradientBoostingRegressor": {
       "mae": 655544.179823208,
@@ -112,6 +138,10 @@
     "order_items_exact_duplicates_removed": 3133,
     "recipes_invalid_removed": 0,
     "inventory_invalid_removed": 0,
+    "orders_before_normalize": 81629,
+    "order_items_before_normalize": 108579,
+    "recipes_before_normalize": 12,
+    "inventory_before_normalize": 5,
     "demo_product_recipe_mapping": true,
     "orders_rows": 81629,
     "order_items_rows": 105446,
@@ -124,6 +154,9 @@
     "revenue_excluded_payment_counts": {},
     "revenue_observed_days": 1022,
     "revenue_filled_zero_days": 0,
-    "revenue_cutoff_date": "2026-10-18"
+    "revenue_cutoff_date": "2026-10-18",
+    "forecast_artifact_loaded": false,
+    "forecast_artifact_path": "branch-1.joblib",
+    "forecast_artifact_metadata_path": "branch-1.json"
   }
 }

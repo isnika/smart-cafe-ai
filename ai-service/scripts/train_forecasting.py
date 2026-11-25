@@ -29,6 +29,17 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=ROOT / "evaluation" / "forecasting_metrics.json",
     )
+    parser.add_argument(
+        "--artifact-dir",
+        type=Path,
+        default=None,
+        help="Override the directory used for the .joblib model and metadata sidecar.",
+    )
+    parser.add_argument(
+        "--no-save",
+        action="store_true",
+        help="Run the time-based evaluation without writing a model artifact.",
+    )
     return parser.parse_args()
 
 
@@ -37,13 +48,24 @@ def main() -> int:
     settings = get_forecasting_settings()
     if args.source_mode:
         settings = replace(settings, source_mode=args.source_mode)
+    if args.artifact_dir is not None:
+        settings = replace(settings, artifact_dir=str(args.artifact_dir))
     repository = (
         DemoForecastingRepository(DEMO_DATA_DIR, settings)
         if settings.source_mode == "demo"
         else OperationalForecastingRepository(settings)
     )
     snapshot = repository.load_snapshot(branch_id=args.branch_id)
-    service = RevenueForecastService(snapshot=snapshot, settings=settings)
+    service = RevenueForecastService(
+        snapshot=snapshot,
+        settings=settings,
+        force_retrain=True,
+        persist_artifact=not args.no_save,
+    )
+    quality = dict(service.quality)
+    for key in ("forecast_artifact_path", "forecast_artifact_metadata_path"):
+        if quality.get(key):
+            quality[key] = Path(str(quality[key])).name
     result = {
         "source_mode": service.source_mode,
         "branch_id": service.branch_id,
@@ -55,11 +77,31 @@ def main() -> int:
         "timezone": service.timezone,
         "model_version": service.model_version,
         "selected_model": service.model_name,
+        "candidate_models": service.evaluation.get("candidate_names", []),
+        "selection_metric": service.evaluation.get("selection_metric", "mae"),
+        "test_is_holdout": bool(service.evaluation.get("test_is_holdout", True)),
+        "artifact_loaded": service.artifact_loaded,
+        "artifact_path": service.artifact_path.name if service.artifact_path else None,
+        "training_window": {
+            "start": service.history.index.min().strftime("%Y-%m-%d"),
+            "end": service.history.index.max().strftime("%Y-%m-%d"),
+            "observations": len(service.history),
+        },
+        "data_summary": {
+            "orders": int(len(service.orders)),
+            "order_items": int(len(service.order_items)),
+            "recipes": int(len(service.recipes)),
+            "inventory": int(len(service.inventory)),
+            "revenue_observed_days": service.quality.get("revenue_observed_days"),
+            "revenue_filled_zero_days": service.quality.get("revenue_filled_zero_days"),
+            "revenue_excluded_status_counts": service.quality.get("revenue_excluded_status_counts", {}),
+            "revenue_excluded_payment_counts": service.quality.get("revenue_excluded_payment_counts", {}),
+        },
         "validation": service.evaluation.get("validation", {}),
         "test": service.evaluation.get("test", {}),
         "folds": service.evaluation.get("folds", []),
         "fallback_reason": service.evaluation.get("fallback_reason"),
-        "quality": service.quality,
+        "quality": quality,
     }
     output = args.output if args.output.is_absolute() else (Path.cwd() / args.output).resolve()
     output.parent.mkdir(parents=True, exist_ok=True)

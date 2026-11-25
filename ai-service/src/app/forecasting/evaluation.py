@@ -25,7 +25,15 @@ BASELINE_NAMES = ("SeasonalNaive", "WeekdayMean8Weeks")
 CANDIDATE_NAMES = (*BASELINE_NAMES, *TREE_FACTORIES.keys())
 
 
-def _metrics(actual: pd.Series, predicted: list[float]) -> dict[str, float | None]:
+def compute_metrics(actual: pd.Series, predicted: list[float]) -> dict[str, float | None]:
+    """Compute point-weighted MAE/RMSE/WAPE for one evaluation slice.
+
+    Aggregation is performed by concatenating every actual/predicted point from
+    the selected folds before calling this function. Therefore folds with
+    different sizes are weighted by their number of evaluated observations,
+    rather than by an unweighted mean of fold-level metrics.
+    """
+
     y_true = np.asarray(actual, dtype=float)
     y_pred = np.asarray(predicted, dtype=float)
     y_pred = np.where(np.isfinite(y_pred), np.maximum(0.0, y_pred), 0.0)
@@ -37,6 +45,12 @@ def _metrics(actual: pd.Series, predicted: list[float]) -> dict[str, float | Non
         if denominator > 0
         else None,
     }
+
+
+def _metrics(actual: pd.Series, predicted: list[float]) -> dict[str, float | None]:
+    """Backward-compatible internal alias used by the fold evaluator."""
+
+    return compute_metrics(actual, predicted)
 
 
 def fit_tree_model(model_name: str, history: pd.Series):
@@ -108,6 +122,8 @@ def rolling_origin_evaluation(
         return {
             "selected_model": "WeekdayMean8Weeks",
             "candidate_names": list(CANDIDATE_NAMES),
+            "selection_metric": "mae",
+            "test_is_holdout": True,
             "folds": [],
             "validation": {},
             "test": {},
@@ -162,6 +178,8 @@ def rolling_origin_evaluation(
     return {
         "selected_model": selected_model,
         "candidate_names": list(CANDIDATE_NAMES),
+        "selection_metric": "mae",
+        "test_is_holdout": True,
         "folds": [
             {key: value for key, value in fold.items() if key != "models"}
             for fold in folds

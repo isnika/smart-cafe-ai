@@ -150,3 +150,56 @@ formula remains the fallback. Missing recipe/inventory or a unit mismatch remain
 
 Not implemented: shrinkage/waste, inbound stock, MOQ, pack size, and unit
 conversion. These are not included in the response as if they were implemented.
+
+## Train, evaluate, persist, and serve
+
+The reproducible training command is:
+
+```powershell
+cd ai-service
+$env:FORECASTING_SOURCE_MODE = "demo"
+python scripts/train_forecasting.py --source-mode demo
+```
+
+The command uses a chronological rolling-origin evaluation. Each fold trains on
+the prefix before the forecast origin, evaluates the same horizon, and reserves
+the final fold as a holdout test. Model selection uses validation MAE only;
+test metrics are reported after selection. `WeekdayMean8Weeks` remains a valid
+production winner and is not replaced by a tree model unless validation proves
+that the tree is better.
+
+Candidates currently implemented and evaluated are `SeasonalNaive`,
+`WeekdayMean8Weeks`, `RandomForestRegressor`, `ExtraTreesRegressor`, and
+`HistGradientBoostingRegressor`. The optional XGBoost factory is not part of the
+active candidate set.
+
+Successful training writes a branch/source-scoped `.joblib` artifact plus a
+human-readable `.json` sidecar under `FORECASTING_ARTIFACT_DIR` (default:
+`ai-service/artifacts/forecasting`). Artifacts are ignored by git. The sidecar
+records the snapshot version, branch, target, feature schema, training window,
+model version, validation metrics, and holdout test metrics. Serving loads the
+artifact only when all of those compatibility checks pass; otherwise it
+re-trains from the current snapshot. A corrupt or incompatible artifact never
+causes a false successful response.
+
+The verified demo fixture contains 81,629 orders over 1,022 business days
+(`2024-01-01` through `2026-10-18`), 108,579 order items, 12 recipe rows, and
+5 inventory rows. All demo orders are branch 1, `Completed`, and `Paid`.
+
+## Backend data readiness
+
+The AI adapter requires a branch-scoped snapshot containing non-empty
+`orders`, `order_items`, `recipes`, and `inventory`, plus `version`,
+`generated_at`, `complete_through`, `coverage_complete=true`, and branch
+timezone. The current Spring Boot `DataProviderService` exposes the snapshot
+route but returns empty order/order-item lists in its implementation. Live
+forecasting therefore rejects that snapshot as unavailable instead of treating
+missing sales as zero or falling back to demo data. Backend must populate those
+lists from completed order/order-item data before live inventory optimization
+can produce a recommendation.
+
+The current backend snapshot contract does not provide inbound stock, package
+size/MOQ, unit conversion, expiry, or per-ingredient lead time. The AI service
+uses an explicit `INVENTORY_DEFAULT_LEAD_TIME_DAYS` only when configured; it
+does not invent these values. Missing recipe, inventory, lead time/history, or
+unit compatibility is surfaced in `status`, `missing_data`, and `reason`.

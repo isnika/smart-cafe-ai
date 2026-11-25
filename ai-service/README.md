@@ -51,3 +51,19 @@ Score(món) = 0.8 × Score_cá_nhân_hóa + 0.2 × Score_hot_trend
 | Gợi ý món | Recommender System | Matrix Factorization + Content-Based + Popularity | Đại số tuyến tính, Thống kê |
 | Dự đoán doanh thu | Time Series Forecasting | Prophet/SARIMA, XGBoost | Thống kê, Hồi quy |
 | Tồn kho | Demand Forecasting + Inventory Optimization | Time Series + Reorder Point | Thống kê, Xác suất |
+
+### Implementation status (verified in this repository)
+
+- Forecasting is the primary supervised-ML module. It evaluates chronological
+  baselines and tree regressors, keeps the final rolling-origin fold as a
+  holdout test, and persists a compatible `.joblib` artifact with metadata.
+- The deployed model is selected by validation MAE; a baseline may remain the
+  winner. The current active code does not use Prophet, SARIMA, LightGBM, or
+  XGBoost as an active candidate.
+- Recommendations use TF-IDF/content similarity, item-item cosine
+  collaboration, recency, popularity, and reorder rules. There is no matrix
+  factorization implementation in the current serving path.
+- Inventory optimization converts variant demand through recipes only when
+  recipe and inventory units match. Missing lead time/history uses the explicit
+  reorder-level fallback; missing business data is reported as
+  `insufficient_data`.

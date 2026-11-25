@@ -24,7 +24,9 @@ from .inventory_policy import (
     safety_stock,
     service_level_to_z,
 )
+from .features import FEATURE_COLUMNS
 from .models import seasonal_naive, weekday_mean
+from .persistence import load_artifact, save_artifact
 from .repository import (
     DEMO_DATA_DIR,
     DemoForecastingRepository,
@@ -75,6 +77,8 @@ class RevenueForecastService:
         settings: ForecastingSettings | None = None,
         branch_id: int | None = None,
         authorization: str | None = None,
+        force_retrain: bool = False,
+        persist_artifact: bool = True,
     ):
         settings = settings or get_forecasting_settings()
         if snapshot is None:
@@ -96,6 +100,11 @@ class RevenueForecastService:
         self.timezone = snapshot.timezone
         self.cutoff_date = pd.Timestamp(snapshot.complete_through).normalize()
         self.trained_at = pd.Timestamp.now(tz="UTC")
+        self.force_retrain = force_retrain
+        self.persist_artifact = persist_artifact
+        self.artifact_loaded = False
+        self.artifact_path: Path | None = None
+        self.artifact_metadata: dict[str, Any] = {}
         self.stale = False
         self.refresh_error: str | None = None
         self.quality = dict(snapshot.quality)
@@ -203,6 +212,37 @@ class RevenueForecastService:
             raise ForecastingDataQualityError(
                 "Cần tối thiểu 14 ngày lịch sử để dùng baseline revenue forecast."
             )
+        if not self.force_retrain:
+            loaded = load_artifact(
+                artifact_dir=self.settings.artifact_dir,
+                source_mode=self.source_mode,
+                branch_id=self.branch_id,
+                data_version=self.data_version,
+                model_version=self.settings.model_version,
+                evaluation_config={
+                    "initial_train_days": self.settings.evaluation_initial_days,
+                    "horizon_days": self.settings.evaluation_horizon_days,
+                    "folds": self.settings.evaluation_folds,
+                    "step_days": self.settings.evaluation_step_days,
+                },
+            )
+            if loaded is not None:
+                self.artifact_loaded = True
+                self.artifact_path = loaded["path"]
+                self.artifact_metadata = dict(loaded.get("metadata", {}))
+                trained_at = self.artifact_metadata.get("trained_at")
+                if trained_at:
+                    try:
+                        self.trained_at = pd.Timestamp(trained_at)
+                        if self.trained_at.tzinfo is None:
+                            self.trained_at = self.trained_at.tz_localize("UTC")
+                    except (TypeError, ValueError):
+                        pass
+                evaluation = dict(loaded.get("evaluation") or {})
+                evaluation["model"] = loaded.get("model")
+                self.quality["forecast_artifact_loaded"] = True
+                return evaluation
+
         evaluation = rolling_origin_evaluation(
             self.history,
             initial_train_days=self.settings.evaluation_initial_days,
@@ -216,6 +256,41 @@ class RevenueForecastService:
         else:
             model = fit_tree_model(selected, self.history)
         evaluation["model"] = model
+        self.quality["forecast_artifact_loaded"] = False
+        if self.persist_artifact:
+            metadata = {
+                "source_mode": self.source_mode,
+                "branch_id": self.branch_id,
+                "data_version": self.data_version,
+                "timezone": self.timezone,
+                "model_version": self.settings.model_version,
+                "target": "daily_revenue_vnd",
+                "evaluation_config": {
+                    "initial_train_days": self.settings.evaluation_initial_days,
+                    "horizon_days": self.settings.evaluation_horizon_days,
+                    "folds": self.settings.evaluation_folds,
+                    "step_days": self.settings.evaluation_step_days,
+                },
+                "training_window_start": self.history.index.min().strftime("%Y-%m-%d"),
+                "training_window_end": self.history.index.max().strftime("%Y-%m-%d"),
+                "training_observations": len(self.history),
+                "trained_at": self.trained_at.isoformat(),
+                "selected_model": str(selected),
+                "evaluation": {key: value for key, value in evaluation.items() if key != "model"},
+            }
+            try:
+                self.artifact_path, metadata_path = save_artifact(
+                    artifact_dir=self.settings.artifact_dir,
+                    source_mode=self.source_mode,
+                    branch_id=self.branch_id,
+                    model=model,
+                    metadata=metadata,
+                )
+                self.artifact_metadata = metadata
+                self.quality["forecast_artifact_path"] = str(self.artifact_path)
+                self.quality["forecast_artifact_metadata_path"] = str(metadata_path)
+            except Exception as exc:  # persistence must never take down forecasting
+                self.quality["forecast_artifact_save_error"] = type(exc).__name__
         return evaluation
 
     def _selected_validation_metric(self, metric: str) -> float | None:
@@ -251,6 +326,11 @@ class RevenueForecastService:
             "stale": self.stale,
             "refresh_error": self.refresh_error,
             "fallback_reason": fallback_reason,
+            "artifact_loaded": self.artifact_loaded,
+            "artifact_path": self.artifact_path.name if self.artifact_path else None,
+            "training_window_start": self.artifact_metadata.get("training_window_start"),
+            "training_window_end": self.artifact_metadata.get("training_window_end"),
+            "feature_schema": list(FEATURE_COLUMNS),
         }
 
     def _forecast_value(self, history: pd.Series, target_date: pd.Timestamp) -> float:
@@ -699,6 +779,7 @@ def get_forecast_service(
         settings.evaluation_step_days,
         settings.inventory_default_lead_time_days,
         settings.inventory_service_level,
+        settings.artifact_dir,
         _auth_fingerprint(authorization) if settings.source_mode == "live" else "demo",
     )
     now = time.monotonic()

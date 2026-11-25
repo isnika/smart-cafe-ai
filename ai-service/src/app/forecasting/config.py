@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from math import isfinite
+from .persistence import DEFAULT_ARTIFACT_DIR
 
 
 def _int(name: str, default: int, minimum: int, maximum: int) -> int:
@@ -63,6 +64,7 @@ class ForecastingSettings:
     evaluation_step_days: int
     inventory_default_lead_time_days: float | None = None
     inventory_service_level: float = 0.95
+    artifact_dir: str = str(DEFAULT_ARTIFACT_DIR)
 
     @classmethod
     def from_env(cls) -> "ForecastingSettings":
@@ -108,6 +110,10 @@ class ForecastingSettings:
                 "INVENTORY_DEFAULT_LEAD_TIME_DAYS"
             ),
             inventory_service_level=_service_level(),
+            artifact_dir=os.getenv(
+                "FORECASTING_ARTIFACT_DIR",
+                str(DEFAULT_ARTIFACT_DIR),
+            ).strip() or str(DEFAULT_ARTIFACT_DIR),
         )
 
 

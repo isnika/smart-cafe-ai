@@ -36,6 +36,11 @@ class ForecastMetadata(BaseModel):
     stale: bool = False
     refresh_error: str | None = None
     fallback_reason: str | None = None
+    artifact_loaded: bool = False
+    artifact_path: str | None = None
+    training_window_start: date | None = None
+    training_window_end: date | None = None
+    feature_schema: list[str] = Field(default_factory=list)
 
 
 class RevenueForecastPoint(BaseModel):

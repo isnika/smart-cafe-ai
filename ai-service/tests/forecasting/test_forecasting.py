@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import json
 
 import pandas as pd
 import pytest
@@ -11,6 +12,8 @@ from src.app.api.routes import forecasting as forecasting_route
 from src.app.forecasting.config import ForecastingSettings
 from src.app.forecasting.exceptions import ForecastingDataUnavailable
 from src.app.forecasting.features import make_future_features
+from src.app.forecasting.evaluation import compute_metrics
+from src.app.forecasting.persistence import artifact_paths
 from src.app.forecasting.repository import DemoForecastingRepository
 from src.app.forecasting.service import (
     RevenueForecastService,
@@ -374,3 +377,77 @@ def test_cache_refresh_rebuilds_when_forced(tmp_path, monkeypatch):
     assert refreshed is not first
     assert refreshed.data_version != first.data_version
     clear_forecast_service_cache()
+
+
+def test_forecasting_artifact_is_saved_with_metadata_and_reused(tmp_path):
+    _write_fixture(tmp_path)
+    artifact_dir = tmp_path / "artifacts"
+    settings = replace(_settings(), artifact_dir=str(artifact_dir))
+    snapshot = DemoForecastingRepository(tmp_path, settings).load_snapshot(branch_id=1)
+
+    trained = RevenueForecastService(
+        snapshot=snapshot,
+        settings=settings,
+        force_retrain=True,
+    )
+    joblib_path, metadata_path = artifact_paths(
+        artifact_dir,
+        source_mode="demo",
+        branch_id=1,
+    )
+    assert trained.artifact_loaded is False
+    assert joblib_path.exists()
+    assert metadata_path.exists()
+
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    assert metadata["target"] == "daily_revenue_vnd"
+    assert metadata["data_version"] == snapshot.version
+    assert metadata["feature_schema"] == [
+        "day_of_week",
+        "day_of_month",
+        "month",
+        "day_of_year",
+        "is_weekend",
+        "lag_1",
+        "lag_7",
+        "lag_14",
+        "rolling_mean_7",
+        "rolling_mean_28",
+    ]
+    assert "validation" in metadata["evaluation"]
+    assert "test" in metadata["evaluation"]
+
+    reused = RevenueForecastService(snapshot=snapshot, settings=settings)
+    assert reused.artifact_loaded is True
+    assert reused.artifact_path == joblib_path
+    assert reused.model_name == trained.model_name
+    assert reused.evaluation["test"] == trained.evaluation["test"]
+
+
+def test_incompatible_artifact_is_not_served(tmp_path):
+    _write_fixture(tmp_path)
+    artifact_dir = tmp_path / "artifacts"
+    settings = replace(_settings(), artifact_dir=str(artifact_dir))
+    snapshot = DemoForecastingRepository(tmp_path, settings).load_snapshot(branch_id=1)
+    RevenueForecastService(snapshot=snapshot, settings=settings, force_retrain=True)
+
+    joblib_path, _ = artifact_paths(
+        artifact_dir,
+        source_mode="demo",
+        branch_id=1,
+    )
+    joblib_path.write_bytes(b"corrupt artifact")
+    recovered = RevenueForecastService(snapshot=snapshot, settings=settings)
+    assert recovered.artifact_loaded is False
+
+    changed_snapshot = replace(snapshot, version="different-snapshot-version")
+    rebuilt = RevenueForecastService(snapshot=changed_snapshot, settings=settings)
+    assert rebuilt.artifact_loaded is False
+    assert rebuilt.data_version == "different-snapshot-version"
+
+
+def test_wape_is_none_when_actuals_sum_to_zero():
+    metrics = compute_metrics(pd.Series([0.0, 0.0]), [0.0, 2.0])
+    assert metrics["mae"] == 1.0
+    assert metrics["rmse"] == pytest.approx(2**0.5)
+    assert metrics["wape"] is None
