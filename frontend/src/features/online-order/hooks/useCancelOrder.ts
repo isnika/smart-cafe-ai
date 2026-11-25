@@ -27,7 +27,7 @@ export function describeCancelError(e: unknown): CancelFailure {
   }
   if (e.status === 404) return { kind: 'other', message: 'Không tìm thấy đơn hàng hoặc đơn không thuộc tài khoản của bạn.' };
   if (e.status === 403) return { kind: 'other', message: 'Bạn không có quyền hủy đơn này.' };
-  if (e.status === 400) return { kind: 'other', message: 'Thông tin hủy đơn chưa hợp lệ. Vui lòng kiểm tra lại lý do.' };
+  if (e.status === 400) return { kind: 'other', message: e.message || 'Thông tin hủy đơn chưa hợp lệ. Vui lòng kiểm tra lại lý do.' };
   if (e.status === 0) return { kind: 'other', message: 'Không thể kết nối tới máy chủ. Vui lòng thử lại.' };
   return { kind: 'other', message: 'Không thể hủy đơn lúc này. Vui lòng thử lại sau.' };
 }
