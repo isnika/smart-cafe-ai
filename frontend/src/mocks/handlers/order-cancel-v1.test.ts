@@ -388,7 +388,7 @@ describe('400 VALIDATION_ERROR', () => {
     ['version thiếu', { status: 'Cancelled', cancel_reason: 'x' }],
     ['version là chuỗi', { status: 'Cancelled', cancel_reason: 'x', version: '1' }],
     ['version thập phân', { status: 'Cancelled', cancel_reason: 'x', version: 1.5 }],
-    ['version = 0', { status: 'Cancelled', cancel_reason: 'x', version: 0 }],
+    ['version < 0', { status: 'Cancelled', cancel_reason: 'x', version: -1 }],
     ['cancel_reason thiếu', { status: 'Cancelled', version: 1 }],
     ['cancel_reason rỗng', { status: 'Cancelled', cancel_reason: '', version: 1 }],
     ['cancel_reason toàn khoảng trắng', { status: 'Cancelled', cancel_reason: '   ', version: 1 }],
@@ -401,6 +401,14 @@ describe('400 VALIDATION_ERROR', () => {
     const w = await cancel(order.id, body);
     expect([w.status, errorOf(w).code]).toEqual([400, 'VALIDATION_ERROR']);
     expect(snapshot(order.id)).toBe(before);
+  });
+
+  it('chấp nhận version = 0 khi đơn vừa được tạo từ database', async () => {
+    const order = await placeOnlineOrder(A);
+    dbOrder(order.id).version = 0;
+    const w = await cancel(order.id, cancelBody(order, { version: 0 }));
+    expect(w.status).toBe(200);
+    expect(data(w)).toMatchObject({ status: 'Cancelled', version: 1 });
   });
 
   it('cancel_reason đúng 255 ký tự hợp lệ', async () => {

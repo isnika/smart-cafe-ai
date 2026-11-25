@@ -23,5 +23,6 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
             "where v.productId in :ids group by v.productId")
     List<Counts> countByProductIds(@Param("ids") Collection<Integer> ids, @Param("active") MenuStatus active);
     List<ProductVariant> findByProductIdInAndStatusOrderBySortOrderAscIdAsc(Collection<Integer> productIds, MenuStatus status);
+    List<ProductVariant> findByProductIdOrderBySortOrderAscIdAsc(Integer productId);
 }
 

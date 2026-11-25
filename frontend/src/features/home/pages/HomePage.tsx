@@ -6,10 +6,12 @@ import { useAuthStore } from "@/features/auth/store";
 import { useOnlineCartStore } from '@/features/online-order/store';
 import { RecommendationSection } from "@/features/recommendation/components/RecommendationSection";
 import { CategoryChips } from "../components/CategoryChips";
+import { MenuSearch } from "../components/MenuSearch";
 import { MenuEmpty, MenuError, MenuSkeleton } from "../components/MenuStates";
 import { ProductTile } from "../components/ProductTile";
 import { useCategories, usePublicMenu } from "../hooks/useMenu";
 import { useDefaultBranch } from "../hooks/useDefaultBranch";
+import { filterMenu } from "../menuFilter";
 
 const FEATURED_COUNT = 4;
 
@@ -27,8 +29,14 @@ export default function HomePage() {
   const menu = usePublicMenu();
   const { branchId, branches } = useDefaultBranch();
   const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [keyword, setKeyword] = useState("");
 
-  const featured = (menu.data ?? []).filter((p) => categoryId === null || p.categoryId === categoryId).slice(0, FEATURED_COUNT);
+  const matches = filterMenu(menu.data ?? [], categoryId, keyword);
+  const featured = keyword.trim() ? matches : matches.slice(0, FEATURED_COUNT);
+  const menuParams = new URLSearchParams();
+  if (categoryId !== null) menuParams.set("category", String(categoryId));
+  if (keyword.trim()) menuParams.set("q", keyword.trim());
+  const menuLink = menuParams.size ? `${PATHS.menu}?${menuParams}` : PATHS.menu;
 
   return (
     <div className="space-y-8 px-4 pb-24 pt-4">
@@ -79,16 +87,17 @@ export default function HomePage() {
           <h2 id="featured-title" className="text-h3">
             Món nổi bật
           </h2>
-          <Link to={categoryId ? `${PATHS.menu}?category=${categoryId}` : PATHS.menu} className="text-body font-semibold text-primary-600 hover:underline">
+          <Link to={menuLink} className="text-body font-semibold text-primary-600 hover:underline">
             Xem tất cả
           </Link>
         </div>
 
+        <MenuSearch value={keyword} onChange={setKeyword} />
         {categories.data && categories.data.length > 0 && <CategoryChips categories={categories.data} activeId={categoryId} onChange={setCategoryId} />}
 
         {branchId !== null && menu.isPending && <MenuSkeleton />}
         {menu.isError && <MenuError error={menu.error} onRetry={() => void menu.refetch()} />}
-        {menu.isSuccess && featured.length === 0 && <MenuEmpty>Danh mục này hiện chưa có món để hiển thị.</MenuEmpty>}
+        {menu.isSuccess && featured.length === 0 && <MenuEmpty>{keyword.trim() ? "Không tìm thấy món phù hợp. Hãy thử từ khóa hoặc danh mục khác." : "Danh mục này hiện chưa có món để hiển thị."}</MenuEmpty>}
         {featured.length > 0 && (
           <div className="grid grid-cols-2 gap-3">
             {featured.map((p) => (

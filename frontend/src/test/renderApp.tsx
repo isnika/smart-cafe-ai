@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
+import { Toaster } from 'sonner';
 import { routes } from '@/app/router';
 
 /** jsdom chưa có <dialog>.showModal/close; Modal của dự án dựa vào chúng. */
@@ -17,6 +18,7 @@ export function renderApp(path: string) {
   const utils = render(
     <QueryClientProvider client={client}>
       <RouterProvider router={router} />
+      <Toaster />
     </QueryClientProvider>,
   );
   return { router, client, ...utils };

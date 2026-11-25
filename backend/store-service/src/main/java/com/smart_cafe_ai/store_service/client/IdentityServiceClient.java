@@ -11,7 +11,7 @@ import java.util.List;
 /**
  * Feign client giao tiếp với identity-service qua Eureka / API Gateway hoặc direct URL.
  */
-@FeignClient(name = "identity-service", url = "${IDENTITY_SERVICE_URL:}", path = "/internal/users")
+@FeignClient(name = "identity-service", url = "${IDENTITY_SERVICE_URL:}", path = "/internal/users", configuration = IdentityClientConfig.class)
 public interface IdentityServiceClient {
 
     /**

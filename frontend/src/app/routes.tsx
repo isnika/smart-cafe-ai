@@ -36,7 +36,9 @@ export const PATHS = {
 
   // Manager
   manager: "/manager",
+  managerOrders: "/manager/orders",
   managerInventory: "/manager/inventory",
+  managerIngredients: "/manager/ingredients",
   managerForecast: "/manager/forecast",
   managerLeave: "/manager/leave-requests",
   managerSchedules: "/manager/schedules",
@@ -44,12 +46,15 @@ export const PATHS = {
   // Admin
   admin: "/admin",
   adminRevenue: "/admin/revenue",
+  adminOrders: "/admin/orders",
   adminBranches: "/admin/branches",
   adminTables: "/admin/tables",
   adminUsers: "/admin/users",
   adminProducts: "/admin/products",
   adminCategories: "/admin/categories",
   adminMenus: "/admin/menus",
+  adminIngredients: "/admin/ingredients",
+  adminSchedules: "/admin/schedules",
 } as const;
 
 export const to = {
@@ -80,8 +85,8 @@ export function homeAfterLogin(roleName: RoleName, requestedPath?: string | null
   const allowed: Record<RoleName, readonly string[]> = {
     Customer: [PATHS.home, PATHS.menu, PATHS.cart, PATHS.checkout, PATHS.orders, PATHS.profile],
     Staff: [PATHS.staff, PATHS.staffQueue, PATHS.staffCheckin, PATHS.staffTables, '/staff/orders/'],
-    Manager: [PATHS.manager, PATHS.managerInventory, PATHS.managerForecast],
-    Admin: [PATHS.admin, PATHS.adminRevenue, PATHS.adminBranches, PATHS.adminTables, PATHS.adminUsers, PATHS.adminProducts, PATHS.adminCategories, PATHS.adminMenus],
+    Manager: [PATHS.manager, PATHS.managerOrders, PATHS.managerInventory, PATHS.managerIngredients, PATHS.managerForecast, PATHS.managerSchedules],
+    Admin: [PATHS.admin, PATHS.adminRevenue, PATHS.adminOrders, PATHS.adminBranches, PATHS.adminTables, PATHS.adminUsers, PATHS.adminProducts, PATHS.adminCategories, PATHS.adminMenus, PATHS.adminIngredients, PATHS.adminSchedules],
   };
   const canOpen = allowed[roleName].some((path) =>
     path.endsWith('/') ? requestedPath.startsWith(path) : requestedPath === path || requestedPath.startsWith(`${path}/`),

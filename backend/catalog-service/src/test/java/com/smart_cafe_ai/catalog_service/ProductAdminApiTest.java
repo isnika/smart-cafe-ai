@@ -54,7 +54,7 @@ class ProductAdminApiTest {
 
     @Test void adminRoutesRequireAuthenticationOnBothAliasesBeforeBinding() throws Exception {
         for (String prefix : List.of(BASE, "/api/v1/catalog")) {
-            for (var request : List.of(get(prefix+"/admin/products"), post(prefix+"/products"),
+            for (var request : List.of(get(prefix+"/admin/products"), get(prefix+"/admin/products/1"), post(prefix+"/products"),
                     put(prefix+"/products/1"), patch(prefix+"/products/1/status"), delete(prefix+"/products/6"))) {
                 mvc.perform(request.contentType(MediaType.APPLICATION_JSON).content("{").header("X-Role","Admin"))
                         .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.error.code").value("UNAUTHORIZED"));
@@ -65,11 +65,22 @@ class ProductAdminApiTest {
 
     @ParameterizedTest @ValueSource(strings={"Customer","Staff",""})
     void rejectsNonManagerRoles(String role) throws Exception {
-        for (var request : List.of(get(BASE+"/admin/products"),post(BASE+"/products"),put(BASE+"/products/1"),
+        for (var request : List.of(get(BASE+"/admin/products"),get(BASE+"/admin/products/1"),post(BASE+"/products"),put(BASE+"/products/1"),
                 patch(BASE+"/products/1/status"),delete(BASE+"/products/6"))) {
             mvc.perform(request.header("Authorization",CategoryAdminApiTest.token(role)).contentType(MediaType.APPLICATION_JSON).content("{}"))
                     .andExpect(status().isForbidden());
         }
+    }
+
+    @Test void managementDetailIncludesInactiveProductsVariantsAndOptions() throws Exception {
+        mvc.perform(auth(get(BASE+"/admin/products/1")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.name").value("Latte"))
+                .andExpect(jsonPath("$.data.variants", hasSize(3)))
+                .andExpect(jsonPath("$.data.variants[0].status").value("Inactive"))
+                .andExpect(jsonPath("$.data.option_groups", hasSize(2)));
+        mvc.perform(auth(get(BASE+"/admin/products/4")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("Inactive"));
+        mvc.perform(auth(get(BASE+"/admin/products/99999"))).andExpect(status().isNotFound());
     }
 
     @ParameterizedTest @ValueSource(strings={"Manager","Admin"})

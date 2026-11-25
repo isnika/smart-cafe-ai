@@ -11,5 +11,6 @@ public interface ProductOptionRepository extends JpaRepository<ProductOption, In
     boolean existsByGroupIdAndOptionNameIgnoreCaseAndIdNot(Integer groupId,String name,Integer id);
     List<ProductOption> findByIdIn(Collection<Integer> ids);
     List<ProductOption> findByGroupIdInAndStatusOrderBySortOrderAscIdAsc(Collection<Integer> groupIds, MenuStatus status);
+    List<ProductOption> findByGroupIdInOrderBySortOrderAscIdAsc(Collection<Integer> groupIds);
 }
 

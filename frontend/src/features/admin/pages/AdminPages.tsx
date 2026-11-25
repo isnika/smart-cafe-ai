@@ -30,6 +30,8 @@ import * as api from "@/shared/api/admin";
 import * as catalogApi from "@/shared/api/catalog";
 import { isApiError } from "@/shared/api/http";
 import { AdminRevenueSection } from "../components/AdminRevenueSection";
+import { AdminProductDetail } from "../components/AdminProductDetail";
+import { ProductConfigurationFields, newVariant, validateConfiguration, type GroupDraft } from "../components/ProductConfigurationFields";
 
 const keys = {
   branches: ["admin", "branches"] as const,
@@ -688,6 +690,8 @@ export function AdminBranchesPage() {
 export function AdminTablesPage() {
   const branches = useAdminBranches();
   const [branchId, setBranchId] = useState<number | null>(null);
+  const [page, setPage] = useState(1);
+  const pageSize = 12;
   const activeId = branchId ?? branches.data?.[0]?.id ?? null;
   const qc = useQueryClient();
   const tables = useQuery({
@@ -695,6 +699,13 @@ export function AdminTablesPage() {
     queryFn: ({ signal }) => api.listAdminTables(activeId!, signal),
     enabled: activeId !== null,
   });
+  const allTables = useMemo(() => tables.data ?? [], [tables.data]);
+  const totalPages = Math.max(1, Math.ceil(allTables.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedTables = allTables.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
   const [number, setNumber] = useState("");
   const [tableFailure, setTableFailure] = useState<FormFailure>({ fields: {} });
   const action = useMutation({
@@ -754,7 +765,10 @@ export function AdminTablesPage() {
             id="admin-branch"
             aria-label="Chọn chi nhánh"
             value={activeId ?? ""}
-            onChange={(e) => setBranchId(Number(e.target.value))}
+            onChange={(e) => {
+              setBranchId(Number(e.target.value));
+              setPage(1);
+            }}
             className="h-10 min-w-[240px] rounded-md border border-gray-200 bg-white px-3 text-sm"
           >
             {branches.data.map((b) => (
@@ -827,7 +841,7 @@ export function AdminTablesPage() {
             </span>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-            {tables.data.map((t) => (
+            {paginatedTables.map((t) => (
               <Card key={t.id} className="p-5">
                 <div className="flex items-start justify-between">
                   <div>
@@ -895,6 +909,33 @@ export function AdminTablesPage() {
               </Card>
             ))}
           </div>
+          {allTables.length > 0 && totalPages > 1 && (
+            <Card className="mt-4 flex items-center justify-between p-4 text-sm text-gray-500">
+              <span>
+                Trang {currentPage} / {totalPages} (Tổng {allTables.length} bàn)
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  aria-label="Trang trước"
+                  disabled={currentPage <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  <ChevronLeft className="size-4" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  aria-label="Trang tiếp"
+                  disabled={currentPage >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  <ChevronRight className="size-4" />
+                </Button>
+              </div>
+            </Card>
+          )}
         </>
       )}
     </div>
@@ -905,18 +946,22 @@ function useAdminProducts(params: {
   q?: string;
   categoryId?: number;
   status?: string;
+  page?: number;
+  size?: number;
 }) {
   return useQuery({
     queryKey: [...keys.products, params],
     queryFn: ({ signal }) =>
-      api.listAdminProducts({ ...params, page: 1, size: 100 }, signal),
+      api.listAdminProducts({ ...params, page: params.page ?? 1, size: params.size ?? 10 }, signal),
   });
 }
 
 export function AdminProductsPage() {
+  const [detailId, setDetailId] = useState<number | null>(null);
   const [term, setTerm] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [status, setStatus] = useState("");
+  const [page, setPage] = useState(1);
   const [form, setForm] = useState<api.AdminProduct | null | undefined>(
     undefined,
   );
@@ -924,6 +969,8 @@ export function AdminProductsPage() {
     q: term.trim() || undefined,
     categoryId: categoryId ? Number(categoryId) : undefined,
     status: status || undefined,
+    page,
+    size: 10,
   });
   const categories = useQuery({
     queryKey: keys.categories,
@@ -963,13 +1010,19 @@ export function AdminProductsPage() {
             placeholder="Tìm theo tên sản phẩm"
             leftIcon={<Search aria-hidden />}
             value={term}
-            onChange={(e) => setTerm(e.target.value)}
+            onChange={(e) => {
+              setTerm(e.target.value);
+              setPage(1);
+            }}
           />
         </div>
         <select
           aria-label="Lọc danh mục sản phẩm"
           value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
+          onChange={(e) => {
+            setCategoryId(e.target.value);
+            setPage(1);
+          }}
           className="h-10 rounded-md border border-gray-200 bg-white px-3 text-sm"
         >
           <option value="">Tất cả danh mục</option>
@@ -982,7 +1035,10 @@ export function AdminProductsPage() {
         <select
           aria-label="Lọc trạng thái sản phẩm"
           value={status}
-          onChange={(e) => setStatus(e.target.value)}
+          onChange={(e) => {
+            setStatus(e.target.value);
+            setPage(1);
+          }}
           className="h-10 rounded-md border border-gray-200 bg-white px-3 text-sm"
         >
           <option value="">Tất cả trạng thái</option>
@@ -1078,6 +1134,9 @@ export function AdminProductsPage() {
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => setDetailId(p.id)} aria-label={`Xem chi tiết ${p.name}`}>
+                          Chi tiết
+                        </Button>
                         <Button
                           size="sm"
                           variant="outline"
@@ -1103,7 +1162,37 @@ export function AdminProductsPage() {
             </table>
           </div>
         )}
+        {products.data && products.data.items.length > 0 && products.data.meta.totalPages > 1 && (
+          <div className="flex items-center justify-between border-t border-gray-100 p-4 text-sm text-gray-500">
+            <span>
+              Trang {products.data.meta.page} / {products.data.meta.totalPages} (Tổng {products.data.meta.totalItems} sản phẩm)
+            </span>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                aria-label="Trang trước"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                <ChevronLeft className="size-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                aria-label="Trang tiếp"
+                disabled={page >= products.data.meta.totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                <ChevronRight className="size-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
+      <Modal open={detailId !== null} onClose={() => setDetailId(null)} title="Chi tiết sản phẩm" size="lg">
+        {detailId !== null && <AdminProductDetail id={detailId} />}
+      </Modal>
       <Modal
         open={form !== undefined}
         onClose={() => setForm(undefined)}
@@ -1122,6 +1211,8 @@ export function AdminProductsPage() {
 
 export function AdminCategoriesPage() {
   const [term, setTerm] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
   const [form, setForm] = useState<api.AdminCategory | null | undefined>(
     undefined,
   );
@@ -1165,8 +1256,20 @@ export function AdminCategoriesPage() {
     },
     onError: (error) => toast.error(displayError(error)),
   });
-  const visibleCategories = (categories.data ?? []).filter((category) =>
-    category.name.toLocaleLowerCase("vi").includes(term.trim().toLocaleLowerCase("vi")),
+  const visibleCategories = useMemo(
+    () =>
+      (categories.data ?? []).filter((category) =>
+        category.name
+          .toLocaleLowerCase("vi")
+          .includes(term.trim().toLocaleLowerCase("vi")),
+      ),
+    [categories.data, term],
+  );
+  const totalPages = Math.max(1, Math.ceil(visibleCategories.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedCategories = visibleCategories.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
   );
 
   return (
@@ -1190,7 +1293,10 @@ export function AdminCategoriesPage() {
             placeholder="Tìm theo tên danh mục"
             leftIcon={<Search aria-hidden />}
             value={term}
-            onChange={(event) => setTerm(event.target.value)}
+            onChange={(event) => {
+              setTerm(event.target.value);
+              setPage(1);
+            }}
           />
         </div>
         <Button
@@ -1238,7 +1344,7 @@ export function AdminCategoriesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {visibleCategories.map((category) => {
+                {paginatedCategories.map((category) => {
                   const productCount =
                     category.totalProductCount ?? category.productCount ?? 0;
                   return (
@@ -1319,6 +1425,33 @@ export function AdminCategoriesPage() {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+        {visibleCategories.length > 0 && totalPages > 1 && (
+          <div className="flex items-center justify-between border-t border-gray-100 p-4 text-sm text-gray-500">
+            <span>
+              Trang {currentPage} / {totalPages} (Tổng {visibleCategories.length} danh mục)
+            </span>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                aria-label="Trang trước"
+                disabled={currentPage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                <ChevronLeft className="size-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                aria-label="Trang tiếp"
+                disabled={currentPage >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              >
+                <ChevronRight className="size-4" />
+              </Button>
+            </div>
           </div>
         )}
       </Card>
@@ -1668,9 +1801,9 @@ function AdminProductForm({
   const [temperature, setTemperature] = useState(initial?.temperature ?? "");
   const [caffeine, setCaffeine] = useState(initial?.caffeineLevel ?? "None");
   const [tags, setTags] = useState((initial?.flavorTags ?? []).join(", "));
-  const [price, setPrice] = useState(
-    initial?.price == null ? "" : String(initial.price),
-  );
+  const [productStatus, setProductStatus] = useState<"Active" | "Inactive">(initial?.status ?? "Active");
+  const [variants, setVariants] = useState(() => [newVariant()]);
+  const [groups, setGroups] = useState<GroupDraft[]>([]);
   const mutation = useMutation({
     mutationFn: () => {
       const input: api.AdminProductInput = {
@@ -1685,20 +1818,15 @@ function AdminProductForm({
           .map((tag) => tag.trim().toLowerCase())
           .filter(Boolean),
         sortOrder: initial?.sortOrder ?? 0,
-        status: initial?.status ?? "Active",
+        status: productStatus,
       };
       return initial
         ? api.updateAdminProduct(initial.id, input)
         : api.createAdminProduct({
             ...input,
-            variants: [
-              {
-                variantName: "Mặc định",
-                price: Number(price),
-                sortOrder: 0,
-                status: "Active",
-              },
-            ],
+            variants: variants.map((variant, index) => ({ variantName: variant.name.trim(), price: Number(variant.price), sortOrder: index, status: variant.status })),
+            optionGroups: groups.map((group, index) => ({ name: group.name.trim(), selectionType: group.type, isRequired: group.required, minSelect: Number(group.min), maxSelect: Number(group.max), sortOrder: index,
+              options: group.options.map((option, optionIndex) => ({ optionName: option.name.trim(), extraPrice: Number(option.price), isDefault: option.isDefault, status: option.status, sortOrder: optionIndex })) })),
           });
     },
     onSuccess: () => {
@@ -1716,6 +1844,10 @@ function AdminProductForm({
       onSubmit={(e) => {
         e.preventDefault();
         setFailure({ fields: {} });
+        if (!initial) {
+          const problem = validateConfiguration(variants, groups, productStatus);
+          if (problem) { setFailure({ global: problem, fields: {} }); return; }
+        }
         mutation.mutate();
       }}
     >
@@ -1771,7 +1903,7 @@ function AdminProductForm({
       </label>
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block text-sm font-medium">
-          Nhiệt độ
+          Cách dùng
           <select
             className={field}
             value={temperature}
@@ -1808,18 +1940,14 @@ function AdminProductForm({
         />
       </label>
       {!initial && (
-        <label className="block text-sm font-medium">
-          Giá khởi điểm (₫)
-          <input
-            className={field}
-            type="number"
-            min="0"
-            step="1000"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            required
-          />
-        </label>
+        <>
+          <label className="block text-sm font-medium">Trạng thái sản phẩm
+            <select className={field} value={productStatus} onChange={(e) => setProductStatus(e.target.value as "Active" | "Inactive")}>
+              <option value="Active">Đang bán</option><option value="Inactive">Ngừng bán</option>
+            </select>
+          </label>
+          <ProductConfigurationFields variants={variants} setVariants={setVariants} groups={groups} setGroups={setGroups} />
+        </>
       )}
       <div className="flex justify-end gap-2 border-t border-gray-100 pt-4">
         <Button type="button" variant="outline" onClick={onClose}>
@@ -1828,7 +1956,7 @@ function AdminProductForm({
         <Button
           type="submit"
           loading={mutation.isPending}
-          disabled={!categories.length || (!initial && !price)}
+          disabled={!categories.length}
         >
           {initial ? "Lưu thay đổi" : "Tạo sản phẩm"}
         </Button>

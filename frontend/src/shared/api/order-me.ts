@@ -90,7 +90,7 @@ export async function cancelMyOrder(
   const cancelReason = input.cancelReason.trim();
   if (cancelReason === '') throw validation('cancel_reason là bắt buộc');
   if (cancelReason.length > MAX_CANCEL_REASON_LENGTH) throw validation(`cancel_reason tối đa ${MAX_CANCEL_REASON_LENGTH} ký tự`);
-  if (!Number.isSafeInteger(input.version) || input.version < 1) throw validation(`version phải là số nguyên >= 1: ${String(input.version)}`);
+  if (!Number.isSafeInteger(input.version) || input.version < 0) throw validation(`version phải là số nguyên >= 0: ${String(input.version)}`);
   const data = await http.patch<unknown>(
     `/orders/${id}/status`,
     { status: 'Cancelled', cancelReason, version: input.version },

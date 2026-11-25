@@ -31,6 +31,11 @@ export interface AdminProduct {
   sortOrder: number; status: 'Active' | 'Inactive'; price?: number | null; maxPrice?: number | null;
   variantCount: number; activeVariantCount: number;
 }
+export interface AdminProductDetail extends AdminProduct {
+  variants: { id: number; variantName: string; price: number; status: 'Active' | 'Inactive' }[];
+  optionGroups: { id: number; name: string; selectionType: string; isRequired: boolean; minSelect: number; maxSelect: number;
+    options: { id: number; optionName: string; extraPrice: number; isDefault: boolean; status: 'Active' | 'Inactive' }[] }[];
+}
 export interface AdminCategory {
   id: number; name: string; status: string; image?: string | null; sortOrder?: number;
   totalProductCount?: number; activeProductCount?: number; productCount?: number;
@@ -43,7 +48,9 @@ export interface AdminProductInput {
   caffeineLevel: string; flavorTags: string[]; sortOrder: number; status: 'Active' | 'Inactive';
 }
 export interface AdminProductCreateInput extends AdminProductInput {
-  variants: { variantName: string; price: number; sortOrder: number; status: 'Active' }[];
+  variants: { variantName: string; price: number; sortOrder: number; status: 'Active' | 'Inactive' }[];
+  optionGroups: { name: string; selectionType: 'Single' | 'Multiple'; isRequired: boolean; minSelect: number; maxSelect: number; sortOrder: number;
+    options: { optionName: string; extraPrice: number; isDefault: boolean; sortOrder: number; status: 'Active' | 'Inactive' }[] }[];
 }
 
 const unwrapList = <T>(value: unknown): T[] => {
@@ -121,8 +128,33 @@ export async function listAdminProducts(params: { page?: number; size?: number; 
   const meta = result.meta;
   return { items, meta: { page: meta?.page ?? params.page ?? 1, size: meta?.size ?? params.size ?? 20, totalItems: Number(meta?.totalItems ?? items.length), totalPages: meta?.totalPages ?? 1 } };
 }
+export const getAdminProduct = (id: number, signal?: AbortSignal) =>
+  http.get<AdminProductDetail>(`/catalog/admin/products/${id}`, { signal });
 export async function listAdminCategories(signal?: AbortSignal): Promise<AdminCategory[]> {
   return unwrapList(await http.get<unknown>('/catalog/admin/categories', { query: { page: 1, size: 100 }, signal }));
+}
+export async function listAdminCategoriesPaged(
+  params: { page?: number; size?: number; q?: string; status?: string } = {},
+  signal?: AbortSignal,
+): Promise<AdminPage<AdminCategory>> {
+  const page = params.page ?? 1;
+  const size = params.size ?? 10;
+  const result = await http.getWithMeta<unknown>('/catalog/admin/categories', {
+    query: { ...params, page, size },
+    signal,
+  });
+  const items = unwrapList<AdminCategory>(result.data);
+  const meta = result.meta;
+  const totalItems = Number(meta?.totalItems ?? (meta as { totalElements?: number })?.totalElements ?? items.length);
+  return {
+    items,
+    meta: {
+      page: meta?.page ?? page,
+      size: meta?.size ?? size,
+      totalItems,
+      totalPages: meta?.totalPages ?? Math.max(1, Math.ceil(totalItems / size)),
+    },
+  };
 }
 export const createAdminCategory = async (input: AdminCategoryInput) =>
   unwrapData<AdminCategory>(await http.post<unknown>('/catalog/categories', input, { snake: true }));

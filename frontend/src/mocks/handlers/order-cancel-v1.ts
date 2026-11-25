@@ -80,8 +80,8 @@ function parseBody(body: PatchBody): { status: OrderStatus; version: number; can
   if (typeof body.status !== 'string' || !ORDER_STATUSES.includes(body.status as OrderStatus)) {
     fail(400, 'VALIDATION_ERROR', `status bắt buộc, một trong: ${ORDER_STATUSES.join(', ')}`);
   }
-  if (typeof body.version !== 'number' || !Number.isInteger(body.version) || body.version < 1) {
-    fail(400, 'VALIDATION_ERROR', 'version bắt buộc, số nguyên ≥ 1');
+  if (typeof body.version !== 'number' || !Number.isInteger(body.version) || body.version < 0) {
+    fail(400, 'VALIDATION_ERROR', 'version bắt buộc, số nguyên ≥ 0');
   }
   const status = body.status as OrderStatus;
   const cancelReason = optionalText(body.cancel_reason, 'cancel_reason');

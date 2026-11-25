@@ -3,7 +3,7 @@ import type {
   AdjustInventoryInput, Inventory, InventoryItemView, InventoryLog, InventoryTransactionType, Page,
 } from '@/shared/types';
 import { db, nowNaive } from '../db';
-import { fail, guarded, readJson, requireAuth, url } from '../utils';
+import { fail, guarded, ok, readJson, requireAuth, url } from '../utils';
 import { accountFromRequest, hasMockToken, type MockAccount } from './identity';
 
 const ALL_TYPES: InventoryTransactionType[] = ['Import', 'Auto_Deduct', 'Refund', 'Waste', 'Adjustment', 'Stocktake'];
@@ -163,6 +163,93 @@ export const inventoryHandlers = [
       };
       db.inventoryLogs.push(log);
       return HttpResponse.json<InventoryLog>(log, { status: 201 });
+    }),
+  ),
+
+  // GET /inventory/ingredients
+  http.get(
+    url('/inventory/ingredients'),
+    guarded(({ request }) => {
+      const sp = new URL(request.url).searchParams;
+      const q = fold(sp.get('q') ?? '');
+      const isActiveParam = sp.get('is_active');
+      const page = intParam(sp, 'page', { fallback: 0, min: 0 }) as number;
+      const size = intParam(sp, 'size', { fallback: 10, min: 1, max: 100 }) as number;
+
+      let list = [...db.ingredients];
+      if (q) list = list.filter((i) => fold(i.name).includes(q));
+      if (isActiveParam !== null) {
+        const active = isActiveParam === 'true';
+        list = list.filter((i) => i.isActive === active);
+      }
+
+      const totalElements = list.length;
+      const totalPages = Math.max(1, Math.ceil(totalElements / size));
+      const start = page * size;
+      const pageItems = list.slice(start, start + size);
+
+      return ok(pageItems, { page, size, totalElements, totalPages });
+    }),
+  ),
+
+  // POST /inventory/ingredients
+  http.post(
+    url('/inventory/ingredients'),
+    guarded(async ({ request }) => {
+      const body = await readJson<{ name: string; unit: string; averageCost?: number; isActive?: boolean }>(request);
+      if (!body.name || !body.unit) fail(400, 'VALIDATION_ERROR', 'Thiếu tên hoặc đơn vị');
+      const maxId = db.ingredients.reduce((m, i) => Math.max(m, i.id), 0);
+      const newIng = {
+        id: maxId + 1,
+        name: body.name.trim(),
+        unit: body.unit.trim(),
+        averageCost: body.averageCost ?? 0,
+        isActive: body.isActive ?? true,
+      };
+      db.ingredients.push(newIng);
+      return ok(newIng, null, { status: 201 });
+    }),
+  ),
+
+  // PUT /inventory/ingredients/:id
+  http.put(
+    url('/inventory/ingredients/:id'),
+    guarded(async ({ request, params }) => {
+      const id = Number(params.id);
+      const body = await readJson<{ name: string; unit: string; averageCost?: number; isActive?: boolean }>(request);
+      const ing = db.ingredients.find((i) => i.id === id);
+      if (!ing) fail(404, 'NOT_FOUND', 'Không tìm thấy nguyên liệu');
+      if (body.name) ing.name = body.name.trim();
+      if (body.unit) ing.unit = body.unit.trim();
+      if (body.averageCost !== undefined) ing.averageCost = body.averageCost;
+      if (body.isActive !== undefined) ing.isActive = body.isActive;
+      return ok(ing);
+    }),
+  ),
+
+  // PATCH /inventory/ingredients/:id/active
+  http.patch(
+    url('/inventory/ingredients/:id/active'),
+    guarded(async ({ request, params }) => {
+      const id = Number(params.id);
+      const body = await readJson<{ is_active?: boolean; isActive?: boolean }>(request);
+      const ing = db.ingredients.find((i) => i.id === id);
+      if (!ing) fail(404, 'NOT_FOUND', 'Không tìm thấy nguyên liệu');
+      const nextActive = body.is_active ?? body.isActive ?? true;
+      ing.isActive = nextActive;
+      return ok(ing);
+    }),
+  ),
+
+  // DELETE /inventory/ingredients/:id
+  http.delete(
+    url('/inventory/ingredients/:id'),
+    guarded(({ params }) => {
+      const id = Number(params.id);
+      const idx = db.ingredients.findIndex((i) => i.id === id);
+      if (idx === -1) fail(404, 'NOT_FOUND', 'Không tìm thấy nguyên liệu');
+      db.ingredients.splice(idx, 1);
+      return ok({ id });
     }),
   ),
 ];

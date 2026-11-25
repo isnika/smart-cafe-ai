@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   BarChart3,
+  Boxes,
   ClipboardList,
   Coffee,
   Building2,
@@ -40,19 +41,25 @@ const navByRole: Record<Exclude<RoleName, "Customer">, NavItem[]> = {
   ],
   Manager: [
     { to: "/manager", label: "Tổng quan", icon: LayoutDashboard, end: true },
+    { to: "/manager/orders", label: "Đơn hàng", icon: ClipboardList },
     { to: "/manager/inventory", label: "Kho", icon: Package },
+    { to: "/manager/ingredients", label: "Nguyên liệu", icon: Boxes },
     { to: "/manager/forecast", label: "Dự báo AI", icon: Sparkles },
     { to: "/manager/leave-requests", label: "Duyệt nghỉ phép", icon: CalendarDays },
+    { to: "/manager/schedules", label: "Ca làm việc", icon: CalendarDays },
   ],
   Admin: [
     { to: "/admin", label: "Tổng quan", icon: LayoutDashboard, end: true },
     { to: "/admin/revenue", label: "Doanh thu", icon: BarChart3 },
+    { to: "/admin/orders", label: "Đơn hàng", icon: ClipboardList },
     { to: "/admin/branches", label: "Chi nhánh", icon: Building2 },
     { to: "/admin/tables", label: "Bàn & QR", icon: QrCode },
     { to: "/admin/products", label: "Sản phẩm", icon: Coffee },
     { to: "/admin/categories", label: "Danh mục", icon: Tags },
     { to: "/admin/menus", label: "Thực đơn chi nhánh", icon: ClipboardList },
+    { to: "/admin/ingredients", label: "Nguyên liệu", icon: Boxes },
     { to: "/admin/users", label: "Tài khoản & Quyền", icon: Users },
+    { to: "/admin/schedules", label: "Ca làm việc", icon: CalendarDays },
   ],
 };
 

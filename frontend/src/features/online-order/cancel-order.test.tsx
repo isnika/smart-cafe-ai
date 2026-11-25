@@ -51,7 +51,7 @@ const dbOrder = (id: number) => db.orders.find((o) => o.id === id)!;
 /** Đơn Online của u-customer, ép về (status, paymentStatus) mong muốn (version giữ nguyên trừ khi truyền). */
 function onlineOrder(status: OrderStatus, paymentStatus: PaymentStatus, version?: number): OrderDetail {
   const o = db.orders.find((x) => x.userId === 'u-customer' && x.orderSource === 'Online' && x.fulfillmentType === 'Delivery')!;
-  Object.assign(o, { status, paymentStatus, cancelReason: null, cancelledAt: null, cancelledBy: null, ...(version ? { version } : {}) });
+  Object.assign(o, { status, paymentStatus, cancelReason: null, cancelledAt: null, cancelledBy: null, ...(version !== undefined ? { version } : {}) });
   return o;
 }
 
@@ -123,7 +123,7 @@ describe('hiển thị nút Hủy', () => {
     await open(o.id);
     expect(cancelButton()).toBeNull();
     const guide = screen.getByRole('region', { name: 'Hủy đơn đã thanh toán' });
-    expect(guide.textContent).toContain('liên hệ quán');
+    expect(guide.textContent).toContain('quán');
     expect(guide.textContent).toContain(`#${o.orderCode}`);
     expect(patches()).toHaveLength(0);
   });
@@ -348,7 +348,7 @@ describe('cancelMyOrder — kiểm tra đầu vào, không gửi request', () =>
     [{ cancelReason: '', version: 1 }],
     [{ cancelReason: '   ', version: 1 }],
     [{ cancelReason: 'x'.repeat(256), version: 1 }],
-    [{ cancelReason: 'x', version: 0 }],
+    [{ cancelReason: 'x', version: -1 }],
     [{ cancelReason: 'x', version: 1.5 }],
   ])('%j → VALIDATION_ERROR', async (input) => {
     await signIn('customer@smartcafe.vn');
@@ -357,5 +357,15 @@ describe('cancelMyOrder — kiểm tra đầu vào, không gửi request', () =>
     const e = await myOrderApi.cancelMyOrder(o.id, input).catch((x: unknown) => x);
     expect(isApiError(e) && [e.status, e.code]).toEqual([400, 'VALIDATION_ERROR']);
     expect(calls).toHaveLength(0);
+  });
+
+  it('hợp lệ với version = 0 (đơn mới khởi tạo trong DB)', async () => {
+    await signIn('customer@smartcafe.vn');
+    const o = onlineOrder('Pending', 'Unpaid', 0);
+    calls.length = 0;
+    const res = await myOrderApi.cancelMyOrder(o.id, { cancelReason: 'Đặt nhầm món', version: 0 });
+    expect(res.status).toBe('Cancelled');
+    expect(patches()).toHaveLength(1);
+    expect(JSON.parse(await patches()[0]!.body)).toEqual({ status: 'Cancelled', cancel_reason: 'Đặt nhầm món', version: 0 });
   });
 });

@@ -969,6 +969,7 @@ export interface Ingredient {
   id: number;
   name: string;
   unit: string; // đơn vị cơ sở: g, ml
+  averageCost?: number | null;
   isActive: boolean;
 }
 
