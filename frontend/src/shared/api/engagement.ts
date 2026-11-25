@@ -23,10 +23,16 @@ export const getLoyaltyTransactions = async (page = 1, size = 20): Promise<Page<
 export const validateVoucher = (input: ValidateVoucherInput) => http.post<VoucherValidation>(`${P}/vouchers/validate`, input);
 
 // Notification
-export const listNotifications = (params: PageParams & { type?: string; unreadOnly?: boolean } = {}) =>
-  http.get<Page<Notification>>(`${P}/notifications`, { query: params });
-export const markNotificationRead = (id: number) => http.post<Notification>(`${P}/notifications/${id}/read`);
-export const markAllNotificationsRead = () => http.post<void>(`${P}/notifications/read-all`);
+export const listNotifications = async (params: PageParams & { type?: string; unreadOnly?: boolean } = {}): Promise<Page<Notification>> => {
+  const page = params.page ?? 1;
+  const size = params.pageSize ?? 20;
+  const { data, meta } = await http.getWithMeta<Notification[]>('/notifications/me', {
+    query: { page, size, type: params.type, is_read: params.unreadOnly ? false : undefined, sort: 'created_at,desc' },
+  });
+  return { items: data ?? [], total: meta?.total ?? data?.length ?? 0, page: meta?.page ?? page, pageSize: meta?.size ?? size };
+};
+export const markNotificationRead = (id: number) => http.patch<{ id: number; isRead: boolean }>(`/notifications/${id}/read`, { is_read: true });
+export const markAllNotificationsRead = () => http.post<{ updatedCount: number }>('/notifications/read-all');
 
 // Review (chỉ đọc – tạo review chưa có input type). Chỉ trả review Approved + điểm trung bình (xem ProductReviewPage).
 export const listProductReviews = (productId: number, params: PageParams = {}) =>

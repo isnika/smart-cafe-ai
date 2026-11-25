@@ -30,7 +30,7 @@ public class EngagementEventService {
         try { if(!UUID.fromString(id).toString().equalsIgnoreCase(id)) throw new IllegalArgumentException(); }
         catch(Exception ex) { throw ApiException.invalid("event_id phải là UUID."); }
         String type=text(envelope,"event_type"); if(type==null) type=text(body,"event_type"); if(type==null) type=headerType;
-        if(type==null||!Set.of("order.completed","order.cancelled","order.status_changed","payment.refunded","payment.failed","invoice.issued").contains(type)) throw ApiException.invalid("event_type không được hỗ trợ.");
+        if(type==null||!Set.of("order.created","order.completed","order.cancelled","order.status_changed","payment.refunded","payment.failed","invoice.issued").contains(type)) throw ApiException.invalid("event_type không được hỗ trợ.");
         if(headerType!=null&&!headerType.equals(type)) throw ApiException.invalid("event_type không khớp message type.");
         if(envelope.has("event_version")&&(!envelope.get("event_version").isIntegralNumber()||envelope.get("event_version").asInt()!=1)) throw ApiException.invalid("event_version chưa được hỗ trợ.");
         var old=processed.findById(id);
@@ -40,6 +40,8 @@ public class EngagementEventService {
         String correlation=text(envelope,"correlation_id"); if(correlation==null||!correlation.matches("[a-zA-Z0-9_-]{1,64}")) correlation=id;
         try(var ignored=MDC.putCloseable("trace_id",correlation)) {
             switch(type) {
+                // Consume creation events so later events for the order can be published in order.
+                case "order.created" -> { }
                 case "order.completed" -> completed(body,envelope);
                 case "order.cancelled" -> benefits.reverse(number(body,"order_id"),user(body));
                 case "order.status_changed" -> {

@@ -1,5 +1,5 @@
-import { lazy, Suspense } from "react";
-import { createBrowserRouter, Link, type RouteObject } from "react-router-dom";
+import { createBrowserRouter, type RouteObject } from "react-router-dom";
+import { NotFound, DesignSystemRoute } from "@/app/RoutePages";
 import { RequireRole } from "@/app/guards/RequireRole";
 import { CustomerLayout } from "@/app/layouts/CustomerLayout";
 import { CustomerChatLayout } from "@/app/layouts/CustomerChatLayout";
@@ -40,29 +40,13 @@ import { ScheduleManagementPage } from "@/features/workforce/ScheduleManagementP
 import OrderManagementPage from "@/features/orders/pages/OrderManagementPage";
 import IngredientsPage from "@/features/manager-inventory/pages/IngredientsPage";
 
-// Tải lười để trang này không đi vào bundle production
-const DesignSystemPage = lazy(() => import("@/pages/DesignSystemPage"));
-
-function NotFound() {
-  return (
-    <div className="p-6">
-      <h1 className="text-h2">Không tìm thấy trang</h1>
-      <Link to="/home" className="text-primary-600 underline">
-        Về trang chủ
-      </Link>
-    </div>
-  );
-}
-
 // Trang xem design system: chỉ tồn tại khi chạy dev
 const devRoutes: RouteObject[] = import.meta.env.DEV
   ? [
       {
         path: "/design-system",
         element: (
-          <Suspense fallback={null}>
-            <DesignSystemPage />
-          </Suspense>
+          <DesignSystemRoute />
         ),
       },
     ]

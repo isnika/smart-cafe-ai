@@ -160,6 +160,15 @@ class EngagementApiTest {
         mvc.perform(get("/api/v1/reviews").param("product_id","10")).andExpect(jsonPath("$.data[0].rating").value(5));
         assertEquals(2,outbox.count());
     }
+    @Test void createdEventIsAcceptedBeforeStatusNotification() throws Exception {
+        var created=event("order.created"); created.put("order_id",11); created.put("user_id","customer");
+        events.consume(created,"order.created"); events.consume(created,"order.created");
+        var changed=event("order.status_changed"); changed.put("order_id",11); changed.put("user_id","customer"); changed.put("status","Preparing");
+        events.consume(changed,"order.status_changed");
+        mvc.perform(auth(get("/api/v1/notifications/me"),"customer","Customer"))
+                .andExpect(jsonPath("$.meta.total").value(1))
+                .andExpect(jsonPath("$.data[0].data.status").value("Preparing"));
+    }
     @Test void deviceAndNotificationApisEnforceOwnershipAndHideSensitiveFields() throws Exception {
         var registered=result(mvc.perform(body(auth(post("/api/v1/device-tokens"),"customer","Customer"),Map.of("platform","Web","token","secret-push-token"))).andExpect(status().isCreated()).andExpect(jsonPath("$.data.token").doesNotExist()));
         long id=registered.path("data").path("id").asLong();

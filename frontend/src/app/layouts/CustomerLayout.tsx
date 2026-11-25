@@ -4,6 +4,7 @@ import { PATHS } from "@/app/routes";
 import { countItems } from "@/features/dine-in/cart";
 import { useDineInCartStore } from "@/features/dine-in/store";
 import { useOnlineCartStore } from "@/features/online-order/store";
+import { NotificationBell } from "@/features/notifications/NotificationBell";
 import { cn } from "@/shared/lib/cn";
 
 const tabs = [
@@ -53,6 +54,7 @@ export function CustomerLayout() {
             {label}
           </NavLink>
         ))}
+        <NotificationBell />
       </nav>
     </div>
   );

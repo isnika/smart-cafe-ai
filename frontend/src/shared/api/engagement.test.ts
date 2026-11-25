@@ -1,7 +1,7 @@
 import { http as mswHttp, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { getLoyaltySummary, getLoyaltyTransactions } from './engagement';
+import { getLoyaltySummary, getLoyaltyTransactions, listNotifications, markNotificationRead } from './engagement';
 import { configureHttp } from './http';
 
 const server = setupServer();
@@ -56,5 +56,25 @@ describe('Loyalty backend contract', () => {
       success: false, error: { code: 'UNAUTHORIZED', message: 'Vui lòng đăng nhập.' },
     }, { status: 401 })));
     await expect(getLoyaltySummary()).rejects.toMatchObject({ status: 401, code: 'UNAUTHORIZED' });
+  });
+});
+
+describe('customer notifications API', () => {
+  it('requests order notifications with the API pagination and unread filter', async () => {
+    server.use(mswHttp.get('http://localhost/api/notifications/me', ({ request }) => {
+      const query = new URL(request.url).searchParams;
+      expect(Object.fromEntries(query)).toEqual({ page: '2', size: '5', type: 'order_status', is_read: 'false', sort: 'created_at,desc' });
+      return HttpResponse.json({ success: true, data: [{ id: 7, is_read: false, data: { order_id: 9, status: 'Preparing' } }], meta: { page: 2, size: 5, total: 8 } });
+    }));
+    const result = await listNotifications({ page: 2, pageSize: 5, type: 'order_status', unreadOnly: true });
+    expect(result.total).toBe(8);
+    expect(result.items[0]).toMatchObject({ id: 7, isRead: false, data: { orderId: 9, status: 'Preparing' } });
+  });
+  it('uses PATCH with the required read state', async () => {
+    server.use(mswHttp.patch('http://localhost/api/notifications/7/read', async ({ request }) => {
+      expect(await request.json()).toEqual({ is_read: true });
+      return HttpResponse.json({ success: true, data: { id: 7, is_read: true } });
+    }));
+    expect(await markNotificationRead(7)).toEqual({ id: 7, isRead: true });
   });
 });

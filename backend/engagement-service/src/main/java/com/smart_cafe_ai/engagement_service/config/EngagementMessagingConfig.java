@@ -12,7 +12,7 @@ public class EngagementMessagingConfig {
         var queue=QueueBuilder.durable(QUEUE).withArgument("x-single-active-consumer",true).deadLetterExchange(DEAD_EXCHANGE).deadLetterRoutingKey(QUEUE).build();
         var dlq=QueueBuilder.durable(QUEUE+".dlq").build();
         var all=new ArrayList<Declarable>(List.of(exchange,order,payment,dead,queue,dlq,BindingBuilder.bind(dlq).to(dead).with(QUEUE)));
-        for(String type:List.of("order.completed","order.cancelled","order.status_changed")) all.add(BindingBuilder.bind(queue).to(order).with(type));
+        for(String type:List.of("order.created","order.completed","order.cancelled","order.status_changed")) all.add(BindingBuilder.bind(queue).to(order).with(type));
         for(String type:List.of("payment.refunded","payment.failed","invoice.issued")) all.add(BindingBuilder.bind(queue).to(payment).with(type));
         return new Declarables(all);
     }
