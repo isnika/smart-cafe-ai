@@ -416,9 +416,18 @@ export interface RevenueReportParams {
   fulfillmentType?: 'Delivery' | 'Pickup' | 'Dine_In';
 }
 
+const revenueQuery = (params?: RevenueReportParams) => ({
+  branch_id: params?.branchId,
+  from: params?.from,
+  to: params?.to,
+  group_by: params?.groupBy,
+  order_source: params?.orderSource,
+  fulfillment_type: params?.fulfillmentType,
+});
+
 export const getRevenueOverview = (params?: RevenueReportParams) =>
-  http.get<RevenueOverviewResponse>('/orders/reports/revenue', { query: params, snake: true });
+  http.get<RevenueOverviewResponse>('/orders/reports/revenue', { query: revenueQuery(params) });
 
 export const getRevenueByBranches = (params?: RevenueReportParams) =>
-  http.get<RevenueByBranchesResponse>('/orders/reports/revenue/branches', { query: params, snake: true });
+  http.get<RevenueByBranchesResponse>('/orders/reports/revenue/branches', { query: revenueQuery(params) });
 

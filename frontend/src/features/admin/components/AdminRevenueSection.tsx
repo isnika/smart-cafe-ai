@@ -66,8 +66,9 @@ export function AdminRevenueSection() {
     () => ({
       from,
       to,
+      branchId: selectedBranchId ?? undefined,
     }),
-    [from, to],
+    [from, to, selectedBranchId],
   );
 
   const overview = useAdminRevenueOverview(overviewParams);
@@ -80,6 +81,7 @@ export function AdminRevenueSection() {
   const aov = summary?.averageOrderValue ?? 0;
 
   const branchItems = byBranches.data?.branches ?? overview.data?.byBranch ?? [];
+  const visibleBranchIds = selectedBranchId === null ? [1, 2, 3] : [selectedBranchId];
 
   // Determine top-performing branch
   const topBranch = useMemo(() => {
@@ -368,13 +370,13 @@ export function AdminRevenueSection() {
               <div className="mb-4 flex items-center justify-between">
                 <div>
                   <h3 className="font-bold text-gray-900 text-base">
-                    So sánh & Tỷ trọng 3 chi nhánh
+                    {selectedBranchId === null ? 'So sánh & Tỷ trọng 3 chi nhánh' : 'Doanh thu chi nhánh'}
                   </h3>
                   <p className="text-xs text-gray-500">
-                    Phân bổ đóng góp doanh số giữa các cơ sở
+                    {selectedBranchId === null ? 'Phân bổ đóng góp doanh số giữa các cơ sở' : 'Doanh số của chi nhánh được chọn'}
                   </p>
                 </div>
-                <Badge tone="primary">{branchItems.length} chi nhánh</Badge>
+                <Badge tone="primary">{visibleBranchIds.length} chi nhánh</Badge>
               </div>
 
               {byBranches.isPending ? (
@@ -383,6 +385,7 @@ export function AdminRevenueSection() {
                 </div>
               ) : (
                 <AdminBranchRevenueChart
+                  branchIds={visibleBranchIds}
                   branches={branchItems}
                   totalRevenue={totalRevenue}
                 />
@@ -423,15 +426,15 @@ export function AdminRevenueSection() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {[1, 2, 3].map((bId) => {
+              {visibleBranchIds.map((bId) => {
                 const found = branchItems.find((b) => b.branchId === bId);
                 const meta = BRANCH_META[bId];
                 const revenue = found?.finalAmount ?? found?.revenue ?? 0;
                 const count = found?.ordersCount ?? 0;
                 const pct = totalRevenue > 0 ? Number(((revenue / totalRevenue) * 100).toFixed(1)) : 0;
                 const aovVal = count > 0 ? Math.round(revenue / count) : 0;
-                const subTotalVal = found?.subTotal ?? Math.round(revenue * 0.85);
-                const deliveryFeeVal = found?.deliveryFee ?? Math.round(revenue * 0.15);
+                const subTotalVal = found?.subTotal ?? 0;
+                const deliveryFeeVal = found?.deliveryFee ?? 0;
 
                 return (
                   <tr key={bId} className="hover:bg-gray-50/50 transition">
@@ -473,11 +476,11 @@ export function AdminRevenueSection() {
             </tbody>
             <tfoot className="border-t-2 border-gray-200 bg-gray-50/90 font-bold text-gray-900">
               <tr>
-                <td className="py-3.5 px-4">TỔNG CỘNG (3 CHI NHÁNH)</td>
+                <td className="py-3.5 px-4">{selectedBranchId === null ? 'TỔNG CỘNG (3 CHI NHÁNH)' : 'TỔNG CỘNG'}</td>
                 <td className="py-3.5 px-4 text-right text-base text-primary-800">
                   {formatVnd(totalRevenue)}
                 </td>
-                <td className="py-3.5 px-4 text-center">100%</td>
+                <td className="py-3.5 px-4 text-center">{totalRevenue > 0 ? '100%' : '0%'}</td>
                 <td className="py-3.5 px-4 text-right">{completedOrders} đơn</td>
                 <td className="py-3.5 px-4 text-right">{formatVnd(aov)}</td>
                 <td className="py-3.5 px-4 text-right">{formatVnd(summary?.subTotal ?? 0)}</td>
