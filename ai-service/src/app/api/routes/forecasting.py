@@ -74,7 +74,7 @@ def forecast_inventory(
     try:
         payload = get_forecast_service(
             branch_id=request.branch_id,
-        ).forecast_inventory(request.target_date.isoformat())
+        ).forecast_inventory(request.target_date.isoformat(), request.days)
         return _validate_metadata(payload)
     except Exception as exc:
         raise _handle_error(exc) from exc

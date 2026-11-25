@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from math import isfinite
 
 
 def _int(name: str, default: int, minimum: int, maximum: int) -> int:
@@ -20,6 +21,32 @@ def _float(name: str, default: float, minimum: float, maximum: float) -> float:
     return max(minimum, min(value, maximum))
 
 
+def _optional_nonnegative_float(name: str) -> float | None:
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return None
+    try:
+        value = float(raw)
+    except ValueError:
+        return None
+    if not isfinite(value) or value < 0:
+        return None
+    return value
+
+
+def _service_level() -> float:
+    raw = os.getenv("INVENTORY_SERVICE_LEVEL", "0.95")
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise ValueError(
+            "INVENTORY_SERVICE_LEVEL must be strictly between 0.5 and 0.999"
+        ) from exc
+    if not isfinite(value) or not 0.5 < value < 0.999:
+        raise ValueError("INVENTORY_SERVICE_LEVEL must be strictly between 0.5 and 0.999")
+    return value
+
+
 @dataclass(frozen=True)
 class ForecastingSettings:
     source_mode: str
@@ -34,6 +61,8 @@ class ForecastingSettings:
     evaluation_horizon_days: int
     evaluation_folds: int
     evaluation_step_days: int
+    inventory_default_lead_time_days: float | None = None
+    inventory_service_level: float = 0.95
 
     @classmethod
     def from_env(cls) -> "ForecastingSettings":
@@ -75,6 +104,10 @@ class ForecastingSettings:
             evaluation_step_days=_int(
                 "FORECASTING_EVALUATION_STEP_DAYS", 28, 1, 365
             ),
+            inventory_default_lead_time_days=_optional_nonnegative_float(
+                "INVENTORY_DEFAULT_LEAD_TIME_DAYS"
+            ),
+            inventory_service_level=_service_level(),
         )
 
 

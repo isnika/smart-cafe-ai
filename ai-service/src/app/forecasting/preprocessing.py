@@ -185,6 +185,7 @@ def normalize_inventory(frame: pd.DataFrame, branch_id: int) -> tuple[pd.DataFra
             "stock": "quantity_in_stock",
             "reserved": "reserved_quantity",
             "minimum_stock": "reorder_level",
+            "lead_time": "lead_time_days",
         },
     )
     _require(
@@ -205,6 +206,8 @@ def normalize_inventory(frame: pd.DataFrame, branch_id: int) -> tuple[pd.DataFra
         result[column] = _numeric(result, column)
     result["ingredient_name"] = result["ingredient_name"].fillna("").astype(str).str.strip()
     result["unit"] = result["unit"].fillna("").astype(str).str.strip()
+    if "lead_time_days" in result.columns:
+        result["lead_time_days"] = _numeric(result, "lead_time_days")
     invalid = (
         result["ingredient_id"].isna()
         | result["unit"].eq("")

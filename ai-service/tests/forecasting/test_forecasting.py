@@ -130,6 +130,84 @@ def test_inventory_uses_variant_recipe_and_available_stock(fixture_service):
     assert ingredient["available_stock"] == 80
     assert ingredient["forecast_usage"] == 2
     assert ingredient["recommended_purchase"] == 0
+    assert ingredient["method"] == "heuristic_reorder_level"
+    assert ingredient["reason"] == "missing_lead_time"
+    assert ingredient["lead_time_days"] is None
+
+
+def test_inventory_uses_rop_when_lead_time_and_history_are_available(fixture_service):
+    settings = replace(
+        fixture_service.settings,
+        inventory_default_lead_time_days=4,
+    )
+    service = RevenueForecastService(snapshot=fixture_service.snapshot, settings=settings)
+    ingredient = service.forecast_inventory("2025-04-01")["ingredients"][0]
+
+    assert ingredient["method"] == "rop_safety_stock"
+    assert ingredient["daily_demand_mean"] == 2
+    assert ingredient["daily_demand_std"] == 0
+    assert ingredient["lead_time_days"] == 4
+    assert ingredient["safety_stock"] == 0
+    assert ingredient["reorder_point"] == 8
+    assert ingredient["days_of_cover"] == 40
+    assert ingredient["reorder_alert"] is False
+
+
+def test_inventory_horizon_keeps_old_fields_and_uses_daily_mean(fixture_service):
+    result = fixture_service.forecast_inventory("2025-04-01", days=3)
+    ingredient = result["ingredients"][0]
+
+    assert result["coverage_horizon_days"] == 3
+    assert ingredient["forecast_usage"] == 6
+    assert ingredient["daily_demand_mean"] == 2
+    for field in ("available_stock", "reorder_level", "forecast_usage", "recommended_purchase"):
+        assert field in ingredient
+
+
+def test_inventory_zero_daily_demand_has_null_days_of_cover(fixture_service, monkeypatch):
+    def zero_product_forecast(target_date, *, _items=None):
+        return {
+            "fallback_reason": None,
+            "products": [{
+                "product_id": 1,
+                "variant_id": 1,
+                "product_name": "Espresso",
+                "predicted_quantity": 0.0,
+            }],
+        }
+
+    settings = replace(
+        fixture_service.settings,
+        inventory_default_lead_time_days=4,
+    )
+    service = RevenueForecastService(snapshot=fixture_service.snapshot, settings=settings)
+    monkeypatch.setattr(service, "forecast_products", zero_product_forecast)
+    ingredient = service.forecast_inventory("2025-04-01")["ingredients"][0]
+
+    assert ingredient["daily_demand_mean"] == 0
+    assert ingredient["days_of_cover"] is None
+    assert ingredient["safety_stock"] == 0
+
+
+def test_inventory_history_is_sample_std_over_latest_56_days(tmp_path):
+    _write_fixture(tmp_path)
+    items = pd.read_csv(tmp_path / "order_items.csv")
+    quantities = [1 + (offset % 5) for offset in range(len(items))]
+    items["quantity"] = quantities
+    items.to_csv(tmp_path / "order_items.csv", index=False)
+    settings = _settings()
+    service = RevenueForecastService(
+        snapshot=DemoForecastingRepository(tmp_path, settings).load_snapshot(branch_id=1),
+        settings=settings,
+    )
+
+    history = service._ingredient_usage_history(service._demand_rows(), 1, "g")
+    expected_values = [2 * quantities[offset] for offset in range(34, 90)]
+    expected = pd.Series(expected_values, dtype=float).std(ddof=1)
+
+    assert len(history) == 56
+    assert history.std(ddof=1) == pytest.approx(expected)
+    assert history.std(ddof=1) != pytest.approx(pd.Series(expected_values).std(ddof=0))
 
 
 def test_revenue_refund_and_demand_consumption_are_separate(tmp_path):

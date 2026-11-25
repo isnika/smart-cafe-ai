@@ -23,10 +23,16 @@ Request doanh thu:
 {"start_date":"2026-10-19","days":3,"branch_id":1}
 ```
 
-Request product/inventory:
+Request product:
 
 ```json
 {"target_date":"2026-10-19","branch_id":1}
+```
+
+Request inventory (the optional `days` defaults to `1`):
+
+```json
+{"target_date":"2026-10-19","days":3,"branch_id":1}
 ```
 
 `branch_id` được truyền xuyên suốt và là bắt buộc ở live mode. Demo chỉ tự chọn
@@ -112,3 +118,35 @@ xuất cần nhận `run_id`, `branch_id`, `forecast_type`, `target_id`,
 `forecast_date`, `predicted_value`, `model_version`, `raw_data` và dùng idempotency
 theo `(run_id, branch_id, forecast_type, target_id, forecast_date)`; endpoint
 write backend chưa được triển khai/xác nhận trong repository này.
+
+## ROP and safety-stock policy
+
+`POST /api/forecasting/inventory` accepts `days` (default `1`, maximum `90`).
+`forecast_usage` is the total ingredient demand over H forecast days from predicted
+variant quantities multiplied by recipes; `d_bar = forecast_usage / H`.
+
+When data is sufficient, the policy uses `SS = z × sigma_d × sqrt(L)`,
+`ROP = d_bar × L + SS`, and `DaysOfCover = available_stock / d_bar` (null when
+`d_bar = 0`). Reorder is alerted when `available_stock <= ROP`, and
+`recommended_purchase = max(0, d_bar × (L + H) + SS - available_stock)`.
+
+`sigma_d` is sample standard deviation (`ddof=1`) of daily ingredient usage in
+the latest 56-day history window. Missing calendar days are filled with zero only
+when the snapshot has `coverage_complete=true`; dates use the branch business
+timezone. `d_bar` never reuses the historical mean.
+
+`L` comes from per-ingredient `inventory.lead_time_days`. If the snapshot does
+not provide it, `INVENTORY_DEFAULT_LEAD_TIME_DAYS` may supply an explicit default;
+without either source, lead time is missing. `z` uses
+`statistics.NormalDist().inv_cdf` and `INVENTORY_SERVICE_LEVEL` (default `0.95`),
+which must be strictly inside `(0.5, 0.999)`.
+
+At least 14 history days and a usable lead time select
+`method=rop_safety_stock`. Missing lead time or history selects
+`method=heuristic_reorder_level`, with `reason` containing
+`missing_lead_time` and/or `insufficient_history`; the existing `reorder_level`
+formula remains the fallback. Missing recipe/inventory or a unit mismatch remains
+`status=insufficient_data`; missing values are not replaced with zero.
+
+Not implemented: shrinkage/waste, inbound stock, MOQ, pack size, and unit
+conversion. These are not included in the response as if they were implemented.

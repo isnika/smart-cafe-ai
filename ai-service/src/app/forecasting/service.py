@@ -17,6 +17,13 @@ from .exceptions import (
     ForecastingDataQualityError,
     ForecastingDataUnavailable,
 )
+from .inventory_policy import (
+    days_of_cover,
+    needs_reorder,
+    reorder_point,
+    safety_stock,
+    service_level_to_z,
+)
 from .models import seasonal_naive, weekday_mean
 from .repository import (
     DEMO_DATA_DIR,
@@ -113,9 +120,26 @@ class RevenueForecastService:
             return DemoForecastingRepository(DEMO_DATA_DIR, settings)
         return OperationalForecastingRepository(settings)
 
+    def _eligible_order_rows(self) -> pd.DataFrame:
+        """Return orders eligible for both revenue and consumption history."""
+
+        orders = self.orders[self.orders["order_status"].eq("Completed")].copy()
+        payment = orders["payment_status"]
+        partial = payment.eq("Partially_Refunded")
+        if partial.any():
+            if not self.quality.get("refund_amount_available"):
+                raise ForecastingDataQualityError(
+                    "Partially refunded orders require refunded_amount_vnd."
+                )
+            if orders.loc[partial, "refunded_amount_vnd"].isna().any():
+                raise ForecastingDataQualityError(
+                    "Partially refunded orders require a refund amount."
+                )
+        eligible_payment = payment.isin({"Paid", "Partially_Refunded", "Refunded"})
+        return orders.loc[eligible_payment].copy()
+
     def _build_revenue_history(self) -> pd.Series:
-        orders = self.orders.copy()
-        orders = orders[orders["order_status"].eq("Completed")].copy()
+        orders = self._eligible_order_rows()
         orders["revenue_amount_vnd"] = orders["order_total_vnd"].astype(float)
         payment = orders["payment_status"]
         partial = payment.eq("Partially_Refunded")
@@ -133,21 +157,23 @@ class RevenueForecastService:
                 orders.loc[partial, "order_total_vnd"] - refund
             ).clip(lower=0)
         orders.loc[payment.eq("Refunded"), "revenue_amount_vnd"] = 0.0
-        eligible_payment = payment.isin({"Paid", "Partially_Refunded", "Refunded"})
         excluded_status = self.orders[~self.orders["order_status"].eq("Completed")]
         self.quality["revenue_excluded_status_counts"] = (
             excluded_status["order_status"].value_counts().astype(int).to_dict()
         )
         self.quality["revenue_excluded_payment_counts"] = (
             self.orders.loc[
-                self.orders["order_status"].eq("Completed") & ~eligible_payment,
+                self.orders["order_status"].eq("Completed")
+                & ~self.orders["payment_status"].isin(
+                    {"Paid", "Partially_Refunded", "Refunded"}
+                ),
                 "payment_status",
             ]
             .value_counts()
             .astype(int)
             .to_dict()
         )
-        orders = orders[eligible_payment & (orders["revenue_amount_vnd"] >= 0)].copy()
+        orders = orders[orders["revenue_amount_vnd"] >= 0].copy()
         if orders.empty:
             raise ForecastingDataQualityError("Không có doanh thu hợp lệ sau khi lọc nghiệp vụ.")
         dates = _local_dates(orders["order_time"], self.timezone)
@@ -158,12 +184,17 @@ class RevenueForecastService:
         daily_observed = orders.groupby("business_date")["revenue_amount_vnd"].sum().sort_index()
         start = daily_observed.index.min()
         index = pd.date_range(start, self.cutoff_date, freq="D")
-        # Zero-fill is allowed only because the repository contract says the
-        # snapshot is complete through complete_through. An outage must not be
-        # silently converted to zero by an unbounded resample.
-        daily = daily_observed.reindex(index, fill_value=0.0).astype(float)
+        # Zero-fill is safe only for a snapshot with complete coverage.
+        if self.snapshot.quality.get("coverage_complete"):
+            daily = daily_observed.reindex(index, fill_value=0.0).astype(float)
+        else:
+            daily = daily_observed.astype(float)
         self.quality["revenue_observed_days"] = int(daily_observed.size)
-        self.quality["revenue_filled_zero_days"] = int(len(index) - daily_observed.size)
+        self.quality["revenue_filled_zero_days"] = (
+            int(len(index) - daily_observed.size)
+            if self.snapshot.quality.get("coverage_complete")
+            else 0
+        )
         self.quality["revenue_cutoff_date"] = self.cutoff_date.strftime("%Y-%m-%d")
         return daily
 
@@ -282,15 +313,21 @@ class RevenueForecastService:
 
     def _demand_rows(self) -> pd.DataFrame:
         items = self.order_items.copy()
-        items = items[items["order_status"].eq("Completed")].copy()
+        eligible_order_ids = set(self._eligible_order_rows()["order_id"].astype(str))
+        items = items[items["order_id"].astype(str).isin(eligible_order_ids)].copy()
         items["business_date"] = _local_dates(items["order_time"], self.timezone)
         items = items[items["business_date"] <= self.cutoff_date]
         return items[items["quantity"] > 0].copy()
 
-    def forecast_products(self, target_date: str) -> dict:
+    def forecast_products(
+        self,
+        target_date: str,
+        *,
+        _items: pd.DataFrame | None = None,
+    ) -> dict:
         target = pd.Timestamp(target_date).normalize()
         self._validate_future_target(target)
-        items = self._demand_rows()
+        items = _items if _items is not None else self._demand_rows()
         if items.empty:
             raise ForecastingDataQualityError("Không có completed order_items để dự báo product demand.")
         results: list[dict[str, Any]] = []
@@ -303,7 +340,9 @@ class RevenueForecastService:
                 )
             daily = group.groupby("business_date")["quantity"].sum().sort_index()
             index = pd.date_range(daily.index.min(), self.cutoff_date, freq="D")
-            daily = daily.reindex(index, fill_value=0.0).tail(56)
+            if self.snapshot.quality.get("coverage_complete"):
+                daily = daily.reindex(index, fill_value=0.0)
+            daily = daily.tail(56)
             same_weekday = daily[daily.index.dayofweek == target.dayofweek]
             reason = None
             if len(same_weekday) >= 4:
@@ -353,16 +392,92 @@ class RevenueForecastService:
             "metadata": metadata,
         }
 
-    def forecast_inventory(self, target_date: str) -> dict:
-        product_forecast = self.forecast_products(target_date)
-        demand = {
-            int(item["variant_id"]): float(item["predicted_quantity"])
-            for item in product_forecast["products"]
-        }
+    def _resolve_lead_time_days(self, inventory_row: Any) -> float | None:
+        """Read per-ingredient lead time, then the explicit environment default."""
+
+        values = [getattr(inventory_row, "lead_time_days", None)]
+        values.append(self.settings.inventory_default_lead_time_days)
+        for value in values:
+            try:
+                numeric = float(value)
+            except (TypeError, ValueError):
+                continue
+            if np.isfinite(numeric) and numeric >= 0:
+                return numeric
+        return None
+
+    def _ingredient_usage_history(
+        self,
+        demand_rows: pd.DataFrame,
+        ingredient_id: int,
+        inventory_unit: str,
+    ) -> pd.Series:
+        """Build a 56-day ingredient-use series in the branch business timezone."""
+
+        if demand_rows.empty:
+            return pd.Series(dtype=float)
+        recipe_rows = self.recipes[
+            (self.recipes["ingredient_id"].eq(ingredient_id))
+            & (self.recipes["unit"].eq(inventory_unit))
+        ][["variant_id", "quantity_required"]]
+        if recipe_rows.empty:
+            return pd.Series(dtype=float)
+        joined = demand_rows.merge(recipe_rows, on="variant_id", how="inner")
+        observed = pd.Series(dtype=float)
+        if not joined.empty:
+            joined["ingredient_usage"] = joined["quantity"] * joined["quantity_required"]
+            observed = joined.groupby("business_date")["ingredient_usage"].sum().sort_index()
+        start = demand_rows["business_date"].min()
+        if pd.isna(start):
+            return pd.Series(dtype=float)
+        window_start = max(
+            pd.Timestamp(start),
+            self.cutoff_date - pd.Timedelta(days=55),
+        )
+        window = pd.date_range(window_start, self.cutoff_date, freq="D")
+        observed = observed[
+            (observed.index >= window_start) & (observed.index <= self.cutoff_date)
+        ]
+        if self.snapshot.quality.get("coverage_complete"):
+            return observed.reindex(window, fill_value=0.0).astype(float)
+        return observed.astype(float)
+
+    def forecast_inventory(self, target_date: str, days: int = 1) -> dict:
+        """Forecast inventory with ``order_up_to = d_bar × (L + H) + SS``.
+
+        The new-policy purchase quantity is
+        ``recommended_purchase = max(0, order_up_to - available_stock)``.
+        Ingredients without enough policy inputs retain the legacy heuristic.
+        """
+
+        if not 1 <= days <= 90:
+            raise ValueError("days phải nằm trong khoảng 1 đến 90")
+        target = pd.Timestamp(target_date).normalize()
+        demand_rows = self._demand_rows()
+        product_forecasts = [
+            self.forecast_products(
+                (target + pd.Timedelta(days=offset)).strftime("%Y-%m-%d"),
+                _items=demand_rows,
+            )
+            for offset in range(days)
+        ]
+        demand: dict[int, float] = {}
+        product_fallback_reasons: set[str] = set()
+        for product_forecast in product_forecasts:
+            if product_forecast.get("fallback_reason"):
+                product_fallback_reasons.add(str(product_forecast["fallback_reason"]))
+            for item in product_forecast["products"]:
+                variant_id = int(item["variant_id"])
+                demand[variant_id] = demand.get(variant_id, 0.0) + float(
+                    item["predicted_quantity"]
+                )
         inventory_by_id = {
             int(row.ingredient_id): row
             for row in self.inventory.itertuples(index=False)
         }
+        service_level = self.settings.inventory_service_level
+        z_value = service_level_to_z(service_level)
+        history_by_ingredient: dict[int, pd.Series] = {}
         usage: dict[int, float] = {}
         ingredient_names: dict[int, str] = {}
         ingredient_units: dict[int, set[str]] = {}
@@ -401,6 +516,7 @@ class RevenueForecastService:
             reasons = list(dict.fromkeys(missing.get(ingredient_id, [])))
             if inv is None:
                 unit = next(iter(ingredient_units.get(ingredient_id, {""})))
+                forecast_usage = usage.get(ingredient_id)
                 ingredients.append(
                     {
                         "ingredient_id": ingredient_id,
@@ -410,6 +526,16 @@ class RevenueForecastService:
                         "reorder_level": None,
                         "forecast_usage": round(usage[ingredient_id], 3) if ingredient_id in usage else None,
                         "recommended_purchase": None,
+                        "method": "heuristic_reorder_level",
+                        "daily_demand_mean": round(forecast_usage / days, 3) if forecast_usage is not None else None,
+                        "daily_demand_std": None,
+                        "lead_time_days": None,
+                        "service_level": service_level,
+                        "safety_stock": None,
+                        "reorder_point": None,
+                        "days_of_cover": None,
+                        "reorder_alert": None,
+                        "reason": "missing_inventory",
                         "status": "insufficient_data",
                         "missing_data": ["inventory branch tương ứng không tồn tại", *reasons],
                     }
@@ -422,15 +548,56 @@ class RevenueForecastService:
             if ingredient_id in ingredient_units and any(recipe_unit != unit for recipe_unit in ingredient_units[ingredient_id]):
                 reasons.append("recipe và inventory không cùng đơn vị; không tự đổi đơn vị")
             forecast_usage = usage.get(ingredient_id)
+            daily_mean = forecast_usage / days if forecast_usage is not None else None
+            daily_std: float | None = None
+            lead_time = self._resolve_lead_time_days(inv)
+            policy_reason: list[str] = []
+            method = "heuristic_reorder_level"
+            safety: float | None = None
+            rop: float | None = None
+            alert: bool | None = None
             if reasons or forecast_usage is None:
                 recommended = None
                 status = "insufficient_data"
+                reason = "; ".join(reasons) if reasons else "missing_forecast_usage"
             else:
-                recommended = max(
-                    0.0,
-                    forecast_usage + float(inv.reorder_level) - available,
-                )
-                status = "ok"
+                history = history_by_ingredient.get(ingredient_id)
+                if history is None:
+                    history = self._ingredient_usage_history(
+                        demand_rows,
+                        ingredient_id,
+                        unit,
+                    )
+                    history_by_ingredient[ingredient_id] = history
+                if len(history) >= 14:
+                    candidate_std = float(history.std(ddof=1))
+                    if np.isfinite(candidate_std):
+                        daily_std = max(0.0, candidate_std)
+                    else:
+                        policy_reason.append("insufficient_history")
+                else:
+                    policy_reason.append("insufficient_history")
+                if lead_time is None:
+                    policy_reason.append("missing_lead_time")
+                if not policy_reason:
+                    method = "rop_safety_stock"
+                    safety = safety_stock(z_value, daily_std or 0.0, lead_time)
+                    rop = reorder_point(daily_mean or 0.0, lead_time, safety)
+                    # order_up_to = d_bar × (L + H) + SS
+                    order_up_to = (daily_mean or 0.0) * (lead_time + days) + safety
+                    recommended = max(0.0, order_up_to - available)
+                    alert = needs_reorder(available, rop)
+                    status = "ok"
+                    reason = None
+                else:
+                    recommended = max(
+                        0.0,
+                        forecast_usage + float(inv.reorder_level) - available,
+                    )
+                    rop = max(0.0, float(inv.reorder_level))
+                    alert = needs_reorder(available, rop)
+                    status = "ok"
+                    reason = ",".join(policy_reason)
             ingredients.append(
                 {
                     "ingredient_id": ingredient_id,
@@ -442,20 +609,30 @@ class RevenueForecastService:
                     "recommended_purchase": round(float(recommended), 3) if recommended is not None else None,
                     "status": status,
                     "missing_data": list(dict.fromkeys(reasons)),
+                    "method": method,
+                    "daily_demand_mean": round(float(daily_mean), 3) if daily_mean is not None else None,
+                    "daily_demand_std": round(float(daily_std), 3) if daily_std is not None else None,
+                    "lead_time_days": round(float(lead_time), 3) if lead_time is not None else None,
+                    "service_level": service_level,
+                    "safety_stock": round(float(safety), 3) if safety is not None else None,
+                    "reorder_point": round(float(rop), 3) if rop is not None else None,
+                    "days_of_cover": days_of_cover(available, daily_mean) if daily_mean is not None else None,
+                    "reorder_alert": alert,
+                    "reason": reason,
                 }
             )
-        fallback_reason = product_forecast.get("fallback_reason")
+        fallback_reason = sorted(product_fallback_reasons)[0] if product_fallback_reasons else None
         if missing_data:
             fallback_reason = fallback_reason or "recipe_missing_for_forecast_variants"
         if any(item["status"] != "ok" for item in ingredients):
             fallback_reason = fallback_reason or "recipe_or_inventory_data_incomplete"
         metadata = self._metadata(
-            forecast_origin=pd.Timestamp(target_date).normalize(),
-            horizon_days=1,
+            forecast_origin=target,
+            horizon_days=days,
             fallback_reason=fallback_reason,
         )
         return {
-            "forecast_date": pd.Timestamp(target_date).date(),
+            "forecast_date": target.date(),
             "branch_id": self.branch_id,
             "method": "predicted variant demand × Recipes.quantity_required",
             "model": "VariantDemandTimesRecipe",
@@ -463,11 +640,13 @@ class RevenueForecastService:
             "source_mode": self.source_mode,
             "data_cutoff_date": self.cutoff_date.date(),
             "timezone": self.timezone,
-            "coverage_horizon_days": 1,
+            "coverage_horizon_days": days,
             "calculation_assumption": (
-                "Forecast bắt đầu sau complete_through; reserved_quantity đã được trừ khỏi available_stock. "
-                "reorder_level được dùng như ngưỡng bổ sung heuristic, không được gọi là safety stock. "
-                "Không áp dụng hao hụt, lead time, inbound, MOQ hoặc pack size vì schema snapshot chưa cung cấp."
+                "forecast_usage = sum(predicted_variant_quantity × recipe.quantity_required); "
+                "d_bar = forecast_usage / H; SS = z × sigma_d × sqrt(L); "
+                "ROP = d_bar × L + SS; order_up_to = d_bar × (L + H) + SS. "
+                "Fallback dùng reorder_level khi thiếu lead time hoặc lịch sử; "
+                "không áp dụng hao hụt, inbound, MOQ, pack size hay quy đổi unit."
             ),
             "fallback_reason": fallback_reason,
             "missing_data": missing_data,
@@ -518,6 +697,8 @@ def get_forecast_service(
         settings.evaluation_horizon_days,
         settings.evaluation_folds,
         settings.evaluation_step_days,
+        settings.inventory_default_lead_time_days,
+        settings.inventory_service_level,
         _auth_fingerprint(authorization) if settings.source_mode == "live" else "demo",
     )
     now = time.monotonic()

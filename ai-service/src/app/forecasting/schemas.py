@@ -18,6 +18,7 @@ class TargetDateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     target_date: date
+    days: int = Field(default=1, ge=1, le=90)
     branch_id: int | None = Field(default=None, ge=1)
 
 
@@ -95,6 +96,16 @@ class IngredientForecastItem(BaseModel):
     recommended_purchase: float | None = None
     status: Literal["ok", "insufficient_data"]
     missing_data: list[str] = Field(default_factory=list)
+    method: Literal["rop_safety_stock", "heuristic_reorder_level"]
+    daily_demand_mean: float | None = None
+    daily_demand_std: float | None = None
+    lead_time_days: float | None = None
+    service_level: float | None = None
+    safety_stock: float | None = None
+    reorder_point: float | None = None
+    days_of_cover: float | None = None
+    reorder_alert: bool | None = None
+    reason: str | None = None
 
 
 class InventoryForecastResponse(BaseModel):
