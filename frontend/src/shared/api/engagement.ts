@@ -33,6 +33,7 @@ export const listNotifications = async (params: PageParams & { type?: string; un
   return { items: data ?? [], total: meta?.total ?? data?.length ?? 0, page: meta?.page ?? page, pageSize: meta?.size ?? size };
 };
 export const markNotificationRead = (id: number) => http.patch<{ id: number; isRead: boolean }>(`/notifications/${id}/read`, { is_read: true });
+export const markAllNotificationsRead = () => http.post<{ updatedCount: number }>('/notifications/read-all');
 
 export async function listProductReviews(productId: number, page = 1, signal?: AbortSignal): Promise<Page<ProductReview>> {
   const size = 5;

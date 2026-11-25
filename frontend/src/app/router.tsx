@@ -28,6 +28,7 @@ import OrderHistoryPage from "@/features/orders/pages/OrderHistoryPage";
 import ProfilePage from "@/features/profile/pages/ProfilePage";
 import OrderTrackingPage from "@/features/online-order/pages/OrderTrackingPage";
 import OrderReviewPage from "@/features/online-order/pages/OrderReviewPage";
+import NotificationsPage from "@/features/notifications/NotificationsPage";
 import ManagerDashboardPage from "@/features/manager-dashboard/pages/ManagerDashboardPage";
 import ReviewModerationPage from "@/features/reviews/ReviewModerationPage";
 import InventoryPage from "@/features/manager-inventory/pages/InventoryPage";
@@ -102,6 +103,7 @@ export const routes: RouteObject[] = [
               { path: PATHS.orders, element: <OrderHistoryPage /> },
               { path: PATHS.order, element: <OrderTrackingPage /> },
               { path: PATHS.profile, element: <ProfilePage /> },
+              { path: PATHS.notifications, element: <NotificationsPage /> },
             ],
           },
         ],

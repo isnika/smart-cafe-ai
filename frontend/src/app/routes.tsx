@@ -17,6 +17,7 @@ export const PATHS = {
   order: "/orders/:orderId", // Order Tracking (online)
   orderReview: "/orders/:orderId/reviews",
   profile: "/profile",
+  notifications: "/notifications",
   payment: "/payment/:orderId", // Payment Gateway (dùng chung dine-in & online)
   paymentSuccess: "/payment/:orderId/success",
   paymentReturn: "/payment/:orderId/return", // Khách quay về từ cổng VNPay/Momo (polling GET /payments/{id})
@@ -87,7 +88,7 @@ export const roleHome: Record<RoleName, string> = {
 export function homeAfterLogin(roleName: RoleName, requestedPath?: string | null): string {
   if (!requestedPath) return roleHome[roleName];
   const allowed: Record<RoleName, readonly string[]> = {
-    Customer: [PATHS.home, PATHS.menu, PATHS.cart, PATHS.checkout, PATHS.orders, PATHS.profile],
+    Customer: [PATHS.home, PATHS.menu, PATHS.cart, PATHS.checkout, PATHS.orders, PATHS.profile, PATHS.notifications],
     Staff: [PATHS.staff, PATHS.staffQueue, PATHS.staffCheckin, PATHS.staffTables, '/staff/orders/'],
     Manager: [PATHS.manager, PATHS.managerOrders, PATHS.managerInventory, PATHS.managerIngredients, PATHS.managerForecast, PATHS.managerSchedules],
     Admin: [PATHS.admin, PATHS.adminRevenue, PATHS.adminOrders, PATHS.adminBranches, PATHS.adminTables, PATHS.adminUsers, PATHS.adminProducts, PATHS.adminCategories, PATHS.adminMenus, PATHS.adminIngredients, PATHS.adminSchedules],
