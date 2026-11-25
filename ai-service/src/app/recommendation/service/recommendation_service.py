@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import logging
 import threading
 import time
 from dataclasses import dataclass
@@ -23,6 +24,10 @@ from src.app.recommendation.repository import (
     OperationalRecommendationRepository,
     RecommendationRepository,
 )
+from src.app.recommendation.training.artifact import load_artifact, resolve_path
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -47,17 +52,19 @@ class RecommendationService:
         model_version: str = "demo",
         branch_id: int | None = None,
     ):
+        runtime_settings = None
+        load_offline_artifact = data_dir is None
         if repository is None:
             if data_dir is not None:
                 repository = DemoRecommendationRepository(data_dir)
             else:
-                settings = get_recommendation_settings()
-                repository = self._repository_from_settings(settings)
-                recency_half_life_days = settings.recency_half_life_days
-                max_quantity_signal = settings.max_quantity_signal
-                max_order_signal = settings.max_order_signal
-                trending_window_days = settings.trending_window_days
-                model_version = settings.model_version
+                runtime_settings = get_recommendation_settings()
+                repository = self._repository_from_settings(runtime_settings)
+                recency_half_life_days = runtime_settings.recency_half_life_days
+                max_quantity_signal = runtime_settings.max_quantity_signal
+                max_order_signal = runtime_settings.max_order_signal
+                trending_window_days = runtime_settings.trending_window_days
+                model_version = runtime_settings.model_version
 
         snapshot = repository.load_snapshot(branch_id=branch_id)
         self.source_version = snapshot.version
@@ -73,7 +80,51 @@ class RecommendationService:
         if self.products.empty:
             raise ValueError("Recommendation catalog không có sản phẩm đang bán.")
 
-        self.tfidf_matrix, self.vectorizer = create_tfidf_features(self.products)
+        self.offline_artifact = None
+        self.artifact_fallback_reason = None
+        if load_offline_artifact:
+            runtime_settings = runtime_settings or get_recommendation_settings()
+            artifact_path = resolve_path(
+                runtime_settings.artifact_path,
+                base_dir=Path(__file__).resolve().parents[4],
+            )
+            try:
+                self.offline_artifact = load_artifact(artifact_path)
+                artifact_metadata = self.offline_artifact["metadata"]
+                model_version = str(artifact_metadata["model_version"])
+                self.model_version = model_version
+                logger.info(
+                    "Loaded recommendation artifact version=%s algorithm=%s path=%s",
+                    model_version,
+                    artifact_metadata.get("algorithm"),
+                    artifact_path,
+                )
+            except FileNotFoundError:
+                self.artifact_fallback_reason = "offline_artifact_missing"
+                logger.info("Recommendation artifact chưa có; dùng baseline hiện tại: %s", artifact_path)
+            except Exception as exc:
+                self.artifact_fallback_reason = "offline_artifact_invalid"
+                logger.warning(
+                    "Không thể load recommendation artifact (%s); dùng baseline hiện tại",
+                    type(exc).__name__,
+                )
+
+        self.tfidf_matrix = None
+        self.vectorizer = None
+        if self.offline_artifact is not None:
+            try:
+                self.vectorizer = self.offline_artifact["content_vectorizer"]
+                self.tfidf_matrix = self.vectorizer.transform(self.products["content"])
+            except Exception as exc:
+                self.artifact_fallback_reason = "offline_artifact_content_schema_mismatch"
+                self.offline_artifact = None
+                self.model_version = runtime_settings.model_version
+                logger.warning(
+                    "Artifact recommendation không tương thích content schema (%s); fit baseline content",
+                    type(exc).__name__,
+                )
+        if self.offline_artifact is None:
+            self.tfidf_matrix, self.vectorizer = create_tfidf_features(self.products)
         self.content_similarity = cosine_similarity(self.tfidf_matrix)
         self.product_ids = self.products["product_id"].astype(int).tolist()
         self.product_index = {pid: idx for idx, pid in enumerate(self.product_ids)}
@@ -344,6 +395,15 @@ class RecommendationService:
         top_k: int,
         discovery: bool,
     ) -> RecommendationResult:
+        if self.offline_artifact is not None:
+            trained_result = self._personalized_from_artifact(
+                user_id=user_id,
+                product_id=product_id,
+                top_k=top_k,
+                discovery=discovery,
+            )
+            if trained_result is not None:
+                return trained_result
         if not user_id:
             return self._trending(top_k, fallback_reason="anonymous_user")
         history = self._user_history(user_id)
@@ -444,6 +504,55 @@ class RecommendationService:
             fallback_reason="no_eligible_personalized_candidates",
         )
 
+    def _personalized_from_artifact(
+        self,
+        user_id: str | None,
+        product_id: int | None,
+        top_k: int,
+        discovery: bool,
+    ) -> RecommendationResult | None:
+        if not user_id or self.offline_artifact is None:
+            return None
+        raw_scores = self.offline_artifact.get("scores_by_user", {}).get(str(user_id))
+        if not isinstance(raw_scores, dict):
+            return None
+        history = self._user_history(user_id)
+        purchased_ids = set(history["product_id"].astype(int).tolist()) if not history.empty else set()
+        algorithm = str(self.offline_artifact.get("metadata", {}).get("algorithm", "offline"))
+        scores: dict[int, float] = {}
+        for raw_product_id, raw_score in raw_scores.items():
+            try:
+                candidate_id = int(raw_product_id)
+                candidate_score = float(raw_score)
+            except (TypeError, ValueError):
+                continue
+            if (
+                candidate_id in self.product_lookup
+                and candidate_id != product_id
+                and (not discovery or candidate_id not in purchased_ids)
+                and candidate_score > 0
+            ):
+                scores[candidate_id] = candidate_score
+        if not scores:
+            return None
+        items = [
+            self._item(
+                candidate_id,
+                score,
+                "offline_model",
+                "Được xếp hạng bởi mô hình recommendation đã huấn luyện offline.",
+                "personalized",
+                f"Offline-{algorithm}",
+            )
+            for candidate_id, score in sorted(
+                scores.items(), key=lambda item: (-item[1], item[0])
+            )[:top_k]
+        ]
+        return RecommendationResult(
+            items=self._diversify(items, top_k),
+            strategy="personalized",
+        )
+
     def _reorder(self, user_id: str | None, top_k: int) -> RecommendationResult:
         if not user_id:
             return self._trending(top_k, fallback_reason="reorder_requires_user")
@@ -503,7 +612,14 @@ class RecommendationService:
         if effective_mode == "reorder":
             return self._reorder(user_id, top_k)
         if effective_mode == "personalized":
-            return self._personalized(user_id, product_id, top_k, discovery)
+            result = self._personalized(user_id, product_id, top_k, discovery)
+            if self.artifact_fallback_reason and result.fallback_reason is None:
+                return RecommendationResult(
+                    items=result.items,
+                    strategy=result.strategy,
+                    fallback_reason=self.artifact_fallback_reason,
+                )
+            return result
         raise ValueError(f"mode không hợp lệ: {effective_mode}")
 
     def recommend(

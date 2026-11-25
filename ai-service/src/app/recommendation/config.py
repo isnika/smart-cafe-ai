@@ -43,6 +43,7 @@ class RecommendationSettings:
     max_quantity_signal: int
     max_order_signal: int
     model_version: str
+    artifact_path: str
 
     @classmethod
     def from_env(cls) -> "RecommendationSettings":
@@ -70,6 +71,10 @@ class RecommendationSettings:
             max_order_signal=_int("RECOMMENDATION_MAX_ORDER_SIGNAL", 20, 1, 1000),
             model_version=os.getenv("RECOMMENDATION_MODEL_VERSION", "hybrid-v2").strip()
             or "hybrid-v2",
+            artifact_path=os.getenv(
+                "RECOMMENDATION_ARTIFACT_PATH",
+                "artifacts/recommendation/selected.joblib",
+            ).strip(),
         )
 
 

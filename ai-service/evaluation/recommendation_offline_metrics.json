@@ -1,0 +1,270 @@
+{
+  "artifact_path": "C:\\Users\\pc\\OneDrive\\Máy tính\\srcNK\\smart-cafe-ai\\ai-service\\artifacts\\recommendation\\selected.joblib",
+  "selected_model": "hybrid_bpr_l0.70_c0.20_p0.10",
+  "selection_metric": "NDCG@5",
+  "data": {
+    "source": "raw_purchase_events",
+    "status_filter": "no_status_column_available",
+    "data_fingerprint": "17fbc99cd271bd2d",
+    "products": 102,
+    "events": 67285,
+    "users": 492,
+    "interactions": 16069,
+    "train_events": 55378,
+    "validation_events": 5717,
+    "test_events": 6190,
+    "train_end": "2026-08-01T21:59:00",
+    "validation_end": "2026-08-31T21:59:00",
+    "latest_event": "2026-09-30T21:59:00"
+  },
+  "validation": {
+    "evaluated_users": 341,
+    "models": {
+      "popularity": {
+        "precision_at_k": 0.059238,
+        "recall_at_k": 0.115708,
+        "ndcg_at_k": 0.095288,
+        "coverage_at_k": 0.303922,
+        "diversity_at_k": 0.826463,
+        "evaluated_users": 341
+      },
+      "content_tfidf": {
+        "precision_at_k": 0.075073,
+        "recall_at_k": 0.166196,
+        "ndcg_at_k": 0.125765,
+        "coverage_at_k": 0.970588,
+        "diversity_at_k": 0.748192,
+        "evaluated_users": 341
+      },
+      "item_item_cosine": {
+        "precision_at_k": 0.089736,
+        "recall_at_k": 0.1941,
+        "ndcg_at_k": 0.157896,
+        "coverage_at_k": 0.823529,
+        "diversity_at_k": 0.908203,
+        "evaluated_users": 341
+      },
+      "current_hybrid": {
+        "precision_at_k": 0.090909,
+        "recall_at_k": 0.202391,
+        "ndcg_at_k": 0.160363,
+        "coverage_at_k": 0.990196,
+        "diversity_at_k": 0.802155,
+        "evaluated_users": 341
+      },
+      "als": {
+        "precision_at_k": 0.072727,
+        "recall_at_k": 0.157835,
+        "ndcg_at_k": 0.118004,
+        "coverage_at_k": 1.0,
+        "diversity_at_k": 0.921986,
+        "evaluated_users": 341
+      },
+      "hybrid_als_l0.70_c0.20_p0.10": {
+        "precision_at_k": 0.07566,
+        "recall_at_k": 0.169037,
+        "ndcg_at_k": 0.126249,
+        "coverage_at_k": 1.0,
+        "diversity_at_k": 0.890957,
+        "evaluated_users": 341
+      },
+      "hybrid_als_l0.50_c0.30_p0.20": {
+        "precision_at_k": 0.078592,
+        "recall_at_k": 0.170998,
+        "ndcg_at_k": 0.129986,
+        "coverage_at_k": 1.0,
+        "diversity_at_k": 0.851089,
+        "evaluated_users": 341
+      },
+      "hybrid_als_l0.40_c0.40_p0.20": {
+        "precision_at_k": 0.078592,
+        "recall_at_k": 0.170754,
+        "ndcg_at_k": 0.130883,
+        "coverage_at_k": 1.0,
+        "diversity_at_k": 0.815352,
+        "evaluated_users": 341
+      },
+      "hybrid_als_l0.40_c0.20_p0.40": {
+        "precision_at_k": 0.076246,
+        "recall_at_k": 0.15868,
+        "ndcg_at_k": 0.133109,
+        "coverage_at_k": 0.990196,
+        "diversity_at_k": 0.872836,
+        "evaluated_users": 341
+      },
+      "bpr": {
+        "precision_at_k": 0.079179,
+        "recall_at_k": 0.169433,
+        "ndcg_at_k": 0.147242,
+        "coverage_at_k": 0.990196,
+        "diversity_at_k": 0.91753,
+        "evaluated_users": 341
+      },
+      "hybrid_bpr_l0.70_c0.20_p0.10": {
+        "precision_at_k": 0.088563,
+        "recall_at_k": 0.19592,
+        "ndcg_at_k": 0.162962,
+        "coverage_at_k": 0.990196,
+        "diversity_at_k": 0.869361,
+        "evaluated_users": 341
+      },
+      "hybrid_bpr_l0.50_c0.30_p0.20": {
+        "precision_at_k": 0.090323,
+        "recall_at_k": 0.189899,
+        "ndcg_at_k": 0.15572,
+        "coverage_at_k": 1.0,
+        "diversity_at_k": 0.827003,
+        "evaluated_users": 341
+      },
+      "hybrid_bpr_l0.40_c0.40_p0.20": {
+        "precision_at_k": 0.08915,
+        "recall_at_k": 0.18858,
+        "ndcg_at_k": 0.14866,
+        "coverage_at_k": 0.990196,
+        "diversity_at_k": 0.796772,
+        "evaluated_users": 341
+      },
+      "hybrid_bpr_l0.40_c0.20_p0.40": {
+        "precision_at_k": 0.090323,
+        "recall_at_k": 0.188085,
+        "ndcg_at_k": 0.158259,
+        "coverage_at_k": 1.0,
+        "diversity_at_k": 0.851577,
+        "evaluated_users": 341
+      }
+    }
+  },
+  "test": {
+    "evaluated_users": 362,
+    "models": {
+      "popularity": {
+        "precision_at_k": 0.067956,
+        "recall_at_k": 0.120793,
+        "ndcg_at_k": 0.110231,
+        "coverage_at_k": 0.323529,
+        "diversity_at_k": 0.783696,
+        "evaluated_users": 362
+      },
+      "content_tfidf": {
+        "precision_at_k": 0.083978,
+        "recall_at_k": 0.167697,
+        "ndcg_at_k": 0.131245,
+        "coverage_at_k": 0.970588,
+        "diversity_at_k": 0.741882,
+        "evaluated_users": 362
+      },
+      "item_item_cosine": {
+        "precision_at_k": 0.100552,
+        "recall_at_k": 0.192183,
+        "ndcg_at_k": 0.166877,
+        "coverage_at_k": 0.77451,
+        "diversity_at_k": 0.896586,
+        "evaluated_users": 362
+      },
+      "current_hybrid": {
+        "precision_at_k": 0.10884,
+        "recall_at_k": 0.21399,
+        "ndcg_at_k": 0.173575,
+        "coverage_at_k": 0.990196,
+        "diversity_at_k": 0.796508,
+        "evaluated_users": 362
+      },
+      "als": {
+        "precision_at_k": 0.079006,
+        "recall_at_k": 0.137796,
+        "ndcg_at_k": 0.115231,
+        "coverage_at_k": 1.0,
+        "diversity_at_k": 0.927238,
+        "evaluated_users": 362
+      },
+      "hybrid_als_l0.70_c0.20_p0.10": {
+        "precision_at_k": 0.09116,
+        "recall_at_k": 0.167969,
+        "ndcg_at_k": 0.139862,
+        "coverage_at_k": 1.0,
+        "diversity_at_k": 0.897855,
+        "evaluated_users": 362
+      },
+      "hybrid_als_l0.50_c0.30_p0.20": {
+        "precision_at_k": 0.096685,
+        "recall_at_k": 0.183379,
+        "ndcg_at_k": 0.150981,
+        "coverage_at_k": 1.0,
+        "diversity_at_k": 0.853888,
+        "evaluated_users": 362
+      },
+      "hybrid_als_l0.40_c0.40_p0.20": {
+        "precision_at_k": 0.094475,
+        "recall_at_k": 0.186436,
+        "ndcg_at_k": 0.148777,
+        "coverage_at_k": 0.990196,
+        "diversity_at_k": 0.811236,
+        "evaluated_users": 362
+      },
+      "hybrid_als_l0.40_c0.20_p0.40": {
+        "precision_at_k": 0.100552,
+        "recall_at_k": 0.182654,
+        "ndcg_at_k": 0.15398,
+        "coverage_at_k": 1.0,
+        "diversity_at_k": 0.869821,
+        "evaluated_users": 362
+      },
+      "bpr": {
+        "precision_at_k": 0.097238,
+        "recall_at_k": 0.177637,
+        "ndcg_at_k": 0.149421,
+        "coverage_at_k": 1.0,
+        "diversity_at_k": 0.919191,
+        "evaluated_users": 362
+      },
+      "hybrid_bpr_l0.70_c0.20_p0.10": {
+        "precision_at_k": 0.107182,
+        "recall_at_k": 0.203259,
+        "ndcg_at_k": 0.16517,
+        "coverage_at_k": 1.0,
+        "diversity_at_k": 0.872063,
+        "evaluated_users": 362
+      },
+      "hybrid_bpr_l0.50_c0.30_p0.20": {
+        "precision_at_k": 0.105525,
+        "recall_at_k": 0.204813,
+        "ndcg_at_k": 0.167254,
+        "coverage_at_k": 1.0,
+        "diversity_at_k": 0.815801,
+        "evaluated_users": 362
+      },
+      "hybrid_bpr_l0.40_c0.40_p0.20": {
+        "precision_at_k": 0.100552,
+        "recall_at_k": 0.193948,
+        "ndcg_at_k": 0.157241,
+        "coverage_at_k": 1.0,
+        "diversity_at_k": 0.793567,
+        "evaluated_users": 362
+      },
+      "hybrid_bpr_l0.40_c0.20_p0.40": {
+        "precision_at_k": 0.107735,
+        "recall_at_k": 0.205038,
+        "ndcg_at_k": 0.16903,
+        "coverage_at_k": 1.0,
+        "diversity_at_k": 0.842385,
+        "evaluated_users": 362
+      }
+    },
+    "chosen_model_metrics": {
+      "precision_at_k": 0.107182,
+      "recall_at_k": 0.203259,
+      "ndcg_at_k": 0.16517,
+      "coverage_at_k": 1.0,
+      "diversity_at_k": 0.872063,
+      "evaluated_users": 362
+    }
+  },
+  "unavailable_models": {},
+  "notes": [
+    "Model selection used validation only; test metrics were not used to select the model.",
+    "Relevance is a future purchase not already present in the user's training history.",
+    "Unobserved items are not treated as negative feedback.",
+    "The repository mock order data has no status column, so cancellation/payment filtering was unavailable for this run.",
+    "Offline metrics do not establish online CTR, conversion or revenue impact."
+  ]
+}
