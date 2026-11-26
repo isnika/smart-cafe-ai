@@ -4,6 +4,10 @@ backend/**/target/
 target/
 *.class
 
+# Python
+**/__pycache__/
+*.py[cod]
+
 # Node / frontend
 **/node_modules/
 **/dist/
@@ -25,6 +29,9 @@ frontend/.env*
 # Logs
 backend/logs/
 *.log
+
+# Local ML artifacts (model binaries are generated from the current snapshot)
+ai-service/artifacts/
 
 # Test Scripts & Postman Collections & Tools (excluded from repository)
 *.ps1
