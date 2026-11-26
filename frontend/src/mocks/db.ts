@@ -1,12 +1,11 @@
 import type {
   AIForecast, AIRecommendation, ChatMessage, ChatSession, Ingredient, Inventory, InventoryLog, Invoice, InvoiceItem, InvoiceRequestInput, MenuProduct, OrderDetail, Payment, PaymentOrderAllocation,
-  LeaveRequest, ProductReviewView, ProductVariant, Schedule, Shift, StaffProfile, Table, TableSession, Timekeeping,
+  LeaveRequest, ProductVariant, Schedule, Shift, StaffProfile, Table, TableSession, Timekeeping,
 } from '@/shared/types';
 import { BRANCH_ID, seedProducts, seedTables, type SeedProduct } from './fixtures';
 import { buildForecastSeed } from './forecast-seed';
 import { buildInventorySeed } from './inventory-seed';
 import { buildRecommendationSeed } from './recommendation-seed';
-import { seedReviews } from './review-seed';
 import { buildWorkforceSeed } from './workforce-seed';
 
 export { BRANCH_ID };
@@ -113,8 +112,6 @@ export interface MockDb {
   forecasts: AIForecast[];
   /** Gợi ý AI theo người dùng (Intelligence service). Nằm trong RAM: bấm vào gợi ý sẽ ghi clickedAt, reset cùng resetDb. */
   recommendations: AIRecommendation[];
-  /** Review món (mọi trạng thái; API công khai chỉ trả Approved). Chỉ đọc – chưa có API tạo review. */
-  reviews: ProductReviewView[];
   /** Chat AI cho khách (Intelligence service): phiên + tin nhắn, giữ trong RAM nên F5 là mất (reset cùng resetDb). */
   chatSessions: ChatSession[];
   chatMessages: ChatMessage[];
@@ -155,7 +152,6 @@ const createDb = (): MockDb => {
     inventoryLogs: inv.logs,
     forecasts: buildForecastSeed(),
     recommendations: buildRecommendationSeed(),
-    reviews: seedReviews(),
     chatSessions: [],
     chatMessages: [],
     shifts: wf.shifts,

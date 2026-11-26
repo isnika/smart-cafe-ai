@@ -31,7 +31,8 @@ import * as catalogApi from "@/shared/api/catalog";
 import { isApiError } from "@/shared/api/http";
 import { AdminRevenueSection } from "../components/AdminRevenueSection";
 import { AdminProductDetail } from "../components/AdminProductDetail";
-import { ProductConfigurationFields, newVariant, validateConfiguration, type GroupDraft } from "../components/ProductConfigurationFields";
+import { ProductConfigurationFields } from "../components/ProductConfigurationFields";
+import { newVariant, validateConfiguration, type GroupDraft } from "../components/product-configuration";
 
 const keys = {
   branches: ["admin", "branches"] as const,
@@ -345,6 +346,7 @@ export function AdminDashboardPage() {
                 icon: Users,
               },
               { to: "/admin/menus", label: "Thực đơn chi nhánh", icon: Coffee },
+              { to: "/admin/reviews", label: "Quản lý đánh giá", icon: Shield },
               { to: "/admin/tables", label: "Quản lý bàn & QR", icon: QrCode },
             ].map(({ to, label, icon: Icon }) => (
               <Link
@@ -1997,6 +1999,7 @@ function UserForm({
           // Store rejects the staff profile, so surface that partial outcome clearly.
           throw new Error(
             `Tài khoản đã được tạo nhưng chưa gắn chi nhánh/hồ sơ nhân viên: ${displayError(error)}`,
+            { cause: error },
           );
         }
       }

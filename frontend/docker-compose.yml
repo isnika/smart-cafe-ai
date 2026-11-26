@@ -9,7 +9,10 @@ services:
     env_file:
       - path: .env
         required: false
+      - path: .env.local
+        required: false
     environment:
       API_PROXY_TARGET: ${API_PROXY_TARGET:-http://host.docker.internal:8080}
       AI_PROXY_TARGET: ${AI_PROXY_TARGET:-http://host.docker.internal:8000}
+      VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
     restart: unless-stopped

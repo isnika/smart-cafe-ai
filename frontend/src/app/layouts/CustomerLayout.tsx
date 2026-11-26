@@ -1,9 +1,11 @@
+import { Fragment } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { ClipboardList, Coffee, Home, ShoppingCart, User } from "lucide-react";
 import { PATHS } from "@/app/routes";
 import { countItems } from "@/features/dine-in/cart";
 import { useDineInCartStore } from "@/features/dine-in/store";
 import { useOnlineCartStore } from "@/features/online-order/store";
+import { NotificationBell } from "@/features/notifications/NotificationBell";
 import { cn } from "@/shared/lib/cn";
 
 const tabs = [
@@ -32,26 +34,28 @@ export function CustomerLayout() {
         style={{ paddingBottom: "var(--safe-bottom)" }}
       >
         {tabs.map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) =>
-              cn("flex flex-1 flex-col items-center gap-0.5 py-2 text-caption", isActive ? "font-semibold text-primary-600" : "text-gray-500")
-            }
-          >
-            <span className="relative">
-              <Icon className="size-5" aria-hidden />
-              {to === PATHS.cart && cartCount > 0 && (
-                <span
-                  aria-label={`${cartCount} món trong giỏ`}
-                  className="absolute -right-2 -top-2 grid min-w-4 place-items-center rounded-full bg-accent-500 px-1 text-[10px] font-bold leading-4 text-white"
-                >
-                  {cartCount}
-                </span>
-              )}
-            </span>
-            {label}
-          </NavLink>
+          <Fragment key={to}>
+            {to === PATHS.profile && <NotificationBell />}
+            <NavLink
+              to={to}
+              className={({ isActive }) =>
+                cn("flex flex-1 flex-col items-center gap-0.5 py-2 text-caption", isActive ? "font-semibold text-primary-600" : "text-gray-500")
+              }
+            >
+              <span className="relative">
+                <Icon className="size-5" aria-hidden />
+                {to === PATHS.cart && cartCount > 0 && (
+                  <span
+                    aria-label={`${cartCount} món trong giỏ`}
+                    className="absolute -right-2 -top-2 grid min-w-4 place-items-center rounded-full bg-accent-500 px-1 text-[10px] font-bold leading-4 text-white"
+                  >
+                    {cartCount}
+                  </span>
+                )}
+              </span>
+              {label}
+            </NavLink>
+          </Fragment>
         ))}
       </nav>
     </div>

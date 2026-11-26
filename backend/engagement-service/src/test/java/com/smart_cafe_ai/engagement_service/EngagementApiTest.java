@@ -146,19 +146,30 @@ class EngagementApiTest {
         mvc.perform(body(auth(put("/api/v1/vouchers/"+id),"admin","Admin"),edit)).andExpect(status().isOk());
         mvc.perform(body(auth(patch("/api/v1/vouchers/"+id+"/status"),"admin","Admin"),Map.of("status","Inactive"))).andExpect(jsonPath("$.data.status").value("Inactive"));
     }
-    @Test void verifiedReviewsArePrivateUntilModeratedAndCannotBeForged() throws Exception {
+    @Test void verifiedReviewsArePublishedImmediatelyAndCannotBeForged() throws Exception {
         var complete=completed(10,100,2); events.consume(complete,null); events.consume(complete,null);
         assertEquals(2,cards.findByUserId("customer").orElseThrow().currentStamps); assertEquals(1,purchases.count());
         var review=Map.of("order_item_id",100,"product_id",10,"rating",5,"comment","Ngon");
         mvc.perform(body(auth(post("/api/v1/reviews"),"other","Customer"),review)).andExpect(status().isForbidden());
-        var created=result(mvc.perform(body(auth(post("/api/v1/reviews"),"customer","Customer"),review)).andExpect(status().isCreated())); long id=created.path("data").path("id").asLong();
+        var created=result(mvc.perform(body(auth(post("/api/v1/reviews"),"customer","Customer"),review)).andExpect(status().isCreated()).andExpect(jsonPath("$.data.status").value("Approved"))); long id=created.path("data").path("id").asLong();
         mvc.perform(body(auth(post("/api/v1/reviews"),"customer","Customer"),review)).andExpect(status().isConflict());
-        mvc.perform(get("/api/v1/reviews").param("product_id","10")).andExpect(jsonPath("$.meta.total").value(0));
+        mvc.perform(get("/api/v1/reviews").param("product_id","10")).andExpect(jsonPath("$.meta.total").value(1)).andExpect(jsonPath("$.data[0].rating").value(5));
         mvc.perform(auth(get("/api/v1/reviews/me"),"customer","Customer")).andExpect(jsonPath("$.meta.total").value(1));
-        mvc.perform(auth(get("/api/v1/reviews/admin").param("status","Pending"),"manager","Manager")).andExpect(jsonPath("$.meta.total").value(1));
-        mvc.perform(body(auth(patch("/api/v1/reviews/"+id+"/status"),"manager","Manager"),Map.of("status","Approved"))).andExpect(status().isOk()).andExpect(jsonPath("$.data.moderated_by").value("manager"));
-        mvc.perform(get("/api/v1/reviews").param("product_id","10")).andExpect(jsonPath("$.data[0].rating").value(5));
+        mvc.perform(auth(get("/api/v1/reviews/admin").param("status","Approved"),"manager","Manager")).andExpect(jsonPath("$.meta.total").value(1));
+        mvc.perform(body(auth(patch("/api/v1/reviews/"+id+"/status"),"manager","Manager"),Map.of("status","Approved"))).andExpect(status().isOk());
         assertEquals(2,outbox.count());
+        mvc.perform(body(auth(patch("/api/v1/reviews/"+id+"/status"),"manager","Manager"),Map.of("status","Hidden"))).andExpect(status().isOk()).andExpect(jsonPath("$.data.moderated_by").value("manager"));
+        mvc.perform(get("/api/v1/reviews").param("product_id","10")).andExpect(jsonPath("$.meta.total").value(0));
+        assertEquals(2,outbox.count());
+    }
+    @Test void createdEventIsAcceptedBeforeStatusNotification() throws Exception {
+        var created=event("order.created"); created.put("order_id",11); created.put("user_id","customer");
+        events.consume(created,"order.created"); events.consume(created,"order.created");
+        var changed=event("order.status_changed"); changed.put("order_id",11); changed.put("user_id","customer"); changed.put("status","Preparing");
+        events.consume(changed,"order.status_changed");
+        mvc.perform(auth(get("/api/v1/notifications/me"),"customer","Customer"))
+                .andExpect(jsonPath("$.meta.total").value(1))
+                .andExpect(jsonPath("$.data[0].data.status").value("Preparing"));
     }
     @Test void deviceAndNotificationApisEnforceOwnershipAndHideSensitiveFields() throws Exception {
         var registered=result(mvc.perform(body(auth(post("/api/v1/device-tokens"),"customer","Customer"),Map.of("platform","Web","token","secret-push-token"))).andExpect(status().isCreated()).andExpect(jsonPath("$.data.token").doesNotExist()));

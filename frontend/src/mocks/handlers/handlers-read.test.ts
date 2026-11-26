@@ -34,7 +34,7 @@ async function login(identifier: string, password: string) {
   const res = await fetch(url('/identity/auth/login'), {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ identifier, password }),
   });
-  return { status: res.status, body: (await res.json()) as Record<string, any> };
+  return { status: res.status, body: (await res.json()) as { accessToken: string; user: { roleId: number; password?: string }; code?: string } };
 }
 
 describe('GET /orders-svc/orders', () => {

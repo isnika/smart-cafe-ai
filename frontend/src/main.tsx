@@ -7,7 +7,7 @@ import "./styles/tokens.css";
 import App from "./App";
 import { USE_MOCK, configureHttp } from "@/shared/api/http";
 import { useAuthStore } from "@/features/auth/store";
-import { queryClient } from "@/app/providers";
+import { queryClient } from "@/app/query-client";
 import { bindAuthQueryCache } from "@/features/auth/query-cache";
 import { bindOnlineCartToAuth } from "@/features/online-order/auth-session";
 

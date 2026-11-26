@@ -60,6 +60,18 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/payments/, '/api/v1/payments'),
       },
+      '/notifications': {
+        target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8080',
+        changeOrigin: true,
+        // /notifications is also a page; only proxy requests for API data.
+        bypass: (req) => req.headers.accept?.includes('text/html') ? req.url : undefined,
+        rewrite: (path) => path.replace(/^\/notifications/, '/api/v1/notifications'),
+      },
+      '/reviews': {
+        target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8080',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/reviews/, '/api/v1/reviews'),
+      },
       '/loyalty': {
         target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8080',
         changeOrigin: true,

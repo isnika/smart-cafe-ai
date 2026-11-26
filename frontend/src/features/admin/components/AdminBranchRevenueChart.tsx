@@ -3,13 +3,13 @@ import type { BranchRevenueItem } from '@/shared/api/order';
 import { BRANCH_META } from '../hooks/useAdminRevenue';
 
 interface AdminBranchRevenueChartProps {
+  branchIds: number[];
   branches: BranchRevenueItem[];
   totalRevenue: number;
 }
 
-export function AdminBranchRevenueChart({ branches, totalRevenue }: AdminBranchRevenueChartProps) {
-  // Ensure we display all 3 main branches even if one has 0 orders
-  const branchList = [1, 2, 3].map((bId) => {
+export function AdminBranchRevenueChart({ branchIds, branches, totalRevenue }: AdminBranchRevenueChartProps) {
+  const branchList = branchIds.map((bId) => {
     const found = branches.find((b) => b.branchId === bId);
     const revenue = found?.finalAmount ?? found?.revenue ?? 0;
     const ordersCount = found?.ordersCount ?? 0;
@@ -77,7 +77,7 @@ export function AdminBranchRevenueChart({ branches, totalRevenue }: AdminBranchR
         {branchList.map((b) => (
           <div
             key={b.branchId}
-            style={{ width: `${Math.max(2, b.percentage)}%`, backgroundColor: b.color }}
+            style={{ width: `${b.percentage}%`, backgroundColor: b.color }}
             title={`${b.shortName}: ${b.percentage}% (${formatVnd(b.revenue)})`}
             className="h-full transition-all duration-500"
           />

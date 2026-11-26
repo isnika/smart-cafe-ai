@@ -17,7 +17,7 @@ public class ProductReview {
     @Column(name = "order_item_id", nullable = false) public Long orderItemId;
     @Column(nullable = false) public int rating;
     @Column(columnDefinition = "text") public String comment;
-    @Enumerated(EnumType.STRING) @Column(nullable = false) public ReviewStatus status = ReviewStatus.Pending;
+    @Enumerated(EnumType.STRING) @Column(nullable = false) public ReviewStatus status = ReviewStatus.Approved;
     @Column(name = "moderated_by", length = 36) public String moderatedBy;
     @Column(name = "moderated_at") public Instant moderatedAt;
     @Column(name = "created_at", nullable = false) public Instant createdAt = Instant.now();

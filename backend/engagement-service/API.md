@@ -108,7 +108,7 @@ phần trăm làm tròn xuống VND. PATCH voucher status: `{"status":"Inactive"
 
 Review: `{"order_item_id":101,"product_id":10,"rating":5,"comment":"Ngon"}`.
 Chỉ nhận khi đúng bộ order item/user/product trong Verified_Purchases, mỗi item/user
-một review. Ban đầu `Pending`, public chỉ thấy `Approved`. PATCH status nhận
+một review. Review mới có trạng thái `Approved` và hiển thị công khai ngay. PATCH status nhận
 `{"status":"Approved"}` hoặc `{"status":"Hidden"}` và lưu người/thời điểm duyệt.
 
 Token: `{"platform":"Web","token":"push-token"}`; platform `iOS|Android|Web`.
@@ -149,8 +149,9 @@ Read-all trả `{"updated_count":N}`. Response không lộ recipient, lỗi SMTP
 - Order_Benefit_State serialize apply/redeem và complete/cancel/refund. Khi reversal
   đã được ghi, request checkout hoặc completed đến muộn không được chi tiêu/tích tem lại.
   Cùng request thành công có thể replay sau Completed; không cho thêm command mới.
-- Review: Pending→Approved/Hidden, Approved→Hidden; không mở lại Hidden.
-  Phát `engagement.review.created` khi duyệt Approved lần đầu.
+- Review mới được công khai ngay và phát `engagement.review.created` trong cùng giao dịch.
+  Review Pending cũ vẫn có thể chuyển sang Approved/Hidden; Approved→Hidden; không mở lại Hidden.
+  Khi duyệt review Pending cũ, sự kiện được phát lần đầu.
 - Thông báo mới dùng In_App. `payment.failed`/`invoice.issued` dùng user_id được
   cung cấp hoặc user từ Verified_Purchases cục bộ. Nếu không xác định được tài khoản,
   ghi log bỏ qua; không tra cứu Identity bằng email. Chưa gửi push qua FCM/APNs hay

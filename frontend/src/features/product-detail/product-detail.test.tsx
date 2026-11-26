@@ -25,6 +25,7 @@ afterEach(() => {
 });
 beforeEach(() => {
   resetWorld();
+  server.use(http.get(url('/reviews'), () => HttpResponse.json({ success: true, data: [], meta: { page: 1, size: 5, total: 0 } })));
   useOnlineCartStore.setState({ fulfillmentType: null, lines: [], voucherCode: null, delivery: null });
   requests.length = 0;
 });
@@ -206,13 +207,19 @@ describe('/menu/:id – chọn tuỳ chọn, giá tạm tính, thêm vào giỏ'
   });
 });
 
-describe('/menu/:id – không tải đánh giá', () => {
-  it('chỉ tải nội dung món và không hiển thị phần đánh giá', async () => {
+describe('/menu/:id – đánh giá', () => {
+  it('tải đánh giá công khai theo sản phẩm', async () => {
+    useOnlineCartStore.setState({ branchId: 1 });
+    server.use(http.get(url('/reviews'), ({ request }) => {
+      expect(new URL(request.url).searchParams.get('product_id')).toBe('1');
+      expect(request.headers.get('Authorization')).toBeNull();
+      return HttpResponse.json({ success: true, data: [{ id: 8, product_id: 1, user_id: 'u', order_item_id: 4, rating: 5, comment: 'Rất ngon', status: 'Approved', created_at: '2026-11-01T00:00:00Z' }], meta: { page: 1, size: 5, total: 1 } });
+    }));
     renderApp('/menu/1');
     expect(await screen.findByRole('heading', { level: 2, name: 'Cà phê sữa đá' })).toBeTruthy();
-    expect(screen.queryByRole('heading', { level: 2, name: 'Đánh giá' })).toBeNull();
-    expect(screen.queryByRole('list', { name: 'Danh sách đánh giá' })).toBeNull();
-    expect(requests.some((request) => request.includes('/reviews'))).toBe(false);
+    expect(await screen.findByText('Rất ngon')).toBeTruthy();
+    expect(screen.getByRole('list', { name: 'Danh sách đánh giá' })).toBeTruthy();
+    expect(requests.some((request) => request.includes('/reviews'))).toBe(true);
   });
 });
 

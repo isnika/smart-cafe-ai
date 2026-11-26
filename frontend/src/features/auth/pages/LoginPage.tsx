@@ -42,7 +42,14 @@ declare global {
 }
 
 const getRuntimeConfig = () => (typeof window !== 'undefined' ? window.__SMART_CAFE_CONFIG__ : undefined);
-const GOOGLE_CLIENT_ID = (getRuntimeConfig()?.googleClientId ?? import.meta.env.VITE_GOOGLE_CLIENT_ID)?.trim();
+
+const getGoogleClientId = () => {
+  const runtime = getRuntimeConfig()?.googleClientId?.trim();
+  if (runtime) return runtime;
+  const buildTime = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim();
+  if (buildTime) return buildTime;
+  return undefined;
+};
 
 export default function LoginPage() {
   const status = useAuthStore((s) => s.status);
@@ -62,14 +69,15 @@ export default function LoginPage() {
   const [info, setInfo] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [googleReady, setGoogleReady] = useState(false);
+  const googleClientId = getGoogleClientId();
 
   useEffect(() => {
-    if (!GOOGLE_CLIENT_ID) return;
+    if (!googleClientId) return;
     let cancelled = false;
     const initialize = () => {
       if (cancelled || !window.google) return false;
       window.google.accounts.id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
+        client_id: googleClientId,
         callback: ({ credential }) => {
           if (!credential) {
             setFormError("Google không trả về thông tin đăng nhập. Vui lòng thử lại.");
@@ -235,8 +243,9 @@ export default function LoginPage() {
         leftIcon={<GoogleIcon />}
         onClick={() => {
           setFormError(null);
-          if (!GOOGLE_CLIENT_ID) {
-            setInfo("Google Sign-In chưa được cấu hình. Hãy thêm VITE_GOOGLE_CLIENT_ID vào frontend/.env.local.");
+          const currentClientId = getGoogleClientId();
+          if (!currentClientId) {
+            setInfo("Google Sign-In chưa được cấu hình. Hãy thêm VITE_GOOGLE_CLIENT_ID vào frontend/.env hoặc frontend/.env.local.");
             return;
           }
           if (!googleReady || !window.google) {

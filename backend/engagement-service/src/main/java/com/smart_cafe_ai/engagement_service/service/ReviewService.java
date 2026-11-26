@@ -25,7 +25,10 @@ public class ReviewService {
         if(!purchases.existsByOrderItemIdAndUserIdAndProductId(r.orderItemId(),user,r.productId())) throw ApiException.forbidden();
         if(reviews.existsByOrderItemIdAndUserId(r.orderItemId(),user)) throw ApiException.conflict("Bạn đã đánh giá món trong đơn hàng này.");
         var review=new ProductReview(); review.userId=user; review.orderItemId=r.orderItemId(); review.productId=r.productId(); review.rating=r.rating(); review.comment=r.comment();
-        return reviews.saveAndFlush(review);
+        reviews.saveAndFlush(review);
+        events.emit("engagement.review.created","ProductReview",review.id,
+                Map.of("review_id",review.id,"product_id",review.productId,"user_id",review.userId,"rating",review.rating,"status",review.status.name()));
+        return review;
     }
     @Transactional(readOnly=true)
     public ApiResponse list(Integer product,String user,ReviewStatus status,int page,int size,String sort,Actor moderator) {
