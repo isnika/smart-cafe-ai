@@ -606,10 +606,14 @@ function QuickAdvanceButton({
 
   if (!next) return null;
 
+  const isBlocked = next === "Completed" && order.paymentStatus !== "Paid";
+
   return (
     <Button
       size="sm"
       loading={busy}
+      disabled={isBlocked}
+      title={isBlocked ? "Cần thanh toán đơn trước khi hoàn tất" : undefined}
       onClick={() => onAdvance(next)}
     >
       {STATUS_LABELS[next] ?? next}

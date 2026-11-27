@@ -106,4 +106,14 @@ public class TableSessionController {
         TableSessionResponse session = tableSessionService.getSessionByIdInternal(id);
         return ResponseEntity.ok(ApiResponse.success(session));
     }
+
+    /**
+     * GET /internal/table-sessions/by-code/{code}
+     * Order Service gọi API nội bộ kiểm tra phiên bàn theo mã phiên. (Internal)
+     */
+    @GetMapping({"/internal/table-sessions/by-code/{code}", "/api/v1/internal/table-sessions/by-code/{code}"})
+    public ResponseEntity<ApiResponse<TableSessionResponse>> getSessionByCodeInternal(@PathVariable String code) {
+        TableSessionResponse session = tableSessionService.getCurrentSessionByCode(code);
+        return ResponseEntity.ok(ApiResponse.success(session));
+    }
 }
