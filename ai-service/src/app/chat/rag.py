@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import logging
 import os
 import re
@@ -47,7 +48,15 @@ from .prompts import (
     NATURALIZE_USER,
     OUT_OF_SCOPE_ANSWER,
     SYSTEM_PROMPT,
+    RECOMMENDATION_SYSTEM_RULES,
     USER_TEMPLATE,
+)
+from .recommendation_tool import (
+    GET_RECOMMENDATIONS_TOOL,
+    call_recommendations_tool,
+    deterministic_recommendation_answer,
+    recommendation_prompt_result,
+    serialise_tool_result,
 )
 from .retriever import (
     Retriever,
@@ -425,6 +434,22 @@ def _looks_like_unknown_product_request(question: str) -> bool:
     return bool(
         re.search(r"\b(mon|loai)\b.*\b(khong co|khong thay|ten la)\b", folded)
         or re.search(r"\b(mon|loai)\s+[a-z0-9]{3,}", folded)
+    )
+
+
+def _is_recommendation_tool_request(question: str) -> bool:
+    """Recognise the explicit menu-discovery wording for the tool path.
+
+    Older product-advice questions such as ``Gợi ý Matcha Latte`` continue to
+    use the existing grounded menu lookup; generic discovery wording is routed
+    to the recommendation system.
+    """
+    folded = fold_text(question)
+    return (
+        "gioi thieu" in folded
+        or "nen uong" in folded
+        or bool(re.search(r"\bgoi y\b.*\b(mon|uong|vai)\b", folded))
+        or bool(re.search(r"\btu van\b.*\b(mon|uong)\b", folded))
     )
 
 
@@ -914,6 +939,124 @@ class RAGPipeline:
             logger.exception("Không viết lại được câu hỏi; sử dụng câu hỏi gốc")
             return question
 
+    async def _answer_recommendation(
+        self,
+        question: str,
+        history: list[dict],
+        user_id: str | None,
+    ) -> tuple[str, list[SourceChunk]]:
+        """Run the recommendation tool with request context, then naturalize it."""
+
+        result: dict = {"source": "best_seller", "items": []}
+        answer = ""
+        recommendation_system = f"{SYSTEM_PROMPT}\n{RECOMMENDATION_SYSTEM_RULES}"
+        initial_messages = history + [{"role": "user", "content": question}]
+        generate_with_tools = getattr(self.llm, "generate_with_tools", None)
+
+        if callable(generate_with_tools):
+            try:
+                first = await generate_with_tools(
+                    recommendation_system,
+                    initial_messages,
+                    [GET_RECOMMENDATIONS_TOOL],
+                    max_tokens=120,
+                )
+                calls = first.get("tool_calls", []) if isinstance(first, dict) else []
+                if calls:
+                    tool_messages = initial_messages + [{
+                        "role": "assistant",
+                        "content": first.get("content") if isinstance(first, dict) else None,
+                        "tool_calls": calls,
+                    }]
+                    for call in calls:
+                        function = call.get("function", {}) if isinstance(call, dict) else {}
+                        name = function.get("name")
+                        raw_arguments = function.get("arguments", "{}")
+                        try:
+                            arguments = json.loads(raw_arguments) if isinstance(raw_arguments, str) else raw_arguments
+                        except (TypeError, ValueError):
+                            arguments = {}
+                        if name == "get_recommendations":
+                            result = call_recommendations_tool(
+                                session_user_id=user_id,
+                                arguments=arguments,
+                            )
+                        else:
+                            result = {"source": "best_seller", "items": []}
+                        tool_messages.append({
+                            "role": "tool",
+                            "tool_call_id": call.get("id", "recommendations"),
+                            "name": "get_recommendations",
+                            "content": serialise_tool_result(result),
+                        })
+                    answer = await self.llm.generate(
+                        recommendation_system,
+                        tool_messages,
+                        max_tokens=280,
+                    )
+                else:
+                    result = call_recommendations_tool(session_user_id=user_id, arguments={})
+            except Exception as exc:
+                logger.warning(
+                    "Recommendation function-calling thất bại; chạy tool phía server (error_type=%s)",
+                    type(exc).__name__,
+                )
+                result = call_recommendations_tool(session_user_id=user_id, arguments={})
+        else:
+            result = call_recommendations_tool(session_user_id=user_id, arguments={})
+
+        if not answer:
+            prompt = _render_user_prompt(
+                intent=Intent.PRODUCT_RECOMMENDATION,
+                context=recommendation_prompt_result(result),
+                operation_result=recommendation_prompt_result(result),
+                question=question,
+                history=history,
+            )
+            try:
+                answer = await self.llm.generate(
+                    recommendation_system,
+                    history + [{"role": "user", "content": prompt}],
+                    max_tokens=280,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Recommendation naturalization thất bại; dùng câu trả lời grounded (error_type=%s)",
+                    type(exc).__name__,
+                )
+
+        answer = sanitize_generated_answer(answer or "")
+        items = result.get("items", []) if isinstance(result, dict) else []
+        names = [
+            fold_text(str(item.get("name", "")))
+            for item in items
+            if isinstance(item, dict) and item.get("name")
+        ]
+        if not items or not answer or any(name not in fold_text(answer) for name in names):
+            answer = deterministic_recommendation_answer(result)
+        logger.info(
+            "Chat recommendation answered (source=%s, items=%d, user_present=%s)",
+            result.get("source") if isinstance(result, dict) else "best_seller",
+            len(items) if isinstance(items, list) else 0,
+            bool(user_id),
+        )
+        sources = [
+            SourceChunk(
+                source="products.csv",
+                category="recommendation",
+                heading=str(item.get("name", "Món được gợi ý")),
+                score=float(item.get("score", 0.0) or 0.0),
+                content=(
+                    f"* M\u00e3 m\u00f3n: {item.get('id', item.get('product_id', ''))}\n"
+                    f"* Gi\u00e1: {item.get('price', item.get('price_vnd', ''))}\n"
+                    f"* M\u00f4 t\u1ea3: {item.get('description', '')}"
+                ),
+            )
+            for item in items
+            if isinstance(item, dict) and item.get("name")
+        ]
+        return answer, sources
+
     async def answer(
         self,
         question: str,
@@ -921,6 +1064,7 @@ class RAGPipeline:
         category: str | None = None,
         branch_id: int | None = None,
         authorization: str | None = None,
+        user_id: str | None = None,
     ) -> tuple[str, list[SourceChunk]]:
         question = question.strip()
         if not question:
@@ -1014,6 +1158,11 @@ class RAGPipeline:
             )
             if compound:
                 return compound
+
+        if decision.intent is Intent.PRODUCT_RECOMMENDATION and (
+            user_id or _is_recommendation_tool_request(question)
+        ):
+            return await self._answer_recommendation(question, hist, user_id)
 
         product_clauses = _product_compound_clauses(question)
         if product_clauses:

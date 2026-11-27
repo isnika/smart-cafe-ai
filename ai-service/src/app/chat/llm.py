@@ -155,6 +155,64 @@ class OpenAICompatLLM:
         return answer.strip()
 
 
+    async def generate_with_tools(
+            self,
+            system: str,
+            messages: list[dict],
+            tools: list[dict],
+            max_tokens: int = 256,
+    ) -> dict:
+        """Call the same OpenAI-compatible endpoint with function tools."""
+        import httpx
+
+        payload = {
+            "model": self.model,
+            "messages": [{"role": "system", "content": system}, *messages],
+            "tools": tools,
+            "tool_choice": "auto",
+            "max_tokens": max_tokens,
+            "temperature": float(os.getenv("LLM_TEMPERATURE", "0.1")),
+            "stream": False,
+        }
+        timeout = httpx.Timeout(self.timeout, connect=min(5.0, self.timeout))
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            for attempt in range(self.max_retries + 1):
+                try:
+                    response = await client.post(
+                        f"{self.base_url}/chat/completions",
+                        headers={"Authorization": f"Bearer {self.api_key}"},
+                        json=payload,
+                    )
+                    response.raise_for_status()
+                    data = response.json()
+                    break
+                except httpx.TimeoutException as exc:
+                    if attempt < self.max_retries:
+                        await self._wait_before_retry(attempt)
+                        continue
+                    raise RuntimeError("LLM function-calling quá thời gian cho phép.") from exc
+                except httpx.HTTPStatusError as exc:
+                    status = exc.response.status_code
+                    if status == 429 or status in {500, 502, 503, 504}:
+                        if attempt < self.max_retries:
+                            await self._wait_before_retry(attempt, exc.response)
+                            continue
+                    raise RuntimeError(f"LLM API trả về HTTP {status}.") from exc
+                except httpx.TransportError as exc:
+                    if attempt < self.max_retries:
+                        await self._wait_before_retry(attempt)
+                        continue
+                    raise RuntimeError("Không kết nối được LLM provider.") from exc
+        try:
+            message = data["choices"][0]["message"]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise RuntimeError("LLM trả về function-calling không hợp lệ.") from exc
+        return {
+            "content": message.get("content", "") if isinstance(message, dict) else "",
+            "tool_calls": message.get("tool_calls", []) if isinstance(message, dict) else [],
+        }
+
+
 def get_llm():
     """Khởi tạo adapter theo biến môi trường."""
 

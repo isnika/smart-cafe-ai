@@ -12,6 +12,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -26,6 +28,18 @@ public class IntelligenceService {
      * tuyệt đối không tin tưởng client truyền bừa user_id.
      */
     public ChatResponse chat(ChatRequest request, String authorization, Integer branchId) {
+        // Chat là endpoint public cho guest; chỉ token hợp lệ mới được dùng để cá nhân hóa.
+        // Không bao giờ tin user_id do client tự gửi trong JSON.
+        request.setUserId(null);
+        if (request.getHistory() == null) {
+            request.setHistory(new ArrayList<>());
+        }
+        if (authorization != null && authorization.startsWith("Bearer ")) {
+            String verifiedUserId = jwtService.extractUserId(authorization.substring(7));
+            if (verifiedUserId != null && !verifiedUserId.isBlank()) {
+                request.setUserId(verifiedUserId);
+            }
+        }
         return aiServiceClient.chat(request, authorization, branchId);
     }
 

@@ -40,6 +40,7 @@ ai:
   service:
     base-url: ${AI_SERVICE_URL:http://localhost:8000}
     reindex-key: ${CHAT_REINDEX_API_KEY:smart-cafe-reindex-secret}
+    # Áp dụng cho cả kết nối và đọc response từ ai-service.
     timeout-seconds: ${AI_TIMEOUT_SECONDS:15}
   internal:
     api-key: ${DATA_API_KEY:smart-cafe-internal-ai-key}

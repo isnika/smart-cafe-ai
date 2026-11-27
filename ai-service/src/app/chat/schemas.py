@@ -21,6 +21,9 @@ class ChatMessage(BaseModel):
 
 
 class ChatRequest(BaseModel):
+    # User/session context is supplied by the caller; it is never selected by
+    # the LLM as a function argument.
+    user_id: str | None = Field(default=None, min_length=1, max_length=128)
     message: str = Field(..., min_length=1, max_length=2000, description="Câu hỏi hiện tại")
     # Chặn payload quá lớn; RAGPipeline cũng chỉ dùng số lượt gần nhất.
     history: list[ChatMessage] = Field(default_factory=list, max_length=30)

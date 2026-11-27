@@ -16,7 +16,7 @@ const AI_DIRECT = '/ai-service';
 // API Gateway định tuyến chat tại /api/v1/chat/** (không có /intelligence/chat/**).
 const CHAT = '/chat';
 const canFallbackToAiService = (error: unknown) =>
-  isApiError(error) && (error.status === 403 || error.status === 404 || error.status === 503 || error.status === 0);
+  isApiError(error) && (error.status === 403 || error.status === 404 || error.status === 503 || error.status === 504 || error.status === 0);
 
 export interface ChatCompletionRequest {
   message: string;

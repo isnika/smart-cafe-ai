@@ -399,7 +399,7 @@ def classify_intent(query: str) -> IntentDecision:
 
     if _contains(
         folded,
-        r"\b(goi y|tu van|nen uong|phu hop|thich)\b",
+        r"\b(goi y|tu van|nen uong|phu hop|thich|gioi thieu)\b",
         r"\bmon nao\b.*\b(it ngot|khong dang|beo|thanh|ngon)\b",
         r"\bco mon nao\b",
         r"\b(mon gi|gi)\b.*\bngon\b",

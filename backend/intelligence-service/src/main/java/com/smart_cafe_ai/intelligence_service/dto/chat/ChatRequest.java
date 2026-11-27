@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Data
@@ -13,8 +14,12 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ChatRequest {
+    /** Chỉ do backend suy ra từ JWT; không tin giá trị do browser gửi lên. */
+    @JsonProperty("user_id")
+    private String userId;
     private String message;
-    private List<ChatMessageItem> history;
+    @Builder.Default
+    private List<ChatMessageItem> history = new ArrayList<>();
 
     @Data
     @Builder

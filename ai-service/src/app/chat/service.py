@@ -46,6 +46,7 @@ class ChatService:
             req.history,
             branch_id=branch_id,
             authorization=authorization,
+            user_id=req.user_id,
         )
         logger.info(
             "Chat hoàn tất (elapsed_ms=%d, history_messages=%d, sources=%d, fallback=%s)",

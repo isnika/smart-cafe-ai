@@ -11,7 +11,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
+
+import java.time.Duration;
 
 @Component
 @Slf4j
@@ -22,11 +25,16 @@ public class AiServiceClient {
 
     public AiServiceClient(
             @Value("${ai.service.base-url:http://localhost:8000}") String baseUrl,
-            @Value("${ai.service.reindex-key:smart-cafe-reindex-secret}") String reindexKey
+            @Value("${ai.service.reindex-key:smart-cafe-reindex-secret}") String reindexKey,
+            @Value("${ai.service.timeout-seconds:15}") int timeoutSeconds
     ) {
         this.reindexKey = reindexKey;
+        var requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(Duration.ofSeconds(timeoutSeconds));
+        requestFactory.setReadTimeout(Duration.ofSeconds(timeoutSeconds));
         this.restClient = RestClient.builder()
                 .baseUrl(baseUrl)
+                .requestFactory(requestFactory)
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
                 .build();

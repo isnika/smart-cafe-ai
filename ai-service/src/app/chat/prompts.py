@@ -75,6 +75,15 @@ không nhận đã thực hiện việc chưa được xác nhận.
 """
 
 
+RECOMMENDATION_SYSTEM_RULES = """
+QUY TẮC CÔNG CỤ GỢI Ý MÓN
+- Khi khách xin gợi ý, chỉ dùng các món có trong kết quả công cụ get_recommendations.
+- Không tự bịa tên món, giá, mô tả, trạng thái còn bán hoặc nguồn gợi ý.
+- Nếu source là personalized, nói đây là gợi ý riêng cho khách. Nếu source là trending hoặc best_seller, nói đây là món được nhiều khách chọn/bán chạy.
+- Nếu kết quả công cụ rỗng hoặc lỗi, xin lỗi và đề nghị khách xem menu.
+"""
+
+
 USER_TEMPLATE = """<intent>
 {intent}
 </intent>

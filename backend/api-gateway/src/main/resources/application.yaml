@@ -151,7 +151,7 @@ spring:
         - id: intelligence-service
           uri: lb://INTELLIGENCE-SERVICE
           predicates:
-            - Path=/api/v1/chat/**, /api/v1/ai/**
+            - Path=/api/v1/chat, /api/v1/chat/**, /api/v1/ai/**
 
 eureka:
   client:
