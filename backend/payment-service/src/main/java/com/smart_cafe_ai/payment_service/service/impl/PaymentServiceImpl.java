@@ -248,19 +248,26 @@ public class PaymentServiceImpl implements PaymentService {
             shift = cashierShiftRepository.save(shift);
         }
 
-        BigDecimal cashReceived = request.getCashReceived() != null ? request.getCashReceived() : payment.getAmount();
-        if (cashReceived.compareTo(payment.getAmount()) < 0) {
-            throw new BusinessException("INSUFFICIENT_CASH", "Số tiền khách đưa không đủ (cần: " + payment.getAmount() + ", đưa: " + cashReceived + ")", HttpStatus.BAD_REQUEST);
+        if (payment.getPaymentMethod() == PaymentMethod.Cash) {
+            BigDecimal cashReceived = request.getCashReceived() != null ? request.getCashReceived() : payment.getAmount();
+            if (cashReceived.compareTo(payment.getAmount()) < 0) {
+                throw new BusinessException("INSUFFICIENT_CASH", "Số tiền khách đưa không đủ (cần: " + payment.getAmount() + ", đưa: " + cashReceived + ")", HttpStatus.BAD_REQUEST);
+            }
+            BigDecimal changeAmount = cashReceived.subtract(payment.getAmount());
+            payment.setCashReceived(cashReceived);
+            payment.setChangeAmount(changeAmount);
+            payment.setCashierShiftId(shift.getId());
+        } else {
+            // Với COD: chk_payments_cash_fields yêu cầu cash_received và change_amount phải NULL
+            payment.setCashReceived(null);
+            payment.setChangeAmount(null);
+            // chk_payments_cod_success chỉ yêu cầu collected_by IS NOT NULL, cashier_shift_id có thể lưu nếu có shift
+            payment.setCashierShiftId(shift.getId());
         }
-
-        BigDecimal changeAmount = cashReceived.subtract(payment.getAmount());
 
         payment.setStatus(PaymentStatus.Success);
         payment.setPaidAt(LocalDateTime.now());
-        payment.setCashReceived(cashReceived);
-        payment.setChangeAmount(changeAmount);
-        payment.setCashierShiftId(shift.getId());
-        payment.setCollectedBy(cashierUserId);
+        payment.setCollectedBy(cashierUserId != null ? cashierUserId : "usr_cashier_001");
         payment = paymentRepository.save(payment);
 
         // Cập nhật doanh số ca thu ngân
@@ -271,8 +278,8 @@ public class PaymentServiceImpl implements PaymentService {
         // Ghi nhận Transactional Outbox Event
         publishPaymentSuccessEvent(payment);
 
-        log.info("Cash payment #{} confirmed by staff {}. Received: {}, Change: {}",
-                payment.getId(), cashierUserId, cashReceived, changeAmount);
+        log.info("{} payment #{} confirmed by staff {}.",
+                payment.getPaymentMethod(), payment.getId(), cashierUserId);
 
         return mapToResponse(payment, null);
     }

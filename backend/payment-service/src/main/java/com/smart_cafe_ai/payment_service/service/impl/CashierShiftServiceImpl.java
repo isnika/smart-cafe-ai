@@ -68,10 +68,26 @@ public class CashierShiftServiceImpl implements CashierShiftService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public CashierShiftResponse getCurrentShift(String staffUserId) {
         CashierShift shift = cashierShiftRepository.findFirstByStaffUserIdAndStatus(staffUserId, CashierShiftStatus.Open)
-                .orElseThrow(() -> new BusinessException("NO_OPEN_SHIFT", "Nhân viên chưa mở ca thu ngân", HttpStatus.NOT_FOUND));
+                .orElse(null);
+
+        if (shift == null) {
+            // Tự động mở ca nếu nhân viên chưa mở ca
+            shift = CashierShift.builder()
+                    .branchId(1)
+                    .registerCode("MAIN")
+                    .staffUserId(staffUserId != null ? staffUserId : "usr_cashier_001")
+                    .openingCash(BigDecimal.ZERO)
+                    .totalCashSales(BigDecimal.ZERO)
+                    .totalOrders(0)
+                    .status(CashierShiftStatus.Open)
+                    .openingTime(LocalDateTime.now())
+                    .build();
+            shift = cashierShiftRepository.save(shift);
+            log.info("Auto-opened cashier shift #{} for staff {}", shift.getId(), staffUserId);
+        }
 
         return mapToShiftResponse(shift);
     }

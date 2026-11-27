@@ -167,7 +167,7 @@ export const createPayment = async (input: CreatePaymentInput, ctx: CreatePaymen
 };
 
 /** Gắn shift hiện hành và giữ nguyên Idempotency-Key qua mọi lần retry giao dịch cashier. */
-export async function confirmCashPayment(id: number, input: { cashierShiftId: number; cashReceived: number }, signal?: AbortSignal): Promise<PayResult> {
+export async function confirmCashPayment(id: number, input: { cashierShiftId?: number; cashReceived?: number }, signal?: AbortSignal): Promise<PayResult> {
   return toPayResult(await http.post<unknown>(`/payments/${id}/confirm-cash`, input, {
     snake: true,
     ...(signal ? { signal } : {}),
