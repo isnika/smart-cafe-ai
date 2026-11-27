@@ -20,7 +20,8 @@ public interface IdentityServiceClient {
     @GetMapping("/{id}")
     ApiResponse<UserInfo> getUserById(
             @PathVariable("id") String id,
-            @RequestHeader(value = "Authorization", required = false) String bearerToken
+            @RequestHeader(value = "Authorization", required = false) String bearerToken,
+            @RequestHeader(value = "X-Service-Key", required = false) String serviceKey
     );
 
     /**
@@ -29,6 +30,7 @@ public interface IdentityServiceClient {
     @PostMapping("/batch")
     ApiResponse<List<UserInfo>> getBatchUsers(
             @RequestBody BatchUserRequest request,
-            @RequestHeader(value = "Authorization", required = false) String bearerToken
+            @RequestHeader(value = "Authorization", required = false) String bearerToken,
+            @RequestHeader(value = "X-Service-Key", required = false) String serviceKey
     );
 }

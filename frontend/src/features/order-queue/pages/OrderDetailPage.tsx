@@ -1,11 +1,15 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Banknote } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { PATHS } from '@/app/routes';
-import { isApiError } from '@/shared/api';
+import { isApiError, paymentApi } from '@/shared/api';
 import { formatVnd } from '@/shared/lib';
 import type { OrderDetail } from '@/shared/types';
 import { Badge, Button, Modal, Skeleton } from '@/shared/ui';
+import { newKey } from '@/features/online-order/payment';
+import { useCurrentCashierShift } from '@/features/cashier/hooks/useCashier';
 import { useChangeOrderStatus, useOrder } from '../hooks/useOrders';
 import { advanceLabel, cancelTarget, nextAdvanceStatus, STATUS_LABEL, timeLabel, whereLabel } from '../status';
 
@@ -31,7 +35,7 @@ export default function OrderDetailPage() {
       </div>
     );
   }
-  return <OrderDetailView order={query.data} />;
+  return <OrderDetailView order={query.data} refetchOrder={() => void query.refetch()} />;
 }
 
 function NotFound() {
@@ -45,15 +49,64 @@ function NotFound() {
   );
 }
 
-function OrderDetailView({ order }: { order: OrderDetail }) {
+function OrderDetailView({ order, refetchOrder }: { order: OrderDetail; refetchOrder: () => void }) {
+  const qc = useQueryClient();
   const mutation = useChangeOrderStatus(order.id);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [reason, setReason] = useState('');
+  const [codModalOpen, setCodModalOpen] = useState(false);
+
+  // Lấy ca thu ngân hiện tại để xác nhận COD
+  const shiftQuery = useCurrentCashierShift();
+  const isShiftOpen = shiftQuery.isSuccess && shiftQuery.data?.status === 'Open';
 
   const next = nextAdvanceStatus(order);
   const label = advanceLabel(order);
   const cancelTo = cancelTarget(order);
   const error = mutation.error ? (isApiError(mutation.error) ? mutation.error.message : 'Không cập nhật được đơn.') : null;
+
+  const isCompleteAction = next === 'Completed';
+  const isPaymentPending = isCompleteAction && order.paymentStatus !== 'Paid';
+
+  const collectCodMutation = useMutation({
+    mutationFn: async () => {
+      // Kiểm tra ca trước khi gọi API
+      if (!shiftQuery.data || shiftQuery.data.status !== 'Open') {
+        throw new Error('Vui lòng mở ca thu ngân trước khi xác nhận COD.');
+      }
+      const key = newKey();
+      const created = await paymentApi.createPayment(
+        {
+          branchId: order.branchId,
+          paymentMethod: 'COD',
+          allocations: [{ orderId: order.id, allocatedAmount: order.finalAmount }],
+        },
+        { idempotencyKey: key },
+      );
+      // Dùng id ca thực tế, không fallback về 0
+      const confirmed = await paymentApi.confirmCashPayment(created.payment.id, {
+        cashierShiftId: shiftQuery.data.id,
+        cashReceived: order.finalAmount,
+      });
+      return confirmed;
+    },
+    onSuccess: () => {
+      toast.success(`Đã xác nhận thu ${formatVnd(order.finalAmount)} tiền mặt (COD) thành công!`);
+      setCodModalOpen(false);
+      refetchOrder();
+      void qc.invalidateQueries({ queryKey: ['orders'] });
+      void qc.invalidateQueries({ queryKey: ['staff', 'orders'] });
+    },
+    onError: (err: unknown) => {
+      if (err instanceof Error) {
+        toast.error(err.message);
+      } else if (isApiError(err)) {
+        toast.error(err.message);
+      } else {
+        toast.error('Không thể ghi nhận thanh toán COD.');
+      }
+    },
+  });
 
   return (
     <div className="space-y-4">
@@ -70,7 +123,7 @@ function OrderDetailView({ order }: { order: OrderDetail }) {
       <div className="grid gap-4 lg:grid-cols-[1fr_22rem]">
         <div className="space-y-4">
           <section aria-label="Tài chính" className="rounded-lg border border-gray-200 bg-white p-5">
-            <h2 className="text-h3">{whereLabel(order)} · Tài chính & kiểm soát</h2>
+            <h2 className="text-h3">{whereLabel(order)} · Tài chính &amp; kiểm soát</h2>
             <div className="mt-3 rounded-md border border-accent-200 bg-accent-50 p-4">
               <p className="font-semibold text-accent-700">
                 {formatVnd(order.finalAmount)} · {PAYMENT_LABEL[order.paymentStatus]}
@@ -134,9 +187,48 @@ function OrderDetailView({ order }: { order: OrderDetail }) {
             </p>
           )}
 
-          <div className="mt-5 space-y-2 border-t border-gray-100 pt-4">
+          <div className="mt-5 space-y-2.5 border-t border-gray-100 pt-4">
+            {isPaymentPending && (
+              <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-caption text-amber-900">
+                <div className="flex items-center gap-1.5 font-semibold text-amber-800">
+                  <AlertTriangle className="size-4 shrink-0 text-amber-600" aria-hidden />
+                  Đơn hàng chưa thanh toán
+                </div>
+                <p className="mt-1 text-gray-700">
+                  Cần xác nhận shipper/nhân viên đã thu tiền trước khi hoàn tất giao hàng.
+                </p>
+                {!isShiftOpen && (
+                  <p className="mt-1 text-xs text-amber-700 italic">
+                    ⚠ Chưa có ca thu ngân đang mở. Vui lòng mở ca trước.
+                  </p>
+                )}
+                <Button
+                  fullWidth
+                  className="mt-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+                  leftIcon={<Banknote className="size-4" />}
+                  disabled={!isShiftOpen}
+                  onClick={() => {
+                    if (!isShiftOpen) {
+                      toast.error('Vui lòng mở ca thu ngân trước khi xác nhận COD.');
+                      return;
+                    }
+                    setCodModalOpen(true);
+                  }}
+                >
+                  Xác nhận đã thu tiền (COD)
+                </Button>
+              </div>
+            )}
+
             {next && label && (
-              <Button fullWidth size="lg" loading={mutation.isPending} onClick={() => mutation.mutate({ to: next, version: order.version })}>
+              <Button
+                fullWidth
+                size="lg"
+                disabled={isPaymentPending}
+                loading={mutation.isPending}
+                title={isPaymentPending ? 'Cần xác nhận thu tiền trước khi hoàn tất giao hàng' : undefined}
+                onClick={() => mutation.mutate({ to: next, version: order.version })}
+              >
                 {label}
               </Button>
             )}
@@ -149,6 +241,50 @@ function OrderDetailView({ order }: { order: OrderDetail }) {
           </div>
         </aside>
       </div>
+
+      <Modal
+        open={codModalOpen}
+        onClose={() => setCodModalOpen(false)}
+        title="Xác nhận thu tiền khi giao hàng (COD)"
+        size="sm"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setCodModalOpen(false)}>
+              Quay lại
+            </Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              loading={collectCodMutation.isPending}
+              onClick={() => collectCodMutation.mutate()}
+            >
+              Xác nhận đã thu đủ {formatVnd(order.finalAmount)}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3 text-body">
+          <p className="text-gray-700">
+            Xác nhận khách hàng đã nhận đủ món và shipper đã thu tiền mặt thành công cho đơn hàng:
+          </p>
+          <div className="rounded-lg bg-gray-50 p-3 space-y-1.5 border border-gray-100 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-500">Mã đơn:</span>
+              <span className="font-semibold text-gray-800">#{order.orderCode}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500">Hình thức:</span>
+              <span className="font-medium text-gray-800">Giao hàng (COD)</span>
+            </div>
+            <div className="flex justify-between border-t border-gray-200 pt-1.5 font-bold">
+              <span className="text-gray-800">Số tiền cần thu:</span>
+              <span className="text-emerald-700 text-base">{formatVnd(order.finalAmount)}</span>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500">
+            Hệ thống sẽ cập nhật trạng thái sang <strong>Đã thanh toán</strong> và cho phép bạn bấm &quot;Xác nhận đã giao&quot;.
+          </p>
+        </div>
+      </Modal>
 
       <Modal
         open={cancelOpen}

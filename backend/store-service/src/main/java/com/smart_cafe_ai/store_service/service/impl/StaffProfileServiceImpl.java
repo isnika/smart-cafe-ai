@@ -37,6 +37,9 @@ public class StaffProfileServiceImpl implements StaffProfileService {
     private final StaffBranchHistoryRepository staffBranchHistoryRepository;
     private final IdentityServiceClient identityServiceClient;
 
+    @org.springframework.beans.factory.annotation.Value("${IDENTITY_INTERNAL_API_KEY:smart-cafe-internal-identity-key}")
+    private String identityApiKey;
+
     @Override
     @Transactional(readOnly = true)
     public List<StaffProfileResponse> getStaffProfiles(Integer branchId, StaffStatus status, String bearerToken) {
@@ -68,7 +71,8 @@ public class StaffProfileServiceImpl implements StaffProfileService {
             if (!userIds.isEmpty()) {
                 ApiResponse<List<UserInfo>> batchResponse = identityServiceClient.getBatchUsers(
                         new BatchUserRequest(userIds),
-                        bearerToken
+                        bearerToken,
+                        identityApiKey
                 );
                 if (batchResponse != null && batchResponse.isSuccess() && batchResponse.getData() != null) {
                     Map<String, UserInfo> userMap = batchResponse.getData().stream()
@@ -95,7 +99,7 @@ public class StaffProfileServiceImpl implements StaffProfileService {
 
         // Gọi identity-service qua OpenFeign để kết nối dữ liệu user
         try {
-            ApiResponse<UserInfo> userApiResponse = identityServiceClient.getUserById(profile.getUserId(), bearerToken);
+            ApiResponse<UserInfo> userApiResponse = identityServiceClient.getUserById(profile.getUserId(), bearerToken, identityApiKey);
             if (userApiResponse != null && userApiResponse.isSuccess()) {
                 response.setUserInfo(userApiResponse.getData());
             }
