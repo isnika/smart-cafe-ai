@@ -58,7 +58,6 @@ function OrderDetailView({ order, refetchOrder }: { order: OrderDetail; refetchO
 
   // Lấy ca thu ngân hiện tại để xác nhận COD
   const shiftQuery = useCurrentCashierShift();
-  const isShiftOpen = shiftQuery.isSuccess && shiftQuery.data?.status === 'Open';
 
   const next = nextAdvanceStatus(order);
   const label = advanceLabel(order);
@@ -70,10 +69,6 @@ function OrderDetailView({ order, refetchOrder }: { order: OrderDetail; refetchO
 
   const collectCodMutation = useMutation({
     mutationFn: async () => {
-      // Kiểm tra ca trước khi gọi API
-      if (!shiftQuery.data || shiftQuery.data.status !== 'Open') {
-        throw new Error('Vui lòng mở ca thu ngân trước khi xác nhận COD.');
-      }
       const key = newKey();
       const created = await paymentApi.createPayment(
         {
@@ -83,9 +78,10 @@ function OrderDetailView({ order, refetchOrder }: { order: OrderDetail; refetchO
         },
         { idempotencyKey: key },
       );
-      // Dùng id ca thực tế, không fallback về 0
+      // Dùng shift id nếu có, nếu chưa backend sẽ tự động tạo ca
+      const shiftId = shiftQuery.data?.id;
       const confirmed = await paymentApi.confirmCashPayment(created.payment.id, {
-        cashierShiftId: shiftQuery.data.id,
+        cashierShiftId: shiftId,
         cashReceived: order.finalAmount,
       });
       return confirmed;
@@ -197,23 +193,11 @@ function OrderDetailView({ order, refetchOrder }: { order: OrderDetail; refetchO
                 <p className="mt-1 text-gray-700">
                   Cần xác nhận shipper/nhân viên đã thu tiền trước khi hoàn tất giao hàng.
                 </p>
-                {!isShiftOpen && (
-                  <p className="mt-1 text-xs text-amber-700 italic">
-                    ⚠ Chưa có ca thu ngân đang mở. Vui lòng mở ca trước.
-                  </p>
-                )}
                 <Button
                   fullWidth
                   className="mt-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
                   leftIcon={<Banknote className="size-4" />}
-                  disabled={!isShiftOpen}
-                  onClick={() => {
-                    if (!isShiftOpen) {
-                      toast.error('Vui lòng mở ca thu ngân trước khi xác nhận COD.');
-                      return;
-                    }
-                    setCodModalOpen(true);
-                  }}
+                  onClick={() => setCodModalOpen(true)}
                 >
                   Xác nhận đã thu tiền (COD)
                 </Button>
