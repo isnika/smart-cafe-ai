@@ -61,6 +61,29 @@ describe('Schedule management', () => {
     expect(screen.queryByRole('button', { name: 'Phân lịch' })).toBeNull();
   });
 
+  it('shows and filters each employee confirmation separately from shift status', async () => {
+    vi.mocked(http.get).mockImplementation(async (path) => {
+      if (path === '/staff-profiles') return [
+        { id: 7, status: 'Active', jobTitle: 'Thu ngân', userInfo: { fullName: 'An' } },
+        { id: 8, status: 'Active', jobTitle: 'Pha chế', userInfo: { fullName: 'Bình' } },
+      ] as never;
+      if (path === '/schedules') return [
+        { id: 1, branchId: 1, staffId: 7, shiftId: 1, workDate: '2099-01-01', status: 'Scheduled', confirmationStatus: 'CONFIRMED', confirmedAt: '2026-11-28T01:00:00Z', shift: { id: 1, name: 'Ca sáng', startTime: '06:00:00', endTime: '12:00:00' } },
+        { id: 2, branchId: 1, staffId: 8, shiftId: 1, workDate: '2099-01-01', status: 'Scheduled', confirmationStatus: 'PENDING', shift: { id: 1, name: 'Ca sáng', startTime: '06:00:00', endTime: '12:00:00' } },
+      ] as never;
+      return [] as never;
+    });
+    renderPage('Manager');
+    const anRow = (await screen.findByText('An')).closest('tr')!;
+    const binhRow = screen.getByText('Bình').closest('tr')!;
+    expect(within(anRow).getByText('Đã xác nhận')).toBeTruthy();
+    expect(within(anRow).getByText('Đã xếp')).toBeTruthy();
+    expect(within(binhRow).getByText('Chưa xác nhận')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Xác nhận nhận ca'), { target: { value: 'PENDING' } });
+    expect(screen.queryByText('An')).toBeNull();
+    expect(screen.getByText('Bình')).toBeTruthy();
+  });
+
   it('shows the conflicting shift beside the form without creating a schedule', async () => {
     const post = vi.spyOn(http, 'post');
     vi.mocked(http.get).mockImplementation(async (path, options) => {

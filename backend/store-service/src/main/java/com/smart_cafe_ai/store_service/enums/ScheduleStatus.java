@@ -4,5 +4,6 @@ public enum ScheduleStatus {
     Scheduled,
     Completed,
     Absent,
-    Leave
+    Leave,
+    Cancelled
 }

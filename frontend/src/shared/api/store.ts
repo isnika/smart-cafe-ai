@@ -95,6 +95,7 @@ export const getTableBill = (sessionId: number) => http.get<TableBill>(`${P}/tab
 
 // Work schedules and staff timekeeping. These are separate from cashier shifts.
 export const getMySchedules = (params: Pick<ListSchedulesParams, 'from' | 'to'>) => http.get<ScheduleView[]>('/schedules/me', { query: params });
+export const confirmSchedule = (id: number) => http.post<ScheduleView>(`/schedules/${id}/confirm`);
 export const getMyTimekeeping = (params: Pick<ListSchedulesParams, 'from' | 'to'> = {}) => http.get<Timekeeping[]>('/timekeeping/me', { query: params });
 export const getMyLeaveRequests = (status?: string) => http.get<LeaveRequest[]>('/leave-requests/me', { query: { status } });
 export const createLeaveRequest = (input: { leaveType: LeaveType; startDate: string; endDate: string; reason: string }) =>

@@ -15,6 +15,11 @@ import org.springframework.data.repository.query.Param;
 @Repository
 public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
     boolean existsByShiftId(Integer shiftId);
+    @Query("SELECT s.staff.id FROM Schedule s WHERE s.id = :id")
+    Optional<Long> findStaffIdByScheduleId(@Param("id") Long id);
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM Schedule s WHERE s.id = :id")
+    Optional<Schedule> lockById(@Param("id") Long id);
     List<Schedule> findAllByBranchIdAndWorkDateBetween(Integer branchId, LocalDate startDate, LocalDate endDate);
     List<Schedule> findAllByStaffIdAndWorkDateBetween(Long staffId, LocalDate startDate, LocalDate endDate);
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)

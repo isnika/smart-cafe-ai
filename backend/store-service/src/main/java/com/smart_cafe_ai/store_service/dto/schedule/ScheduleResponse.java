@@ -11,6 +11,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Data
 @NoArgsConstructor
@@ -23,6 +24,9 @@ public class ScheduleResponse {
     @JsonProperty("branch_id")
     private Integer branchId;
 
+    @JsonProperty("branch_name")
+    private String branchName;
+
     @JsonProperty("staff_id")
     private Long staffId;
 
@@ -33,6 +37,12 @@ public class ScheduleResponse {
     private LocalDate workDate;
 
     private ScheduleStatus status;
+
+    @JsonProperty("confirmation_status")
+    private String confirmationStatus;
+
+    @JsonProperty("confirmed_at")
+    private LocalDateTime confirmedAt;
 
     private StaffProfileResponse staff;
 
@@ -45,10 +55,13 @@ public class ScheduleResponse {
         return ScheduleResponse.builder()
                 .id(schedule.getId())
                 .branchId(schedule.getBranchId())
+                .branchName(schedule.getShift() != null && schedule.getShift().getBranch() != null ? schedule.getShift().getBranch().getName() : null)
                 .staffId(schedule.getStaff() != null ? schedule.getStaff().getId() : null)
                 .shiftId(schedule.getShift() != null ? schedule.getShift().getId() : null)
                 .workDate(schedule.getWorkDate())
                 .status(schedule.getStatus())
+                .confirmationStatus(schedule.getConfirmedAt() == null ? "PENDING" : "CONFIRMED")
+                .confirmedAt(schedule.getConfirmedAt())
                 .staff(staffRes)
                 .shift(shiftRes)
                 .build();

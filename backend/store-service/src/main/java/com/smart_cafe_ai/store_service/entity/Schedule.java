@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 /**
  * Thực thể lịch làm việc – phân công nhân viên vào ca cụ thể mỗi ngày.
@@ -46,6 +47,9 @@ public class Schedule {
 
     @Column(name = "work_date", nullable = false)
     private LocalDate workDate;
+
+    @Column(name = "confirmed_at")
+    private LocalDateTime confirmedAt;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)

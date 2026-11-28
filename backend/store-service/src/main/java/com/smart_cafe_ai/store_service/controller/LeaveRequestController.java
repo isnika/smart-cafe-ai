@@ -28,7 +28,7 @@ public class LeaveRequestController {
      * Nhân viên gửi đơn nghỉ. (Staff/Manager)
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('STAFF', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('STAFF', 'CASHIER', 'BARISTA', 'MANAGER')")
     public ResponseEntity<ApiResponse<LeaveRequestResponse>> createLeaveRequest(
             @Valid @RequestBody LeaveRequestCreateRequest request,
             Authentication authentication
@@ -43,7 +43,7 @@ public class LeaveRequestController {
      * Đơn nghỉ của tôi. (Staff/Manager)
      */
     @GetMapping("/me")
-    @PreAuthorize("hasAnyRole('STAFF', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('STAFF', 'CASHIER', 'BARISTA', 'MANAGER')")
     public ResponseEntity<ApiResponse<List<LeaveRequestResponse>>> getMyLeaveRequests(
             Authentication authentication,
             @RequestParam(value = "status", required = false) LeaveStatus status
@@ -58,7 +58,7 @@ public class LeaveRequestController {
      * Rút đơn nghỉ khi còn Pending. (Staff/Manager)
      */
     @PostMapping("/{id}/cancel")
-    @PreAuthorize("hasAnyRole('STAFF', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('STAFF', 'CASHIER', 'BARISTA', 'MANAGER')")
     public ResponseEntity<ApiResponse<LeaveRequestResponse>> cancelLeaveRequest(
             @PathVariable Long id,
             Authentication authentication

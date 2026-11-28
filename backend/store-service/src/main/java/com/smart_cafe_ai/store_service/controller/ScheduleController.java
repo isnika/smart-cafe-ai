@@ -50,7 +50,7 @@ public class ScheduleController {
      * Nhân viên xem lịch của mình. (Staff/Manager/Admin)
      */
     @GetMapping("/me")
-    @PreAuthorize("hasAnyRole('STAFF', 'MANAGER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('STAFF', 'CASHIER', 'BARISTA', 'MANAGER', 'ADMIN')")
     public ResponseEntity<ApiResponse<List<ScheduleResponse>>> getMySchedules(
             Authentication authentication,
             @RequestParam(value = "from", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -59,6 +59,12 @@ public class ScheduleController {
         String userId = authentication != null ? authentication.getName() : null;
         List<ScheduleResponse> schedules = scheduleService.getMySchedules(userId, from, to);
         return ResponseEntity.ok(ApiResponse.success(schedules));
+    }
+
+    @PostMapping("/{id}/confirm")
+    @PreAuthorize("hasAnyRole('STAFF', 'CASHIER', 'BARISTA') and !hasRole('ADMIN') and !hasRole('MANAGER')")
+    public ResponseEntity<ApiResponse<ScheduleResponse>> confirmSchedule(@PathVariable Long id, Authentication authentication) {
+        return ResponseEntity.ok(ApiResponse.success(scheduleService.confirmSchedule(id, authentication.getName())));
     }
 
     /**

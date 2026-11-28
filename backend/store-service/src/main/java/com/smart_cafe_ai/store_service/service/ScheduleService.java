@@ -12,6 +12,7 @@ import java.util.List;
 public interface ScheduleService {
     List<ScheduleResponse> getSchedules(Integer branchId, Long staffId, Integer shiftId, LocalDate from, LocalDate to, ScheduleStatus status);
     List<ScheduleResponse> getMySchedules(String userId, LocalDate from, LocalDate to);
+    ScheduleResponse confirmSchedule(Long id, String userId);
     ScheduleResponse createSchedule(ScheduleRequest request);
     ScheduleBulkResponse createSchedulesBulk(ScheduleBulkRequest request);
     ScheduleResponse updateSchedule(Long id, ScheduleRequest request);

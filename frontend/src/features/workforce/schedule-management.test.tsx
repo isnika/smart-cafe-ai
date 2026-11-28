@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, beforeEach, expect, it } from 'vitest';
@@ -25,30 +25,34 @@ beforeEach(() => {
 
 it('phân lịch theo chi nhánh và gửi đúng dữ liệu đến API', async () => {
   let body: unknown;
-  server.use(http.post(url('/schedules'), async ({ request }) => { body = await readJson(request); return ok({ id: 1 }); }));
+  server.use(http.post(url('/schedules/bulk'), async ({ request }) => { body = await readJson(request); return ok({ created_count: 1, conflicts: [] }); }));
   renderApp('/manager/schedules');
   expect(await screen.findByRole('option', { name: /Ca sáng/ })).toBeTruthy();
-  expect(screen.getByRole('option', { name: 'An · NV07' })).toBeTruthy();
-  fireEvent.change(screen.getByLabelText('Nhân viên'), { target: { value: '7' } });
+  fireEvent.click(screen.getByRole('button', { name: /Nhân viên Chọn nhân viên/ }));
+  fireEvent.click(await screen.findByRole('checkbox', { name: 'An - Chưa có chức vụ' }));
   fireEvent.change(screen.getByLabelText('Ca'), { target: { value: '10' } });
-  fireEvent.change(screen.getByLabelText('Ngày làm'), { target: { value: '2026-12-01' } });
+  fireEvent.change(screen.getByLabelText('Ngày làm'), { target: { value: '2099-12-01' } });
   fireEvent.click(screen.getByRole('button', { name: 'Phân lịch' }));
-  await waitFor(() => expect(body).toEqual({ staff_id: 7, shift_id: 10, work_date: '2026-12-01' }));
+  await waitFor(() => expect(body).toEqual({ items: [{ staff_id: 7, shift_id: 10, work_date: '2099-12-01' }] }));
   expect((screen.getByLabelText('Chi nhánh') as HTMLSelectElement).disabled).toBe(true);
 });
 
 it('không lặp mã nhân viên khi dịch vụ chưa trả tên', async () => {
   server.use(http.get(url('/staff-profiles'), () => ok([{ id: 7, branch_id: 1, employee_code: 'NV07', status: 'Active' }])));
   renderApp('/manager/schedules');
-  expect(await screen.findByRole('option', { name: 'NV07' })).toBeTruthy();
+  await screen.findByRole('option', { name: /Ca sáng/ });
+  fireEvent.click(screen.getByRole('button', { name: /Nhân viên Chọn nhân viên/ }));
+  expect(await screen.findByRole('checkbox', { name: 'NV07 - Chưa có chức vụ' })).toBeTruthy();
 });
 
 it('hiển thị lỗi xung đột từ máy chủ khi phân lịch', async () => {
-  server.use(http.post(url('/schedules'), () => HttpResponse.json({ message: 'Nhân viên đã có lịch' }, { status: 409 })));
+  server.use(http.post(url('/schedules/bulk'), () => HttpResponse.json({ message: 'Nhân viên đã có lịch' }, { status: 409 })));
   renderApp('/manager/schedules');
   await screen.findByRole('option', { name: /Ca sáng/ });
-  fireEvent.change(screen.getByLabelText('Nhân viên'), { target: { value: '7' } });
+  fireEvent.click(screen.getByRole('button', { name: /Nhân viên Chọn nhân viên/ }));
+  fireEvent.click(await screen.findByRole('checkbox', { name: 'An - Chưa có chức vụ' }));
   fireEvent.change(screen.getByLabelText('Ca'), { target: { value: '10' } });
+  fireEvent.change(screen.getByLabelText('Ngày làm'), { target: { value: '2099-12-01' } });
   fireEvent.click(screen.getByRole('button', { name: 'Phân lịch' }));
-  expect(await within(await screen.findByRole('alert')).findByText('Nhân viên đã có lịch')).toBeTruthy();
+  expect((await screen.findAllByRole('alert')).some((alert) => alert.textContent === 'Nhân viên đã có lịch')).toBe(true);
 });

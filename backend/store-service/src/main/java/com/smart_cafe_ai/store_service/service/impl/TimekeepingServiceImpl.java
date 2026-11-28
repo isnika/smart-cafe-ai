@@ -39,11 +39,17 @@ public class TimekeepingServiceImpl implements TimekeepingService {
         StaffProfile staff = staffProfileRepository.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Hồ sơ nhân viên cho tài khoản", userId));
 
-        Schedule schedule = scheduleRepository.findById(request.getScheduleId())
+        staffProfileRepository.lockById(staff.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Nhân viên", staff.getId()));
+        Schedule schedule = scheduleRepository.lockById(request.getScheduleId())
                 .orElseThrow(() -> new ResourceNotFoundException("Lịch làm việc", request.getScheduleId()));
 
         if (!schedule.getStaff().getId().equals(staff.getId())) {
             throw new BusinessException("FORBIDDEN_SCHEDULE", "Bạn không thể check-in vào ca làm việc của nhân viên khác");
+        }
+
+        if (schedule.getStatus() == ScheduleStatus.Cancelled) {
+            throw new BusinessException("SCHEDULE_CANCELLED", "Lịch làm việc đã bị hủy");
         }
 
         Optional<Timekeeping> existingOpt = timekeepingRepository.findByScheduleId(schedule.getId());

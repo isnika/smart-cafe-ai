@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -61,6 +62,23 @@ public class ScheduleServiceImpl implements ScheduleService {
         return schedules.stream()
                 .map(ScheduleResponse::fromEntity)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public ScheduleResponse confirmSchedule(Long id, String userId) {
+        StaffProfile owner = staffProfileRepository.findByUserId(userId)
+                .orElseThrow(() -> new org.springframework.security.access.AccessDeniedException("No staff profile"));
+        Long staffId = scheduleRepository.findStaffIdByScheduleId(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Lịch làm việc", id));
+        if (!staffId.equals(owner.getId())) throw new org.springframework.security.access.AccessDeniedException("Not the schedule owner");
+        Schedule schedule = lockSchedule(id, staffId);
+        checkEditable(schedule);
+        if (schedule.getConfirmedAt() == null) {
+            schedule.setConfirmedAt(LocalDateTime.now(ZoneOffset.UTC));
+            scheduleRepository.save(schedule);
+        }
+        return ScheduleResponse.fromEntity(schedule);
     }
 
     @Override
@@ -122,11 +140,9 @@ public class ScheduleServiceImpl implements ScheduleService {
     @Override
     @Transactional
     public ScheduleResponse updateSchedule(Long id, ScheduleRequest request) {
-        Schedule schedule = scheduleRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Lịch làm việc", id));
+        Schedule schedule = lockSchedule(id);
 
         branchScope.check(schedule.getBranchId());
-        staffProfileRepository.lockById(schedule.getStaff().getId()).orElseThrow();
         checkEditable(schedule);
 
         Shift shift = shiftRepository.findById(request.getShiftId())
@@ -143,6 +159,9 @@ public class ScheduleServiceImpl implements ScheduleService {
         checkFuture(shift, request.getWorkDate());
         checkOverlap(schedule.getStaff().getId(), shift, request.getWorkDate(), id);
 
+        if (!schedule.getShift().getId().equals(shift.getId()) || !schedule.getWorkDate().equals(request.getWorkDate())) {
+            schedule.setConfirmedAt(null);
+        }
         schedule.setShift(shift);
         schedule.setWorkDate(request.getWorkDate());
 
@@ -153,8 +172,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     @Override
     @Transactional
     public ScheduleResponse updateScheduleStatus(Long id, ScheduleStatus status) {
-        Schedule schedule = scheduleRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Lịch làm việc", id));
+        Schedule schedule = lockSchedule(id);
 
         branchScope.check(schedule.getBranchId());
         checkEditable(schedule);
@@ -167,8 +185,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     @Override
     @Transactional
     public void deleteSchedule(Long id) {
-        Schedule schedule = scheduleRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Lịch làm việc", id));
+        Schedule schedule = lockSchedule(id);
 
         branchScope.check(schedule.getBranchId());
         checkEditable(schedule);
@@ -177,7 +194,18 @@ public class ScheduleServiceImpl implements ScheduleService {
             throw new BusinessException("SCHEDULE_HAS_TIMEKEEPING", "Không thể xóa lịch làm việc đã có bản ghi chấm công");
         }
 
-        scheduleRepository.delete(schedule);
+        schedule.setStatus(ScheduleStatus.Cancelled);
+        scheduleRepository.save(schedule);
+    }
+
+    private Schedule lockSchedule(Long id) {
+        Long staffId = scheduleRepository.findStaffIdByScheduleId(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Lịch làm việc", id));
+        return lockSchedule(id, staffId);
+    }
+    private Schedule lockSchedule(Long id, Long staffId) {
+        staffProfileRepository.lockById(staffId).orElseThrow(() -> new ResourceNotFoundException("Nhân viên", staffId));
+        return scheduleRepository.lockById(id).orElseThrow(() -> new ResourceNotFoundException("Lịch làm việc", id));
     }
 
     private LocalDateTime start(Shift shift, LocalDate date) { return date.atTime(shift.getStartTime().toLocalTime()); }
@@ -198,7 +226,7 @@ public class ScheduleServiceImpl implements ScheduleService {
     private void checkOverlap(Long staffId, Shift shift, LocalDate date, Long excludedId) {
         LocalDateTime start = start(shift, date), end = end(shift, date);
         for (Schedule other : scheduleRepository.findForOverlap(staffId, date.minusDays(1), date.plusDays(1))) {
-            if (other.getId().equals(excludedId) || other.getStatus() == ScheduleStatus.Leave) continue;
+            if (other.getId().equals(excludedId) || other.getStatus() == ScheduleStatus.Leave || other.getStatus() == ScheduleStatus.Cancelled) continue;
             if (start.isBefore(end(other.getShift(), other.getWorkDate())) && end.isAfter(start(other.getShift(), other.getWorkDate())))
                 throw new BusinessException("SCHEDULE_CONFLICT", "Lịch làm việc bị trùng giờ");
         }

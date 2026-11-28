@@ -244,7 +244,7 @@ export type BranchStatus = 'Active' | 'Inactive';
 export type TableSessionStatus = 'Active' | 'Payment_Pending' | 'Completed' | 'Cancelled';
 export type StaffStatus = 'Active' | 'On_Leave' | 'Inactive' | 'Terminated';
 export type EmploymentType = 'Full_Time' | 'Part_Time' | 'Probation' | 'Intern';
-export type ScheduleStatus = 'Scheduled' | 'Completed' | 'Absent' | 'Leave';
+export type ScheduleStatus = 'Scheduled' | 'Completed' | 'Absent' | 'Leave' | 'Cancelled';
 export type LeaveType = 'Annual' | 'Sick' | 'Unpaid' | 'Other';
 export type LeaveRequestStatus = 'Pending' | 'Approved' | 'Rejected' | 'Cancelled';
 export type TimekeepingSource = 'Manual' | 'Device' | 'GPS' | 'QR';
@@ -306,6 +306,7 @@ export interface StaffProfile {
   id: number;
   userId: string;
   branchId: number;
+  branchName?: string | null;
   employeeCode: string;
   jobTitle: string; // Barista, Cashier, Shift Leader, Store Manager...
   employmentType: EmploymentType;
@@ -341,10 +342,13 @@ export interface Shift {
 export interface Schedule {
   id: number;
   branchId: number;
+  branchName?: string | null;
   staffId: number;
   shiftId: number;
   workDate: IsoDate;
   status: ScheduleStatus;
+  confirmationStatus?: 'PENDING' | 'CONFIRMED';
+  confirmedAt?: string | null;
 }
 
 export interface Timekeeping {
