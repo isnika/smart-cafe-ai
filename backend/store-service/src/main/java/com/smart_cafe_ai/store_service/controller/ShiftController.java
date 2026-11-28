@@ -51,7 +51,7 @@ public class ShiftController {
      * Tạo ca. (Manager, Admin)
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
+    @PreAuthorize("hasRole('MANAGER') and !hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<ShiftResponse>> createShift(@Valid @RequestBody ShiftRequest request) {
         ShiftResponse created = shiftService.createShift(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(created));
@@ -62,7 +62,7 @@ public class ShiftController {
      * Sửa ca. (Manager, Admin)
      */
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
+    @PreAuthorize("hasRole('MANAGER') and !hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<ShiftResponse>> updateShift(
             @PathVariable Integer id,
             @Valid @RequestBody ShiftRequest request
@@ -76,7 +76,7 @@ public class ShiftController {
      * Bật/tắt ca làm việc. (Manager, Admin)
      */
     @PatchMapping("/{id}/active")
-    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
+    @PreAuthorize("hasRole('MANAGER') and !hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> updateShiftActive(
             @PathVariable Integer id,
             @RequestBody Map<String, Boolean> body

@@ -13,6 +13,10 @@ import java.util.Optional;
 @Repository
 public interface StaffProfileRepository extends JpaRepository<StaffProfile, Long> {
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM StaffProfile s WHERE s.id = :id")
+    Optional<StaffProfile> lockById(@Param("id") Long id);
+
     Optional<StaffProfile> findByUserId(String userId);
 
     Optional<StaffProfile> findByEmployeeCode(String employeeCode);

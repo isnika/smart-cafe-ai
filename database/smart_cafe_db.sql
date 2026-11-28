@@ -468,8 +468,7 @@ CREATE TABLE Shifts (
     UNIQUE KEY uq_shift_id_branch (id, branch_id) COMMENT 'Target of composite FK from Schedules'
 );
 
--- One schedule row per staff per day (prevents double booking / overlapping shifts).
--- To support split shifts later, drop uq_staff_work_date and add an overlap check in the service.
+-- A staff member can have several non-overlapping shifts per day; overlap is checked by the service.
 CREATE TABLE Schedules (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     branch_id INT NOT NULL,
@@ -479,7 +478,7 @@ CREATE TABLE Schedules (
     status ENUM('Scheduled', 'Completed', 'Absent', 'Leave') NOT NULL DEFAULT 'Scheduled',
     CONSTRAINT fk_schedules_staff FOREIGN KEY (staff_id, branch_id) REFERENCES Staff_Profiles(id, branch_id) ON DELETE RESTRICT,
     CONSTRAINT fk_schedules_shift FOREIGN KEY (shift_id, branch_id) REFERENCES Shifts(id, branch_id) ON DELETE RESTRICT,
-    UNIQUE KEY uq_staff_work_date (staff_id, work_date),
+    INDEX idx_schedules_staff_date (staff_id, work_date),
     INDEX idx_schedules_branch_date (branch_id, work_date),
     INDEX idx_schedules_shift_date (shift_id, work_date)
 );

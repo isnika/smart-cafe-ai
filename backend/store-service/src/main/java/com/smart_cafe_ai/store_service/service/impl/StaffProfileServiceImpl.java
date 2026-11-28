@@ -34,6 +34,7 @@ public class StaffProfileServiceImpl implements StaffProfileService {
 
     private final StaffProfileRepository staffProfileRepository;
     private final BranchRepository branchRepository;
+    private final com.smart_cafe_ai.store_service.security.BranchScope branchScope;
     private final StaffBranchHistoryRepository staffBranchHistoryRepository;
     private final IdentityServiceClient identityServiceClient;
 
@@ -43,6 +44,7 @@ public class StaffProfileServiceImpl implements StaffProfileService {
     @Override
     @Transactional(readOnly = true)
     public List<StaffProfileResponse> getStaffProfiles(Integer branchId, StaffStatus status, String bearerToken) {
+        branchId = branchScope.restrict(branchId);
         List<StaffProfile> profiles;
         if (branchId != null && status != null) {
             profiles = staffProfileRepository.findAllByBranchIdAndStatus(branchId, status);
@@ -94,6 +96,7 @@ public class StaffProfileServiceImpl implements StaffProfileService {
     public StaffProfileResponse getStaffProfileById(Long id, String bearerToken) {
         StaffProfile profile = staffProfileRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Hồ sơ nhân viên", id));
+        branchScope.check(profile.getBranch().getId());
 
         StaffProfileResponse response = StaffProfileResponse.fromEntity(profile);
 

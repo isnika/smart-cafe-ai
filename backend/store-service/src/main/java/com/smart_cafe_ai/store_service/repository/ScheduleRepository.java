@@ -14,10 +14,12 @@ import org.springframework.data.repository.query.Param;
 
 @Repository
 public interface ScheduleRepository extends JpaRepository<Schedule, Long> {
+    boolean existsByShiftId(Integer shiftId);
     List<Schedule> findAllByBranchIdAndWorkDateBetween(Integer branchId, LocalDate startDate, LocalDate endDate);
     List<Schedule> findAllByStaffIdAndWorkDateBetween(Long staffId, LocalDate startDate, LocalDate endDate);
-    Optional<Schedule> findByStaffIdAndWorkDate(Long staffId, LocalDate workDate);
-    boolean existsByStaffIdAndWorkDate(Long staffId, LocalDate workDate);
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM Schedule s JOIN FETCH s.shift WHERE s.staff.id = :staffId AND s.workDate BETWEEN :startDate AND :endDate")
+    List<Schedule> findForOverlap(@Param("staffId") Long staffId, @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
     List<Schedule> findAllByStaffIdAndWorkDateBetweenAndStatusNot(Long staffId, LocalDate startDate, LocalDate endDate, ScheduleStatus status);
 
     @Query("SELECT s FROM Schedule s JOIN FETCH s.staff st JOIN FETCH s.shift sh " +

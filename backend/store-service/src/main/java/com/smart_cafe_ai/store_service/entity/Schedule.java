@@ -10,7 +10,6 @@ import java.time.LocalDate;
  * Thực thể lịch làm việc – phân công nhân viên vào ca cụ thể mỗi ngày.
  *
  * Ràng buộc quan trọng:
- * - uq_staff_work_date: một nhân viên chỉ có một ca mỗi ngày.
  * - Composite FK (staff_id, branch_id) đảm bảo ca và nhân viên cùng chi nhánh.
  * - Composite FK (shift_id, branch_id) đảm bảo ca và khung giờ cùng chi nhánh.
  *
@@ -18,12 +17,7 @@ import java.time.LocalDate;
  * bảng trung gian; các ràng buộc này được đảm bảo ở DB và application layer.
  */
 @Entity
-@Table(
-    name = "Schedules",
-    uniqueConstraints = {
-        @UniqueConstraint(name = "uq_staff_work_date", columnNames = {"staff_id", "work_date"})
-    }
-)
+@Table(name = "Schedules")
 @Getter
 @Setter
 @NoArgsConstructor

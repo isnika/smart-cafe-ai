@@ -66,7 +66,7 @@ public class ScheduleController {
      * Xếp lịch một nhân viên. (Manager, Admin)
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
+    @PreAuthorize("hasRole('MANAGER') and !hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<ScheduleResponse>> createSchedule(@Valid @RequestBody ScheduleRequest request) {
         ScheduleResponse created = scheduleService.createSchedule(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(created));
@@ -77,7 +77,7 @@ public class ScheduleController {
      * Xếp lịch hàng loạt. (Manager, Admin)
      */
     @PostMapping("/bulk")
-    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
+    @PreAuthorize("hasRole('MANAGER') and !hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<ScheduleBulkResponse>> createSchedulesBulk(@Valid @RequestBody ScheduleBulkRequest request) {
         ScheduleBulkResponse result = scheduleService.createSchedulesBulk(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(result));
@@ -88,7 +88,7 @@ public class ScheduleController {
      * Đổi ca/ngày cho schedule. (Manager, Admin)
      */
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
+    @PreAuthorize("hasRole('MANAGER') and !hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<ScheduleResponse>> updateSchedule(
             @PathVariable Long id,
             @Valid @RequestBody ScheduleRequest request
@@ -102,7 +102,7 @@ public class ScheduleController {
      * Cập nhật trạng thái lịch. (Manager, Admin)
      */
     @PatchMapping("/{id}/status")
-    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
+    @PreAuthorize("hasRole('MANAGER') and !hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<ScheduleResponse>> updateScheduleStatus(
             @PathVariable Long id,
             @RequestBody Map<String, String> body
@@ -118,7 +118,7 @@ public class ScheduleController {
      * Xóa lịch tương lai chưa có chấm công. (Manager, Admin)
      */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
+    @PreAuthorize("hasRole('MANAGER') and !hasRole('ADMIN')")
     public ResponseEntity<Void> deleteSchedule(@PathVariable Long id) {
         scheduleService.deleteSchedule(id);
         return ResponseEntity.noContent().build();
