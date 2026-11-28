@@ -171,15 +171,33 @@ export async function forecastProducts(input: TargetDateForecastRequest) {
 // Forecast (Manager)
 export const listForecasts = (params: ListForecastsParams) => http.get<AIForecast[]>(`${AI}/forecasts`, { query: params });
 
-// Chat – khách vãng lai dùng guestKey nên không bắt buộc token
+// Chat – khách vãng lai dùng guestKey; request vẫn giữ token nếu tài khoản đã đăng nhập.
 export const createChatSession = (input: CreateChatSessionInput) =>
-  http.post<ChatSession>(`${CHAT}/sessions`, input, { auth: false });
-export const listChatMessages = (sessionId: number) =>
-  http.get<ChatMessage[]>(`${CHAT}/sessions/${sessionId}/messages`, { auth: false });
+  http.post<ChatSession>(`${CHAT}/sessions`, input, {
+    headers: input.branchId !== undefined ? { 'X-Branch-Id': String(input.branchId) } : undefined,
+  });
+export const listChatMessages = (sessionId: number, guestKey?: string, branchId?: number) =>
+  http.get<ChatMessage[]>(`${CHAT}/sessions/${sessionId}/messages`, {
+    headers: {
+      ...(guestKey ? { 'X-Guest-Key': guestKey } : {}),
+      ...(branchId !== undefined ? { 'X-Branch-Id': String(branchId) } : {}),
+    },
+  });
 /** Trả tin nhắn user vừa gửi + (nếu có) câu trả lời AI. */
-export const sendChatMessage = (sessionId: number, input: SendChatMessageInput) =>
-  http.post<ChatReply>(`${CHAT}/sessions/${sessionId}/messages`, input, { auth: false });
-export const handOffChat = (sessionId: number) => http.post<ChatSession>(`${CHAT}/sessions/${sessionId}/handoff`, undefined, { auth: false });
+export const sendChatMessage = (sessionId: number, input: SendChatMessageInput, guestKey?: string, branchId?: number) =>
+  http.post<ChatReply>(`${CHAT}/sessions/${sessionId}/messages`, input, {
+    headers: {
+      ...(guestKey ? { 'X-Guest-Key': guestKey } : {}),
+      ...(branchId !== undefined ? { 'X-Branch-Id': String(branchId) } : {}),
+    },
+  });
+export const handOffChat = (sessionId: number, guestKey?: string, branchId?: number) =>
+  http.post<ChatSession>(`${CHAT}/sessions/${sessionId}/handoff`, undefined, {
+    headers: {
+      ...(guestKey ? { 'X-Guest-Key': guestKey } : {}),
+      ...(branchId !== undefined ? { 'X-Branch-Id': String(branchId) } : {}),
+    },
+  });
 
 // Staff inbox
 export const listChatSessions = (params: ListChatSessionsParams = {}) =>

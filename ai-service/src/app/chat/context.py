@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from .intent import (
     Intent,
+    PRODUCT_INTENTS,
     classify_intent,
     is_booking_detail_submission,
     is_booking_query,
@@ -76,6 +77,20 @@ def build_conversation_context(
     current_product = None
     candidate_products: tuple[str, ...] = ()
     for item in reversed(history):
+        # A clear non-product turn starts a new topic. Do not let an older
+        # product leak into a later opening-hours/policy/order question.
+        if item.get("role") == "user":
+            turn_intent = classify_intent(str(item.get("content", ""))).intent
+            if turn_intent not in {
+                *PRODUCT_INTENTS,
+                Intent.FOLLOW_UP,
+                Intent.AFFIRMATION,
+                Intent.CONFIRMATION,
+                Intent.UNKNOWN,
+                Intent.CHITCHAT,
+                Intent.GREETING,
+            }:
+                break
         mentioned = _mentioned_products(str(item.get("content", "")), product_names)
         if mentioned:
             candidate_products = mentioned
@@ -85,7 +100,17 @@ def build_conversation_context(
     last_intent = Intent.UNKNOWN
     for item in reversed(history):
         if item.get("role") == "user":
-            last_intent = classify_intent(str(item.get("content", ""))).intent
+            candidate_intent = classify_intent(str(item.get("content", ""))).intent
+            if candidate_intent in {
+                Intent.GREETING,
+                Intent.CHITCHAT,
+                Intent.AFFIRMATION,
+                Intent.NEGATION,
+                Intent.COMPLAINT,
+                Intent.UNKNOWN,
+            }:
+                continue
+            last_intent = candidate_intent
             break
 
     pending = question if is_contextual_followup(question) else None

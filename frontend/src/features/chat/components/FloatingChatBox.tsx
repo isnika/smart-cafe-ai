@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
-import { AlertCircle, Bot, Loader2, RefreshCw, Send, User, X } from 'lucide-react';
+import { AlertCircle, Bot, Loader2, Plus, RefreshCw, Send, User, X } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 import { Button } from '@/shared/ui';
 import type { ChatMessage } from '@/shared/types';
@@ -18,7 +18,7 @@ export function FloatingChatBox() {
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const inputLocked = !chat.ready || chat.sending;
+  const inputLocked = !chat.ready || chat.sending || chat.handler !== 'ai' || chat.creatingNew;
 
   // Tự cuộn xuống cuối khi có tin mới / đang gõ / đổi trạng thái.
   useEffect(() => {
@@ -68,6 +68,16 @@ export function FloatingChatBox() {
               <h2 className="truncate text-body font-semibold">Trợ lý AI</h2>
               <p className="truncate text-caption opacity-90">Gợi ý món theo khẩu vị của bạn</p>
             </div>
+            <button
+              type="button"
+              onClick={chat.newChat}
+              disabled={!chat.ready || chat.creatingNew || chat.sending}
+              className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-caption hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60"
+              aria-label="Tạo cuộc chat mới"
+              title="Tạo cuộc chat mới"
+            >
+              <Plus className="size-4" aria-hidden /> Mới
+            </button>
           </header>
 
           <div
@@ -93,6 +103,14 @@ export function FloatingChatBox() {
                   Thử lại
                 </Button>
               </div>
+            )}
+
+            {chat.ready && chat.handler !== 'ai' && (
+              <p role="status" className="rounded-md border border-amber-200 bg-amber-50 p-2.5 text-body text-amber-900">
+                {chat.handler === 'closed'
+                  ? 'Cuộc chat này đã kết thúc. Bạn có thể bấm “Mới” để bắt đầu lại.'
+                  : 'Cuộc chat đang được nhân viên tiếp nhận nên trợ lý AI tạm dừng trả lời.'}
+              </p>
             )}
 
             {chat.ready && chat.messages.length === 0 && (

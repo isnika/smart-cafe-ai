@@ -8,6 +8,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.net.SocketTimeoutException;
 import java.util.List;
@@ -57,6 +59,30 @@ public class IntelligenceExceptionHandler {
             HttpServletRequest request
     ) {
         return error(400, "VALIDATION_ERROR", "Payload chat không hợp lệ.", request);
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<Map<String, Object>> handleValidation(
+            MethodArgumentNotValidException ex,
+            HttpServletRequest request
+    ) {
+        return error(400, "VALIDATION_ERROR", "Payload chat không hợp lệ.", request);
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<Map<String, Object>> handleChatStatus(
+            ResponseStatusException ex,
+            HttpServletRequest request
+    ) {
+        int status = ex.getStatusCode().value();
+        String message = switch (status) {
+            case 400 -> "Yêu cầu chat không hợp lệ.";
+            case 401 -> "Phiên đăng nhập hoặc guest key không hợp lệ.";
+            case 404 -> "Không tìm thấy phiên chat.";
+            case 409 -> "Phiên chat không thể tiếp tục thao tác này.";
+            default -> status >= 500 ? "Dịch vụ chat tạm thời chưa sẵn sàng." : "Yêu cầu chat không được chấp nhận.";
+        };
+        return error(status, status >= 500 ? "CHAT_SERVICE_ERROR" : "CHAT_REQUEST_REJECTED", message, request);
     }
 
     private ResponseEntity<Map<String, Object>> error(

@@ -673,6 +673,17 @@ def _retrieval_query_for_intent(question: str, intent: Intent) -> str:
     return f"{question} {' '.join(additions)}".strip() if additions else question
 
 
+def _is_explicit_product_alternative(question: str, product_names: tuple[str, ...]) -> bool:
+    """Recognise ``Còn <known product> thì sao?`` without borrowing the old product."""
+    folded_question = fold_text(question)
+    if not re.match(r"^\s*con\b", folded_question):
+        return False
+    return any(
+        re.search(rf"(?<!\w){re.escape(fold_text(name))}(?!\w)", folded_question)
+        for name in product_names
+    )
+
+
 def _contains_internal_guidance(text: str) -> bool:
     folded = fold_text(text)
     return any(marker in folded for marker in (
@@ -1078,6 +1089,19 @@ class RAGPipeline:
         normalized_question = canonicalize_query(question)
         resolver = getattr(self.retriever, "resolve_product_names", None)
         explicit_question_products = resolver(question) if callable(resolver) else ()
+        if (
+            explicit_question_products
+            and _is_explicit_product_alternative(question, self.product_names)
+            and conversation.last_intent in PRODUCT_INTENTS
+            and decision.intent in {Intent.PRODUCT_INFO, Intent.UNKNOWN, Intent.FOLLOW_UP}
+        ):
+            # The current product is explicit evidence; inherit only the prior
+            # product intent (price/availability/detail), never the old entity.
+            decision = type(decision)(
+                conversation.last_intent,
+                0.90,
+                "inherited-product-intent",
+            )
         logger.info(
             "Phân loại chat (intent=%s, confidence=%.2f, rule=%s, query_id=%s, query_chars=%d)",
             decision.intent.value,

@@ -2,17 +2,25 @@ package com.smart_cafe_ai.intelligence_service.controller;
 
 import com.smart_cafe_ai.intelligence_service.dto.chat.ChatRequest;
 import com.smart_cafe_ai.intelligence_service.dto.chat.ChatResponse;
+import com.smart_cafe_ai.intelligence_service.dto.chat.ChatReply;
+import com.smart_cafe_ai.intelligence_service.dto.chat.ChatSessionDto;
+import com.smart_cafe_ai.intelligence_service.dto.chat.CreateChatSessionRequest;
 import com.smart_cafe_ai.intelligence_service.dto.chat.ReindexResponse;
+import com.smart_cafe_ai.intelligence_service.dto.chat.SendChatMessageRequest;
 import com.smart_cafe_ai.intelligence_service.dto.forecasting.ForecastingDto.*;
 import com.smart_cafe_ai.intelligence_service.dto.recommendation.RecommendationRequest;
 import com.smart_cafe_ai.intelligence_service.dto.recommendation.RecommendationResponse;
+import com.smart_cafe_ai.intelligence_service.service.ChatSessionService;
 import com.smart_cafe_ai.intelligence_service.service.IntelligenceService;
+import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping
@@ -21,6 +29,7 @@ import org.springframework.web.bind.annotation.*;
 public class IntelligenceController {
 
     private final IntelligenceService intelligenceService;
+    private final ChatSessionService chatSessionService;
 
     /**
      * 1. POST /chat hoặc /api/v1/chat
@@ -33,6 +42,39 @@ public class IntelligenceController {
             @RequestHeader(value = "X-Branch-Id", required = false) Integer branchId
     ) {
         return ResponseEntity.ok(intelligenceService.chat(request, authorization, branchId));
+    }
+
+    /** Tạo hoặc khôi phục phiên chat; userId trong body cũ không được tin dùng. */
+    @PostMapping({"/chat/sessions", "/api/v1/chat/sessions"})
+    public ResponseEntity<ChatSessionDto> createChatSession(
+            @Valid @RequestBody CreateChatSessionRequest request,
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+            @RequestHeader(value = "X-Branch-Id", required = false) Integer branchId
+    ) {
+        return ResponseEntity.ok(chatSessionService.create(request, authorization, branchId));
+    }
+
+    /** Chỉ trả history sau khi ChatSessionService kiểm tra đúng chủ phiên. */
+    @GetMapping({"/chat/sessions/{sessionId}/messages", "/api/v1/chat/sessions/{sessionId}/messages"})
+    public ResponseEntity<List<ChatMessageDto>> listChatMessages(
+            @PathVariable Long sessionId,
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+            @RequestHeader(value = "X-Guest-Key", required = false) String guestKey
+    ) {
+        return ResponseEntity.ok(chatSessionService.messages(sessionId, authorization, guestKey));
+    }
+
+    /** Lưu user message, lấy history từ DB, gọi AI và lưu assistant message cùng session. */
+    @PostMapping({"/chat/sessions/{sessionId}/messages", "/api/v1/chat/sessions/{sessionId}/messages"})
+    public ResponseEntity<ChatReply> sendChatMessage(
+            @PathVariable Long sessionId,
+            @Valid @RequestBody SendChatMessageRequest request,
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+            @RequestHeader(value = "X-Guest-Key", required = false) String guestKey,
+            @RequestHeader(value = "X-Branch-Id", required = false) Integer branchId
+    ) {
+        return ResponseEntity.status(201)
+                .body(chatSessionService.send(sessionId, request, authorization, guestKey, branchId));
     }
 
     /**

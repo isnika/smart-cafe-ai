@@ -1364,13 +1364,18 @@ export interface ChatProductCard {
 }
 
 export interface CreateChatSessionInput {
+  /** Deprecated compatibility field. Backend derives ownership from JWT and ignores this value. */
   userId?: string;
   guestKey?: string;
   branchId?: number;
+  sessionId?: number;
+  newSession?: boolean;
 }
 
 export interface SendChatMessageInput {
   content: string;
+  /** Id ổn định cho retry; backend dùng để trả lại bản ghi cũ thay vì tạo trùng. */
+  clientMessageId?: string;
 }
 
 export interface ChatReply {
